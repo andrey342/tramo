@@ -49,6 +49,7 @@ function setup() {
   });
   const sessions = new SessionIssuer(refreshTokens, credentials, new FakeAccessTokenIssuer(clock), {
     refreshTokenTtlMs: 30 * DAY_MS,
+    sessionMaxLifetimeMs: 45 * DAY_MS,
   });
   return {
     clock,
@@ -204,9 +205,23 @@ describe('session use cases', () => {
       ).toEqual(['active', 'rotated']);
     });
 
+    it('should reject a token replayed within seconds without ending the session', async () => {
+      const t = await signedIn();
+      const next = await t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken));
+      t.clock.advanceBy(2_000);
+
+      await expect(
+        t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken)),
+      ).rejects.toThrow(InvalidRefreshTokenError);
+      await expect(
+        t.refresh.execute(new RefreshSessionCommand(next.refreshToken)),
+      ).resolves.toBeDefined();
+    });
+
     it('should revoke the whole family when a rotated token is presented again', async () => {
       const t = await signedIn();
       const next = await t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken));
+      t.clock.advanceBy(60_000);
 
       await expect(
         t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken)),
@@ -218,6 +233,21 @@ describe('session use cases', () => {
       expect(t.events.ofType(IamEvents.RefreshTokenReuseDetected)).toEqual([
         expect.objectContaining({ payload: expect.objectContaining({ userId: t.student.id }) }),
       ]);
+    });
+
+    it('should end the session at its maximum lifetime however often it is refreshed', async () => {
+      const t = await signedIn();
+      t.clock.advanceBy(29 * DAY_MS);
+      const second = await t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken));
+
+      expect(second.refreshTokenExpiresAt).toEqual(
+        new Date(Date.parse('2026-10-09T10:00:00Z') + 45 * DAY_MS),
+      );
+
+      t.clock.advanceBy(17 * DAY_MS);
+      await expect(
+        t.refresh.execute(new RefreshSessionCommand(second.refreshToken)),
+      ).rejects.toThrow(InvalidRefreshTokenError);
     });
 
     it('should reject unknown and expired tokens', async () => {

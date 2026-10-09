@@ -69,6 +69,7 @@ export class InMemoryRefreshTokenRepository
             status: 'revoked',
             issuedAt: token.issuedAt,
             expiresAt: token.expiresAt,
+            familyExpiresAt: token.familyExpiresAt,
             usedAt: token.usedAt ?? now,
           }),
         );
@@ -89,6 +90,11 @@ export class InMemoryApiKeyRepository
 
   listByCenter(centerId: string): Promise<ApiKey[]> {
     return Promise.resolve(this.all().filter((key) => key.centerId === centerId));
+  }
+
+  // The aggregate instance already holds the new lastUsedAt; nothing else to store in memory.
+  recordUse(): Promise<void> {
+    return Promise.resolve();
   }
 }
 

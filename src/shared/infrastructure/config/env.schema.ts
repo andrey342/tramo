@@ -30,6 +30,7 @@ export const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  SESSION_MAX_DAYS: z.coerce.number().int().min(1).max(365).default(90),
   LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
   LOGIN_LOCK_BASE_SECONDS: z.coerce.number().int().min(1).default(60),
   LOGIN_LOCK_MAX_SECONDS: z.coerce.number().int().min(1).default(3_600),

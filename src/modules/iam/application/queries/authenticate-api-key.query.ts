@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import { type Principal } from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
 import { API_KEY_FORMAT, API_KEY_REPOSITORY, type ApiKeyRepository } from '../../domain';
@@ -20,7 +20,6 @@ export class AuthenticateApiKeyQuery extends Query<Principal | null> {
 @QueryHandler(AuthenticateApiKeyQuery)
 export class AuthenticateApiKeyHandler implements IQueryHandler<AuthenticateApiKeyQuery> {
   constructor(
-    @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(API_KEY_REPOSITORY) private readonly apiKeys: ApiKeyRepository,
     @Inject(CREDENTIAL_GENERATOR) private readonly credentials: CredentialGenerator,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -42,8 +41,9 @@ export class AuthenticateApiKeyHandler implements IQueryHandler<AuthenticateApiK
     if (presented.length !== stored.length || !timingSafeEqual(presented, stored)) {
       return null;
     }
-    if (apiKey.recordUse(this.clock.now())) {
-      await this.uow.run(() => this.apiKeys.save(apiKey));
+    const now = this.clock.now();
+    if (apiKey.recordUse(now)) {
+      await this.apiKeys.recordUse(apiKey.id, now);
     }
     return {
       kind: 'api_key',

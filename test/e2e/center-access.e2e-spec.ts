@@ -99,6 +99,23 @@ describe('Center users and API keys (e2e)', () => {
     expect(afterRevocation.body.code).toBe('invalid_api_key');
   });
 
+  it('should serve parallel requests with the same key', async () => {
+    const issued = await api()
+      .post(`/api/v1/centers/${centerId}/api-keys`)
+      .set(...bearer(adminToken))
+      .send({ name: 'Busy integration', scopes: ['applications:read'] });
+
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        api()
+          .get('/api/v1/me')
+          .set('X-Api-Key', issued.body.key as string),
+      ),
+    );
+
+    expect(responses.map((response) => response.status)).toEqual(Array(8).fill(200));
+  });
+
   it('should keep API keys out of endpoints that do not declare scopes', async () => {
     const issued = await api()
       .post(`/api/v1/centers/${centerId}/api-keys`)

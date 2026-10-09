@@ -64,6 +64,14 @@ export class TypeOrmApiKeyRepository implements ApiKeyRepository {
     return rows.map(toDomain);
   }
 
+  async recordUse(id: string, usedAt: Date): Promise<void> {
+    await this.txHost.tx.query(
+      `UPDATE iam.api_keys SET last_used_at = $2
+        WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < $2)`,
+      [id, usedAt],
+    );
+  }
+
   save(apiKey: ApiKey): Promise<void> {
     return this.persister.save(ApiKeyOrmEntity, apiKey, toRow(apiKey), 'ApiKey');
   }

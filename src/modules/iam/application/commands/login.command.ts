@@ -2,7 +2,7 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock } from '@shared/domain';
+import { CLOCK, type Clock, ConcurrentModificationError } from '@shared/domain';
 
 import {
   AccountTemporarilyLockedError,
@@ -54,13 +54,22 @@ export class LoginHandler implements ICommandHandler<LoginCommand> {
     }
     await this.attempts.reset(account);
 
-    return this.uow.run(async () => {
-      if (this.hasher.needsRehash(user.passwordHash)) {
-        user.replacePasswordHash(await this.hasher.hash(command.password));
-        await this.users.save(user);
+    if (this.hasher.needsRehash(user.passwordHash)) {
+      await this.upgradeHash(user, command.password);
+    }
+    return this.uow.run(() => this.sessions.issue(user, this.clock.now()));
+  }
+
+  // Best effort: if another request changed the user meanwhile, the next sign-in upgrades it.
+  private async upgradeHash(user: User, password: string): Promise<void> {
+    user.replacePasswordHash(await this.hasher.hash(password));
+    try {
+      await this.uow.run(() => this.users.save(user));
+    } catch (error) {
+      if (!(error instanceof ConcurrentModificationError)) {
+        throw error;
       }
-      return this.sessions.issue(user, this.clock.now());
-    });
+    }
   }
 
   // Unknown accounts still pay for one hash verification, so response time does not reveal which

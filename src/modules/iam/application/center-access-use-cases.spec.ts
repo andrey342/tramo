@@ -55,7 +55,7 @@ function setup() {
     issue: new IssueApiKeyHandler(uow, apiKeys, credentials, clock),
     revoke: new RevokeApiKeyHandler(uow, apiKeys, clock),
     list: new ListApiKeysHandler(apiKeys),
-    authenticate: new AuthenticateApiKeyHandler(uow, apiKeys, credentials, clock),
+    authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, clock),
   };
 }
 

@@ -30,6 +30,7 @@ export interface AppConfig {
     readonly jwtSecret: string;
     readonly accessTokenTtlSeconds: number;
     readonly refreshTokenTtlDays: number;
+    readonly sessionMaxDays: number;
     readonly lockout: {
       readonly maxFailures: number;
       readonly baseLockSeconds: number;
@@ -104,6 +105,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       jwtSecret: env.JWT_ACCESS_SECRET,
       accessTokenTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
       refreshTokenTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
+      sessionMaxDays: env.SESSION_MAX_DAYS,
       lockout: {
         maxFailures: env.LOGIN_MAX_FAILURES,
         baseLockSeconds: env.LOGIN_LOCK_BASE_SECONDS,

@@ -41,6 +41,7 @@ export const RefreshTokenMapper = {
       status: row.status,
       issuedAt: row.issuedAt,
       expiresAt: row.expiresAt,
+      familyExpiresAt: row.familyExpiresAt,
       usedAt: row.usedAt,
     });
     token.markPersisted(row.version);
@@ -56,6 +57,7 @@ export const RefreshTokenMapper = {
       status: token.status,
       issuedAt: token.issuedAt,
       expiresAt: token.expiresAt,
+      familyExpiresAt: token.familyExpiresAt,
       usedAt: token.usedAt,
     };
   },

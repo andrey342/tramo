@@ -29,15 +29,24 @@ export class SessionIssuer {
     @Inject(SESSION_SETTINGS) private readonly settings: SessionSettings,
   ) {}
 
-  async issue(user: User, now: Date, familyId: string = uuidv7()): Promise<SessionTokensDto> {
+  // Without `family` a new session starts; with it, the next token of that session is issued.
+  async issue(
+    user: User,
+    now: Date,
+    family: { id: string; expiresAt: Date } = {
+      id: uuidv7(),
+      expiresAt: new Date(now.getTime() + this.settings.sessionMaxLifetimeMs),
+    },
+  ): Promise<SessionTokensDto> {
     const secret = this.credentials.refreshToken();
     const refreshToken = RefreshToken.issue({
       id: uuidv7(),
-      familyId,
+      familyId: family.id,
       userId: user.id,
       tokenHash: secret.hash,
       now,
       ttlMs: this.settings.refreshTokenTtlMs,
+      familyExpiresAt: family.expiresAt,
     });
     await this.refreshTokens.save(refreshToken);
     const access = await this.accessTokens.issue({

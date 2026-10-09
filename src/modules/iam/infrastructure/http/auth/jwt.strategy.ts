@@ -3,7 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import { type Principal } from '@shared/application';
-import { isRole } from '@shared/domain';
+import { isRole, type Role } from '@shared/domain';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import {
@@ -27,12 +27,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   // The token is already verified here; this maps its claims to the principal every controller
   // sees. Unknown roles (from a newer or tampered token) are dropped rather than trusted.
-  validate(payload: AccessTokenPayload): Principal {
+  // Returning false makes passport answer 401, the same as for an invalid signature.
+  validate(payload: Partial<AccessTokenPayload>): Principal | false {
+    if (typeof payload.sub !== 'string' || !Array.isArray(payload.roles)) {
+      return false;
+    }
     return {
       kind: 'user',
       userId: payload.sub,
-      roles: payload.roles.filter((role) => isRole(role)),
-      centerId: payload.cid,
+      roles: (payload.roles as unknown[]).filter(
+        (role): role is Role => typeof role === 'string' && isRole(role),
+      ),
+      centerId: typeof payload.cid === 'string' ? payload.cid : null,
     };
   }
 }

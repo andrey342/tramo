@@ -74,6 +74,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig): SessionSettings => ({
         refreshTokenTtlMs: config.auth.refreshTokenTtlDays * DAY_MS,
+        sessionMaxLifetimeMs: config.auth.sessionMaxDays * DAY_MS,
       }),
     },
   ],

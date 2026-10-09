@@ -18,6 +18,7 @@ describe('RefreshToken', () => {
       tokenHash: 'h',
       now: NOW,
       ttlMs: 30 * DAY_MS,
+      familyExpiresAt: new Date(NOW.getTime() + 90 * DAY_MS),
     });
 
   it('should be consumed once while it is valid', () => {
@@ -26,6 +27,16 @@ describe('RefreshToken', () => {
     expect(token.consume(new Date(NOW.getTime() + DAY_MS)).ok).toBe(true);
     expect(token.status).toBe('rotated');
     expect(token.usedAt).toEqual(new Date(NOW.getTime() + DAY_MS));
+  });
+
+  it('should treat a token presented again within seconds as a retry, not as theft', () => {
+    const token = issue();
+    token.consume(NOW);
+
+    expect(token.consume(new Date(NOW.getTime() + 5_000))).toEqual({
+      ok: false,
+      error: 'superseded',
+    });
   });
 
   it('should report reuse when a consumed token comes back, even after it expired', () => {
@@ -44,6 +55,21 @@ describe('RefreshToken', () => {
     expect(token.status).toBe('active');
   });
 
+  it('should never outlive its session', () => {
+    const late = RefreshToken.issue({
+      id: 't-3',
+      familyId: 'f-1',
+      userId: 'u-1',
+      tokenHash: 'h',
+      now: NOW,
+      ttlMs: 30 * DAY_MS,
+      familyExpiresAt: new Date(NOW.getTime() + 10 * DAY_MS),
+    });
+
+    expect(late.expiresAt).toEqual(new Date(NOW.getTime() + 10 * DAY_MS));
+    expect(late.familyExpiresAt).toEqual(late.expiresAt);
+  });
+
   it('should reject a revoked token', () => {
     const token = RefreshToken.reconstitute('t-2', {
       familyId: 'f-1',
@@ -52,6 +78,7 @@ describe('RefreshToken', () => {
       status: 'revoked',
       issuedAt: NOW,
       expiresAt: new Date(NOW.getTime() + DAY_MS),
+      familyExpiresAt: new Date(NOW.getTime() + DAY_MS),
       usedAt: null,
     });
 

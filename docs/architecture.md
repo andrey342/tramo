@@ -59,3 +59,20 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010); later pages do not shift when new rows arrive.
+
+## Authentication
+
+- **Sessions.** Access tokens are HS256 JWTs valid for 15 minutes. Refresh tokens are opaque,
+  stored as SHA-256, single use and rotated on every refresh within a family. A family ends
+  `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed.
+- **Reuse.** A rotated refresh token presented again more than 10 seconds after its rotation is
+  treated as stolen: the whole family is revoked and `RefreshTokenReuseDetected` is published.
+  Within those 10 seconds it is rejected without revocation, because it is almost always the
+  legitimate client retrying a request whose response it lost.
+- **Lockout.** Failed sign-ins are counted per account, not per IP, so distributed guessing
+  cannot avoid them. The cost is that anyone can lock an account by failing on purpose; the lock is
+  progressive and capped at an hour, the auth routes are rate limited per client, and the attempts
+  are visible in the logs. A per-IP and device-cookie scheme would reduce that risk at the price of
+  more state.
+- **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
+  Routes opened to API keys are not implicitly open to users; they must also name roles.

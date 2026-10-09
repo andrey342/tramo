@@ -89,6 +89,7 @@ describe('iam repositories (integration)', () => {
         tokenHash: hash,
         now,
         ttlMs: 60_000,
+        familyExpiresAt: new Date(now.getTime() + 120_000),
       });
     const familyA = '0199a000-0000-7000-8000-00000000000a';
     const familyB = '0199a000-0000-7000-8000-00000000000b';

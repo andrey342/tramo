@@ -25,6 +25,9 @@ export class RefreshTokenOrmEntity {
   @Column({ type: 'timestamptz', name: 'expires_at', precision: 3 })
   expiresAt: Date;
 
+  @Column({ type: 'timestamptz', name: 'family_expires_at', precision: 3 })
+  familyExpiresAt: Date;
+
   @Column({ type: 'timestamptz', name: 'used_at', precision: 3, nullable: true })
   usedAt: Date | null;
 
