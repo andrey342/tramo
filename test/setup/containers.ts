@@ -1,8 +1,8 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
 
-export const POSTGRES_IMAGE = 'postgres:16-alpine';
-export const REDIS_IMAGE = 'redis:7-alpine';
+export const POSTGRES_IMAGE = 'postgres:16.15-alpine';
+export const REDIS_IMAGE = 'redis:7.4.11-alpine';
 
 export interface TestInfrastructure {
   readonly postgres: StartedPostgreSqlContainer;
