@@ -1,0 +1,4 @@
+# Single-package repo; this file only carries pnpm settings.
+allowBuilds:
+  '@parcel/watcher': true
+  unrs-resolver: true
