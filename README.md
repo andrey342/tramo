@@ -49,22 +49,26 @@ corepack enable pnpm
 pnpm install
 docker compose --profile dev up -d   # only postgres, redis, mailpit and the webhook sink
 pnpm start:dev                       # api on :3000, watch mode
+pnpm migration:run                   # create the schema (the compose api does this by itself)
 pnpm worker:dev                      # worker, health on :3100
 ```
 
 The `dev` profile on the command line takes precedence over `COMPOSE_PROFILES=demo` from `.env`,
 so the api and worker containers are not started and the host processes own ports 3000 and 3100.
 
-| Script                               | What it does                                            |
-| ------------------------------------ | ------------------------------------------------------- |
-| `pnpm start:dev` / `pnpm worker:dev` | Run the api / worker with `nest start --watch`          |
-| `pnpm build`                         | Compile to `dist/`                                      |
-| `pnpm start`                         | Run the compiled api                                    |
-| `pnpm lint` / `pnpm format`          | ESLint (type-aware) / Prettier                          |
-| `pnpm typecheck`                     | `tsc --noEmit` over sources, tests and scripts          |
-| `pnpm arch:check`                    | Dependency rules between layers and modules             |
-| `pnpm test` / `pnpm test:cov`        | Unit tests / with coverage                              |
-| `pnpm test:e2e`                      | HTTP tests against Postgres and Redis in Testcontainers |
+| Script                                     | What it does                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                          |
+| `pnpm build`                               | Compile to `dist/`                                                      |
+| `pnpm start`                               | Run the compiled api                                                    |
+| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                          |
+| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                          |
+| `pnpm arch:check`                          | Dependency rules between layers and modules                             |
+| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                              |
+| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers) |
+| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                  |
+| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                     |
+| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                    |
 
 Configuration is read from the environment and validated with zod at startup; an invalid or
 missing variable stops the process with a message naming it. A local `.env` is loaded if present,
@@ -79,19 +83,21 @@ but real environment variables always win. All variables and their defaults are 
 | `LOG_LEVEL`, `LOG_PRETTY`    | Pino level; pretty output for local runs only           |
 | `CORS_ORIGINS`               | Comma-separated allowlist                               |
 | `SWAGGER_ENABLED`            | Serve `/docs`                                           |
+| `DATABASE_RUN_MIGRATIONS`    | Apply pending migrations when the api starts            |
 
 ## Testing
 
 ```bash
 pnpm test          # unit tests, no Docker needed
-pnpm test:e2e      # needs a running Docker daemon (Testcontainers)
+pnpm test:int      # needs a running Docker daemon (Testcontainers)
+pnpm test:e2e      # same
 pnpm lint
 pnpm typecheck
 pnpm arch:check
 ```
 
-E2E tests start Postgres and Redis containers once per run and build the application through the
-same HTTP setup as `main.api.ts`, so they exercise routing, validation and error rendering as
+Integration and e2e tests start Postgres and Redis containers once per run and build the schema
+with the real migrations. E2E tests build the application through the same HTTP setup as `main.api.ts`, so they exercise routing, validation and error rendering as
 deployed. CI runs all of the above plus the Docker image build on every pull request.
 
 ## Architecture

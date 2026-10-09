@@ -25,9 +25,16 @@
     "prepare": "husky",
     "test:e2e": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-e2e.config.js --runInBand",
     "worker:dev": "nest start --watch --entryFile main.worker",
-    "arch:check": "depcruise src test --config .dependency-cruiser.cjs --output-type err"
+    "arch:check": "depcruise src test --config .dependency-cruiser.cjs --output-type err",
+    "test:int": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-int.config.js --runInBand",
+    "migration:run": "nest build && typeorm migration:run -d dist/src/shared/infrastructure/database/data-source.js",
+    "migration:revert": "nest build && typeorm migration:revert -d dist/src/shared/infrastructure/database/data-source.js",
+    "migration:show": "nest build && typeorm migration:show -d dist/src/shared/infrastructure/database/data-source.js",
+    "migration:generate": "nest build && typeorm migration:generate -d dist/src/shared/infrastructure/database/data-source.js"
   },
   "dependencies": {
+    "@nestjs-cls/transactional": "4.0.1",
+    "@nestjs-cls/transactional-adapter-typeorm": "2.0.1",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-express": "12.1.2",
@@ -39,6 +46,7 @@
     "decimal.js": "10.6.0",
     "helmet": "8.3.0",
     "ioredis": "6.0.0",
+    "nestjs-cls": "7.0.1",
     "nestjs-pino": "5.3.1",
     "pg": "8.23.1",
     "pino": "10.4.0",

@@ -1,4 +1,5 @@
 import { startInfrastructure, type TestInfrastructure } from './containers';
+import { migrateTestDatabase } from './migrate';
 
 declare global {
   var __TRAMO_INFRA__: TestInfrastructure | undefined;
@@ -13,4 +14,5 @@ export default async function globalSetup(): Promise<void> {
   process.env.LOG_PRETTY = 'false';
   process.env.DATABASE_URL = infra.postgres.getConnectionUri();
   process.env.REDIS_URL = infra.redis.getConnectionUrl();
+  await migrateTestDatabase(process.env);
 }
