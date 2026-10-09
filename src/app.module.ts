@@ -1,20 +1,9 @@
 import { Module } from '@nestjs/common';
 
-import { ConfigModule } from '@shared/infrastructure/config';
-import { DatabaseModule } from '@shared/infrastructure/database';
-import { HealthModule } from '@shared/infrastructure/health';
+import { CoreModule } from '@shared/infrastructure/core.module';
 import { HttpPlatformModule } from '@shared/infrastructure/http';
-import { LoggingModule } from '@shared/infrastructure/logging';
-import { RedisModule } from '@shared/infrastructure/redis';
 
 @Module({
-  imports: [
-    ConfigModule,
-    LoggingModule,
-    DatabaseModule.forRoot('tramo-api'),
-    RedisModule,
-    HttpPlatformModule,
-    HealthModule,
-  ],
+  imports: [CoreModule.forRoot({ applicationName: 'tramo-api' }), HttpPlatformModule],
 })
 export class AppModule {}

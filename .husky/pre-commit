@@ -2,17 +2,19 @@ pnpm exec lint-staged
 
 # Reject staged content carrying attribution trailers or tool names. Tooling config that
 # legitimately names the assistant is exempt; the README may mention it in its tooling section.
-forbidden='co-authored-by|anthropic|generated with|ai-generated'
-status=0
-for f in $(git diff --cached --name-only --diff-filter=ACMR); do
-  case "$f" in
-    CLAUDE.md | .claude/* | .mcp.json | .husky/* | commitlint.config.mjs) continue ;;
-  esac
-  pattern="$forbidden|claude"
-  [ "$f" = "README.md" ] && pattern="$forbidden"
-  if git show ":$f" | grep -qiIE "$pattern"; then
-    echo "pre-commit: forbidden attribution text in $f" >&2
-    status=1
-  fi
-done
-exit $status
+git diff --cached --name-only --diff-filter=ACMR | {
+  forbidden='co-authored-by|anthropic|generated with|ai-generated'
+  status=0
+  while IFS= read -r f; do
+    case "$f" in
+      CLAUDE.md | .claude/* | .mcp.json | .husky/* | commitlint.config.mjs) continue ;;
+    esac
+    pattern="$forbidden|claude"
+    [ "$f" = "README.md" ] && pattern="$forbidden"
+    if git show ":$f" | grep -qiIE "$pattern"; then
+      echo "pre-commit: forbidden attribution text in $f" >&2
+      status=1
+    fi
+  done
+  exit $status
+}

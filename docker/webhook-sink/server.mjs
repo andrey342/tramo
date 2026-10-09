@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 
 const PORT = Number(process.env.PORT ?? 9099);
 const KEEP = 200;
+const MAX_BODY_BYTES = 1024 * 1024;
 const deliveries = [];
 
 const server = createServer((req, res) => {
@@ -18,7 +19,16 @@ const server = createServer((req, res) => {
   }
 
   const chunks = [];
-  req.on('data', (chunk) => chunks.push(chunk));
+  let size = 0;
+  req.on('data', (chunk) => {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) {
+      res.writeHead(413).end();
+      req.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
   req.on('end', () => {
     const body = Buffer.concat(chunks).toString('utf8');
     const delivery = {

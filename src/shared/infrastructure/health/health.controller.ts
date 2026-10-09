@@ -1,4 +1,4 @@
-import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
+import { Controller, Get, Res, ServiceUnavailableException, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   HealthCheck,
@@ -6,6 +6,7 @@ import {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
+import { type Response } from 'express';
 
 import { RedisHealthIndicator } from './redis.health';
 
@@ -27,12 +28,22 @@ export class HealthController {
     return this.health.check([]);
   }
 
+  // A failing check is an expected outcome, not an error: answer 503 with Terminus' own body so
+  // the caller sees which dependency is down, instead of a generic problem document.
   @Get('ready')
   @HealthCheck()
-  ready(): Promise<HealthCheckResult> {
-    return this.health.check([
-      () => this.db.pingCheck('database').withTimeout(CHECK_TIMEOUT_MS),
-      () => this.redis.ping('redis', CHECK_TIMEOUT_MS),
-    ]);
+  async ready(@Res({ passthrough: true }) res: Response): Promise<HealthCheckResult> {
+    try {
+      return await this.health.check([
+        () => this.db.pingCheck('database').withTimeout(CHECK_TIMEOUT_MS),
+        () => this.redis.ping('redis', CHECK_TIMEOUT_MS),
+      ]);
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        res.status(error.getStatus());
+        return error.getResponse() as HealthCheckResult;
+      }
+      throw error;
+    }
   }
 }
