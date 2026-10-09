@@ -1,6 +1,6 @@
 export * from './errors/iam-errors';
 export * from './events/iam-events';
-export { ApiKey, type ApiKeyProps } from './model/api-key';
+export { API_KEY_FORMAT, ApiKey, type ApiKeyProps } from './model/api-key';
 export {
   assertPasswordPolicy,
   PASSWORD_MAX_LENGTH,

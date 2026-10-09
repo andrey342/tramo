@@ -19,6 +19,7 @@ export const envSchema = z.object({
   CORS_ORIGINS: commaSeparated,
   THROTTLE_TTL_MS: z.coerce.number().int().min(1_000).default(60_000),
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
+  THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),
   SWAGGER_ENABLED: z.stringbool().default(true),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),

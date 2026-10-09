@@ -7,13 +7,14 @@ import { AuthenticationGuard } from './infrastructure/http/auth/authentication.g
 import { AuthorizationGuard } from './infrastructure/http/auth/authorization.guard';
 import { JwtStrategy } from './infrastructure/http/auth/jwt.strategy';
 import { AuthController } from './infrastructure/http/auth.controller';
+import { CenterAccessController } from './infrastructure/http/center-access.controller';
 import { MeController } from './infrastructure/http/me.controller';
 
 // The api's door: auth endpoints plus the global guards. Authentication runs first and attaches
 // the principal; authorization then checks roles and API key scopes declared on each route.
 @Module({
   imports: [IamModule, PassportModule],
-  controllers: [AuthController, MeController],
+  controllers: [AuthController, MeController, CenterAccessController],
   providers: [
     JwtStrategy,
     { provide: APP_GUARD, useClass: AuthenticationGuard },

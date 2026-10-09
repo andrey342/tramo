@@ -1,8 +1,8 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 
+import { AuthRateLimited } from '@shared/infrastructure/http';
 import { Public } from '@shared/infrastructure/http/access.decorators';
 
 import { LoginCommand } from '../../application/commands/login.command';
@@ -19,12 +19,11 @@ import {
   SessionTokensResponse,
 } from './auth.dto';
 
-// Ten requests per minute per client on every auth route, on top of the per-account lockout.
-const AUTH_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
-
 @ApiTags('auth')
 @Public()
-@Throttle(AUTH_THROTTLE)
+// THROTTLE_AUTH_LIMIT requests per minute per client (10 by default), on top of the per-account
+// lockout.
+@AuthRateLimited()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly commands: CommandBus) {}

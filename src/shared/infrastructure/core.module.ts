@@ -1,6 +1,7 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 
+import { AuditModule } from './audit';
 import { ClockModule } from './clock/system-clock';
 import { ConfigModule } from './config';
 import { RequestContextModule } from './context';
@@ -26,6 +27,9 @@ export class CoreModule {
         LoggingModule,
         DatabaseModule.forRoot(options.applicationName),
         MessagingModule,
+        // The AuditTrail port is available to use cases in both processes; only the api's HTTP
+        // pipeline writes audit entries.
+        AuditModule,
         RedisModule,
         QueuesModule,
         HealthModule,

@@ -15,6 +15,9 @@ export interface ApiKeyProps {
   readonly revokedAt: Date | null;
 }
 
+// `tramo_<8 hex prefix>_<43 base64url chars>`: 32 random bytes behind a prefix that is safe to show.
+export const API_KEY_FORMAT = /^tramo_([0-9a-f]{8})_[A-Za-z0-9_-]{43}$/;
+
 // Recording every use would turn each authenticated request into a write.
 const LAST_USED_RESOLUTION_MS = 60_000;
 
