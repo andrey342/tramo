@@ -9,9 +9,10 @@ import { CoreModule } from '@shared/infrastructure/core.module';
 import { REDIS_CLIENT } from '@shared/infrastructure/redis';
 
 import { loginAttemptTrackerContract } from '../../../../test/contracts/login-attempt-tracker.contract';
+import { API_KEY_FORMAT } from '../domain';
 
 import { ARGON2_OPTIONS, Argon2PasswordHasher } from './adapters/argon2-password.hasher';
-import { API_KEY_PATTERN, CryptoCredentialGenerator } from './adapters/crypto-credential.generator';
+import { CryptoCredentialGenerator } from './adapters/crypto-credential.generator';
 import { JWT_AUDIENCE, JWT_ISSUER, JwtAccessTokenIssuer } from './adapters/jwt-access-token.issuer';
 import { RedisLoginAttemptTracker } from './adapters/redis-login-attempt.tracker';
 
@@ -88,7 +89,7 @@ describe('iam adapters (integration)', () => {
     it('should format api keys with a visible prefix', () => {
       const key = generator.apiKey();
 
-      expect(key.value).toMatch(API_KEY_PATTERN);
+      expect(key.value).toMatch(API_KEY_FORMAT);
       expect(key.value.startsWith(`tramo_${key.prefix}_`)).toBe(true);
     });
   });

@@ -132,8 +132,9 @@ export class SequentialCredentialGenerator implements CredentialGenerator {
 
   apiKey(): GeneratedApiKey {
     this.counter += 1;
-    const prefix = `pfx${String(this.counter)}`;
-    const value = `tramo_${prefix}_secret${String(this.counter)}`;
+    // Same shape as real keys so format checks are exercised.
+    const prefix = this.counter.toString(16).padStart(8, '0');
+    const value = `tramo_${prefix}_${String(this.counter).padStart(43, 'x')}`;
     return { value, prefix, hash: this.hash(value) };
   }
 
