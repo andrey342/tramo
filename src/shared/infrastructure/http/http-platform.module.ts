@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
-import { AuditInterceptor, AuditModule } from '../audit';
+import { AuditInterceptor } from '../audit';
 
 import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
 import { ProblemDetailsFilter } from './problem-details';
@@ -11,7 +11,7 @@ import { createValidationPipe } from './validation';
 // The HTTP pipeline of the api: rate limiting, validation, idempotency, auditing and error
 // rendering. The worker does not import it.
 @Module({
-  imports: [ThrottlingModule, AuditModule],
+  imports: [ThrottlingModule],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
     { provide: APP_PIPE, useFactory: createValidationPipe },
