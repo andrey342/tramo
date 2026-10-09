@@ -41,7 +41,7 @@ export default tseslint.config(
       'import-x/order': [
         'error',
         {
-          groups: ['builtin', 'external', 'internal', ['parent', 'sibling', 'index']],
+          groups: ['builtin', 'external', 'internal', 'parent', ['sibling', 'index']],
           pathGroups: [
             { pattern: '@shared/**', group: 'internal' },
             { pattern: '@modules/**', group: 'internal' },
@@ -66,7 +66,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['*.config.mjs', '*.config.ts'],
+    files: ['*.config.mjs', '*.config.ts', 'test/setup/global-*.ts'],
     rules: { 'import-x/no-default-export': 'off' },
   },
   prettier,
