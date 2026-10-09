@@ -76,17 +76,21 @@ missing variable stops the process with a message naming it. A local `.env` is l
 but real environment variables always win. All variables and their defaults are in
 [`.env.example`](.env.example); the main ones:
 
-| Variable                                       | Purpose                                                 |
-| ---------------------------------------------- | ------------------------------------------------------- |
-| `DATABASE_URL`                                 | Postgres connection string                              |
-| `REDIS_URL`                                    | Redis connection string                                 |
-| `PORT`, `WORKER_HEALTH_PORT`                   | HTTP ports of the api and of the worker health endpoint |
-| `LOG_LEVEL`, `LOG_PRETTY`                      | Pino level; pretty output for local runs only           |
-| `CORS_ORIGINS`                                 | Comma-separated allowlist                               |
-| `SWAGGER_ENABLED`                              | Serve `/docs`                                           |
-| `DATABASE_RUN_MIGRATIONS`                      | Apply pending migrations when the api starts            |
-| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE` | Worker outbox publisher pacing                          |
-| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`   | Basic auth for `/admin/queues`; no password disables it |
+| Variable                                                    | Purpose                                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------- |
+| `DATABASE_URL`                                              | Postgres connection string                              |
+| `REDIS_URL`                                                 | Redis connection string                                 |
+| `PORT`, `WORKER_HEALTH_PORT`                                | HTTP ports of the api and of the worker health endpoint |
+| `LOG_LEVEL`, `LOG_PRETTY`                                   | Pino level; pretty output for local runs only           |
+| `CORS_ORIGINS`                                              | Comma-separated allowlist                               |
+| `SWAGGER_ENABLED`                                           | Serve `/docs`                                           |
+| `DATABASE_RUN_MIGRATIONS`                                   | Apply pending migrations when the api starts            |
+| `JWT_ACCESS_SECRET`                                         | HS256 key for access tokens (32+ characters, required)  |
+| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`          | Session lifetimes (15 minutes, 30 days)                 |
+| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                        | Progressive lockout after failed sign-ins               |
+| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS` | Rate limits per client and proxy setting                |
+| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`              | Worker outbox publisher pacing                          |
+| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                | Basic auth for `/admin/queues`; no password disables it |
 
 ## Testing
 
@@ -117,9 +121,38 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
+| Module | Responsibility                             | Main endpoints                                                  |
+| ------ | ------------------------------------------ | --------------------------------------------------------------- |
+| `iam`  | Accounts, sessions, roles, center API keys | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
+
+## API overview
+
+The OpenAPI document at `/docs` lists every endpoint with its schemas and error responses.
+Errors are `application/problem+json` (RFC 9457) with a stable `code`.
+
+Every route requires authentication unless documented otherwise. Two ways in:
+
+- **Users** (students, center staff, operations, admins): `POST /api/v1/auth/login` returns a
+  15-minute bearer access token and a single-use refresh token. Send
+  `Authorization: Bearer <accessToken>`; renew with `POST /api/v1/auth/refresh`. Reusing an old
+  refresh token ends the session. Students self-register with `POST /api/v1/auth/register`;
+  center administrators are created by an admin (`POST /api/v1/centers/:id/users`).
+- **Training center integrations**: a center administrator issues an API key with explicit
+  scopes (`POST /api/v1/centers/:id/api-keys`, the key is shown once). Send it as
+  `X-Api-Key: tramo_<prefix>_<secret>`. Keys only work on endpoints that declare the scopes they
+  need.
+
+```bash
+curl -s -X POST localhost:3000/api/v1/auth/register -H 'content-type: application/json'   -d '{"email":"ana@example.com","password":"correct horse battery"}'
+curl -s -X POST localhost:3000/api/v1/auth/login -H 'content-type: application/json'   -d '{"email":"ana@example.com","password":"correct horse battery"}'
+curl -s localhost:3000/api/v1/me -H "Authorization: Bearer <accessToken>"
+```
+
+Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
+progressively after five failed attempts.
+
 ## Roadmap
 
-- Shared kernel: value objects, unit of work, transactional outbox, BullMQ, idempotency.
-- Identity and access, catalog of centers and programs, origination and scoring, lending,
-  billing and dunning, notifications and reporting.
+- Catalog of centers and programs, origination and scoring, lending, billing and dunning,
+  notifications and reporting.
 - Seed data, an end-to-end demo script and an API collection.
