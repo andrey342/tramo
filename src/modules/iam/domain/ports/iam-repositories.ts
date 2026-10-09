@@ -26,4 +26,6 @@ export interface ApiKeyRepository {
   findByPrefix(prefix: string): Promise<ApiKey | null>;
   listByCenter(centerId: string): Promise<ApiKey[]>;
   save(key: ApiKey): Promise<void>;
+  // Bookkeeping outside optimistic locking: concurrent requests with one key must not conflict.
+  recordUse(id: string, usedAt: Date): Promise<void>;
 }
