@@ -32,10 +32,10 @@ export class DeadLetterQueue {
       attemptsMade: job.attemptsMade,
       failedAt: now.toISOString(),
     };
-    // Same id as the source job, so a burial reported twice is stored once. Dead letters are
-    // kept until someone removes them.
+    // One entry per exhausted run: a job retried from the dashboard that fails again is recorded
+    // again. Dead letters are kept until someone removes them.
     await this.queue.add(job.name, letter, {
-      jobId: `${job.queueName}.${job.id ?? job.name}`,
+      jobId: `${job.queueName}.${job.id ?? job.name}.${String(now.getTime())}`,
       attempts: 1,
       removeOnComplete: false,
       removeOnFail: false,

@@ -3,8 +3,8 @@ import {
   Inject,
   Injectable,
   Logger,
+  type BeforeApplicationShutdown,
   type OnApplicationBootstrap,
-  type OnApplicationShutdown,
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { type JobsOptions, type Queue } from 'bullmq';
@@ -39,7 +39,7 @@ const MAX_BACKOFF_MS = 30_000;
 // sending a row twice. If Redis accepts the jobs but the commit fails, the rows are sent again on
 // the next pass; job ids (`<eventId>.<consumer>`) and consumer idempotency absorb the duplicate.
 @Injectable()
-export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShutdown {
+export class OutboxPublisher implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private readonly logger = new Logger(OutboxPublisher.name);
   private timer: NodeJS.Timeout | undefined;
   private inFlight: Promise<void> | undefined;
@@ -59,7 +59,9 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
     }
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  // Before, not on, shutdown: BullMQ closes its queues in onApplicationShutdown, and the batch in
+  // flight still needs them.
+  async beforeApplicationShutdown(): Promise<void> {
     this.stopped = true;
     clearTimeout(this.timer);
     await this.inFlight;
