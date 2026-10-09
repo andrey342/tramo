@@ -8,6 +8,9 @@ import {
 } from '@nestjs/common';
 import { type Request, type Response } from 'express';
 
+import { DomainError } from '@shared/domain';
+
+import { domainErrorToProblem } from './domain-error.mapper';
 import {
   PROBLEM_CONTENT_TYPE,
   type ProblemDetails,
@@ -34,7 +37,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       requestId: typeof request.id === 'string' ? request.id : undefined,
     };
 
-    if (!(exception instanceof HttpException)) {
+    if (!(exception instanceof HttpException || exception instanceof DomainError)) {
       this.logger.error({ err: exception, requestId: problem.requestId }, 'Unhandled exception');
     } else if (problem.status >= 500) {
       this.logger.warn({ requestId: problem.requestId, detail: problem.detail }, problem.title);
@@ -44,6 +47,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   }
 
   private toProblem(exception: unknown): ProblemDetails {
+    if (exception instanceof DomainError) {
+      return domainErrorToProblem(exception);
+    }
     if (exception instanceof ValidationProblemException) {
       return {
         type: problemType('validation-error'),
