@@ -1,22 +1,19 @@
-import { type IncomingMessage, type ServerResponse } from 'node:http';
-
 import { Module } from '@nestjs/common';
+import { ClsServiceManager } from 'nestjs-cls';
 import { LoggerModule } from 'nestjs-pino';
-import { uuidv7 } from 'uuidv7';
 
 import { APP_CONFIG, type AppConfig } from '../config';
+import { resolveRequestId } from '../context';
 
 import { censor, REDACTED_PATHS } from './redaction';
 
-export const REQUEST_ID_HEADER = 'x-request-id';
-const SAFE_REQUEST_ID = /^[\w.-]{1,128}$/;
 const QUIET_PATHS = ['/health', '/metrics'];
 
-function resolveRequestId(req: IncomingMessage, res: ServerResponse): string {
-  const incoming = req.headers[REQUEST_ID_HEADER];
-  const id = typeof incoming === 'string' && SAFE_REQUEST_ID.test(incoming) ? incoming : uuidv7();
-  res.setHeader(REQUEST_ID_HEADER, id);
-  return id;
+// Every log line carries the CLS id: the request id over HTTP, the correlation id inside jobs.
+function correlationMixin(): Record<string, string> {
+  const cls = ClsServiceManager.getClsService();
+  const id: unknown = cls.isActive() ? cls.getId() : undefined;
+  return typeof id === 'string' ? { correlationId: id } : {};
 }
 
 @Module({
@@ -27,6 +24,7 @@ function resolveRequestId(req: IncomingMessage, res: ServerResponse): string {
         pinoHttp: {
           level: config.log.level,
           genReqId: resolveRequestId,
+          mixin: correlationMixin,
           redact: { paths: [...REDACTED_PATHS], censor },
           autoLogging: {
             ignore: (req) => QUIET_PATHS.some((path) => req.url?.startsWith(path) === true),
