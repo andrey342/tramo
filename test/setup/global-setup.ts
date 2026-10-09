@@ -14,5 +14,6 @@ export default async function globalSetup(): Promise<void> {
   process.env.LOG_PRETTY = 'false';
   process.env.DATABASE_URL = infra.postgres.getConnectionUri();
   process.env.REDIS_URL = infra.redis.getConnectionUrl();
+  process.env.JWT_ACCESS_SECRET = 'test-secret-that-is-at-least-32-characters';
   await migrateTestDatabase(process.env);
 }
