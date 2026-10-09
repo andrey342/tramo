@@ -3,7 +3,7 @@ import { HealthIndicatorService, TerminusModule, TypeOrmHealthIndicator } from '
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
-import { HttpPlatformModule } from '../http';
+import { httpErrorHandlingProviders } from '../http/testing';
 
 import { HealthController } from './health.controller';
 import { RedisHealthIndicator } from './redis.health';
@@ -13,9 +13,10 @@ describe('HealthController', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [TerminusModule.forRoot({ logger: false }), HttpPlatformModule],
+      imports: [TerminusModule.forRoot({ logger: false })],
       controllers: [HealthController],
       providers: [
+        ...httpErrorHandlingProviders,
         {
           provide: TypeOrmHealthIndicator,
           inject: [HealthIndicatorService],

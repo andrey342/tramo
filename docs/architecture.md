@@ -38,3 +38,24 @@ flowchart LR
 | [009](adr/009-clock-port.md)                           | Time comes from an injectable Clock                            | accepted |
 | [010](adr/010-uri-versioning-cursor-pagination.md)     | URI versioning and cursor pagination                           | accepted |
 | [012](adr/012-toolchain-nest12-commonjs-jest.md)       | NestJS 12 on CommonJS, TypeScript 6 and Jest                   | accepted |
+
+## HTTP pipeline
+
+Every request to the api goes through, in order: request id and CLS context, rate limiting,
+validation, idempotency, the handler, auditing, and Problem Details rendering of errors.
+
+- **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
+  all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Routes declare
+  stricter limits with `@Throttle`; health checks are exempt. Exceeding the limit returns 429 with
+  `Retry-After`.
+- **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
+  scoped to the caller (user or API key). A short-lived "in progress" record (60 s) makes a
+  concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
+  `Idempotent-Replayed: true`. The same key with a different method, path or body returns 422.
+  Failed requests are not stored, so a client can fix the request and retry with the same key.
+- **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
+  `shared.audit_log` per call: actor, action, resource, outcome, error code, request id and the
+  changes the handler described through the `AuditTrail` port. The row is written after the
+  handler's transaction, so failed and rolled-back attempts are recorded too.
+- **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
+  (ADR 010); later pages do not shift when new rows arrive.

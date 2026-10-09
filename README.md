@@ -103,6 +103,10 @@ Integration and e2e tests start Postgres and Redis containers once per run and b
 with the real migrations. E2E tests build the application through the same HTTP setup as `main.api.ts`, so they exercise routing, validation and error rendering as
 deployed. CI runs all of the above plus the Docker image build on every pull request.
 
+On Docker Desktop (Windows), run the suites with only the `dev` profile up, not the full stack:
+with the api and worker containers also running we have seen sporadic `ECONNRESET` on the test
+containers' published ports. `docker compose stop api worker` is enough.
+
 ## Architecture
 
 A modular monolith with two runtime processes built from the same image: `api` (HTTP) and

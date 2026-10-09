@@ -6,6 +6,7 @@ import {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
+import { SkipThrottle } from '@nestjs/throttler';
 import { type Response } from 'express';
 
 import { RedisHealthIndicator } from './redis.health';
@@ -13,6 +14,7 @@ import { RedisHealthIndicator } from './redis.health';
 const CHECK_TIMEOUT_MS = 1500;
 
 @ApiTags('health')
+@SkipThrottle()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
