@@ -1,10 +1,17 @@
-import { type DynamicModule, Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { type DynamicModule, Global, Module } from '@nestjs/common';
+import { getDataSourceToken, TypeOrmModule } from '@nestjs/typeorm';
+import { ClsPluginTransactional } from '@nestjs-cls/transactional';
+import { TransactionalAdapterTypeOrm } from '@nestjs-cls/transactional-adapter-typeorm';
+import { ClsModule } from 'nestjs-cls';
+
+import { UNIT_OF_WORK } from '@shared/application';
 
 import { APP_CONFIG, type AppConfig } from '../config';
 
+import { ClsUnitOfWork } from './cls-unit-of-work';
 import { typeOrmOptions } from './typeorm-options';
 
+@Global()
 @Module({})
 export class DatabaseModule {
   static forRoot(applicationName: string): DynamicModule {
@@ -22,7 +29,14 @@ export class DatabaseModule {
             retryDelay: 2000,
           }),
         }),
+        ClsModule.registerPlugins([
+          new ClsPluginTransactional({
+            adapter: new TransactionalAdapterTypeOrm({ dataSourceToken: getDataSourceToken() }),
+          }),
+        ]),
       ],
+      providers: [{ provide: UNIT_OF_WORK, useClass: ClsUnitOfWork }],
+      exports: [UNIT_OF_WORK],
     };
   }
 }
