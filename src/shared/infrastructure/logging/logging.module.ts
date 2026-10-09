@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { uuidv7 } from 'uuidv7';
 
 import { APP_CONFIG, type AppConfig } from '../config';
+
 import { censor, REDACTED_PATHS } from './redaction';
 
 export const REQUEST_ID_HEADER = 'x-request-id';

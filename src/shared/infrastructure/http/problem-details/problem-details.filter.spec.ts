@@ -12,6 +12,7 @@ import { IsEmail, IsInt, Min, ValidateNested } from 'class-validator';
 import request from 'supertest';
 
 import { HttpPlatformModule } from '../http-platform.module';
+
 import { PROBLEM_CONTENT_TYPE } from './problem-details';
 
 class AddressDto {

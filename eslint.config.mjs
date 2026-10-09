@@ -41,7 +41,7 @@ export default tseslint.config(
       'import-x/order': [
         'error',
         {
-          groups: ['builtin', 'external', 'internal', ['parent', 'sibling', 'index']],
+          groups: ['builtin', 'external', 'internal', 'parent', ['sibling', 'index']],
           pathGroups: [
             { pattern: '@shared/**', group: 'internal' },
             { pattern: '@modules/**', group: 'internal' },
