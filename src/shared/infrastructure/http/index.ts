@@ -6,6 +6,7 @@ export {
   IDEMPOTENT_REPLAYED_HEADER,
 } from './idempotency/idempotent.decorator';
 export { CursorPageQueryDto } from './pagination';
+export { AuthRateLimited } from './throttling/throttling.module';
 export { CurrentPrincipal, principalOf, type RequestWithPrincipal } from './principal';
 export * from './problem-details';
 export { API_KEY_HEADER, setupSwagger } from './swagger';
