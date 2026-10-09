@@ -35,7 +35,8 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     env: env.NODE_ENV,
     http: { port: env.PORT, corsOrigins: env.CORS_ORIGINS },
     worker: { healthPort: env.WORKER_HEALTH_PORT },
-    log: { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY },
+    // pino-pretty is a dev dependency and is not installed in the production image.
+    log: { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY && env.NODE_ENV !== 'production' },
     docs: { enabled: env.SWAGGER_ENABLED },
     database: {
       url: env.DATABASE_URL,

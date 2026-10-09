@@ -38,4 +38,10 @@ describe('parseConfig', () => {
       /DATABASE_URL/,
     );
   });
+
+  it('should ignore pretty logging when running in production', () => {
+    const config = parseConfig({ ...validEnv, NODE_ENV: 'production', LOG_PRETTY: 'true' });
+
+    expect(config.log.pretty).toBe(false);
+  });
 });
