@@ -17,6 +17,12 @@ export interface AppConfig {
     readonly runMigrations: boolean;
   };
   readonly redis: { readonly url: string };
+  readonly outbox: {
+    readonly enabled: boolean;
+    readonly pollIntervalMs: number;
+    readonly batchSize: number;
+  };
+  readonly queueDashboard: { readonly username: string; readonly password: string | undefined };
 }
 
 export class InvalidConfigError extends Error {
@@ -46,5 +52,11 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       runMigrations: env.DATABASE_RUN_MIGRATIONS,
     },
     redis: { url: env.REDIS_URL },
+    outbox: {
+      enabled: env.OUTBOX_PUBLISHER_ENABLED,
+      pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
+      batchSize: env.OUTBOX_BATCH_SIZE,
+    },
+    queueDashboard: { username: env.BULL_BOARD_USERNAME, password: env.BULL_BOARD_PASSWORD },
   };
 }
