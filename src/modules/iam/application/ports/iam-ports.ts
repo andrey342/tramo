@@ -1,0 +1,62 @@
+import { type Role } from '@shared/domain';
+
+export const PASSWORD_HASHER = Symbol('PASSWORD_HASHER');
+export const ACCESS_TOKEN_ISSUER = Symbol('ACCESS_TOKEN_ISSUER');
+export const CREDENTIAL_GENERATOR = Symbol('CREDENTIAL_GENERATOR');
+export const LOGIN_ATTEMPTS = Symbol('LOGIN_ATTEMPTS');
+export const SESSION_SETTINGS = Symbol('SESSION_SETTINGS');
+
+export interface PasswordHasher {
+  hash(password: string): Promise<string>;
+  verify(hash: string, password: string): Promise<boolean>;
+  // True when the hash was produced with weaker parameters than the current ones.
+  needsRehash(hash: string): boolean;
+  // A valid hash of an unguessable password, verified when the account does not exist so that
+  // "unknown email" and "wrong password" take the same time.
+  readonly decoyHash: string;
+}
+
+export interface AccessTokenClaims {
+  readonly userId: string;
+  readonly roles: readonly Role[];
+  readonly centerId: string | null;
+}
+
+export interface IssuedAccessToken {
+  readonly token: string;
+  readonly expiresAt: Date;
+}
+
+export interface AccessTokenIssuer {
+  issue(claims: AccessTokenClaims): Promise<IssuedAccessToken>;
+}
+
+export interface GeneratedSecret {
+  // Returned to the client once; never stored.
+  readonly value: string;
+  readonly hash: string;
+}
+
+export interface GeneratedApiKey extends GeneratedSecret {
+  readonly prefix: string;
+}
+
+// Opaque credentials are high-entropy random strings, so a fast hash (SHA-256) is enough to store
+// them; password hashing is only needed for low-entropy secrets chosen by people.
+export interface CredentialGenerator {
+  refreshToken(): GeneratedSecret;
+  apiKey(): GeneratedApiKey;
+  hash(value: string): string;
+}
+
+// Progressive lockout per account after repeated failed sign-ins.
+export interface LoginAttemptTracker {
+  // Seconds until the account may try again; 0 when it is not locked.
+  lockedFor(account: string): Promise<number>;
+  recordFailure(account: string): Promise<void>;
+  reset(account: string): Promise<void>;
+}
+
+export interface SessionSettings {
+  readonly refreshTokenTtlMs: number;
+}
