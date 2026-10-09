@@ -28,6 +28,8 @@ const COMPLETED_TTL_MS = 24 * 60 * 60 * 1000;
 // Long enough for any request to finish; short enough that a crashed request does not block
 // retries for a day.
 const IN_PROGRESS_TTL_MS = 60 * 1000;
+// Response headers a client may rely on after a create; replayed along with status and body.
+const REPLAYED_HEADERS = ['location', 'content-location', 'etag'] as const;
 
 type IdempotencyRecord =
   | { readonly state: 'in_progress'; readonly fingerprint: string }
@@ -35,6 +37,7 @@ type IdempotencyRecord =
       readonly state: 'completed';
       readonly fingerprint: string;
       readonly status: number;
+      readonly headers: Readonly<Record<string, string>>;
       readonly body: unknown;
     };
 
@@ -80,6 +83,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
           state: 'completed',
           fingerprint,
           status: response.statusCode,
+          headers: replayableHeaders(response),
           body: body ?? null,
         };
         await this.redis.set(storageKey, JSON.stringify(record), 'PX', COMPLETED_TTL_MS);
@@ -127,6 +131,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
       throw inProgress();
     }
     response.status(existing.status);
+    for (const [name, value] of Object.entries(existing.headers)) {
+      response.setHeader(name, value);
+    }
     response.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
     return of(existing.body);
   }
@@ -151,6 +158,17 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const path = request.originalUrl.split('?', 1)[0] ?? '';
     return sha256(`${request.method} ${path}\n${stableStringify(request.body)}`);
   }
+}
+
+function replayableHeaders(response: Response): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const name of REPLAYED_HEADERS) {
+    const value = response.getHeader(name);
+    if (typeof value === 'string') {
+      headers[name] = value;
+    }
+  }
+  return headers;
 }
 
 function inProgress(): ProblemException {

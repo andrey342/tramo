@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
-import { AuditModule } from '../audit';
+import { AuditInterceptor, AuditModule } from '../audit';
 
 import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
 import { ProblemDetailsFilter } from './problem-details';
@@ -15,7 +15,10 @@ import { createValidationPipe } from './validation';
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
     { provide: APP_PIPE, useFactory: createValidationPipe },
+    // Global interceptors run in registration order, the first one outermost. Idempotency wraps
+    // auditing, so a replayed response is not audited as a second execution.
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class HttpPlatformModule {}
