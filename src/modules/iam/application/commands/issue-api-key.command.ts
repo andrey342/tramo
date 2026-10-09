@@ -8,7 +8,11 @@ import { type ApiKeyScope, CLOCK, type Clock } from '@shared/domain';
 import { API_KEY_REPOSITORY, ApiKey, type ApiKeyRepository } from '../../domain';
 import { actorId, assertCanManageCenter } from '../center-access';
 import { type IssuedApiKeyDto } from '../dto/api-key.dto';
-import { CREDENTIAL_GENERATOR, type CredentialGenerator } from '../ports/iam-ports';
+import {
+  CREDENTIAL_GENERATOR,
+  type CredentialGenerator,
+  type GeneratedApiKey,
+} from '../ports/iam-ports';
 
 import { toApiKeySummary } from './api-key.mapping';
 
@@ -34,7 +38,7 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
 
   async execute(command: IssueApiKeyCommand): Promise<IssuedApiKeyDto> {
     assertCanManageCenter(command.actor, command.centerId);
-    const secret = this.credentials.apiKey();
+    const secret = await this.uniqueSecret();
     const apiKey = ApiKey.issue({
       id: uuidv7(),
       centerId: command.centerId,
@@ -47,5 +51,16 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
     });
     await this.uow.run(() => this.apiKeys.save(apiKey));
     return { ...toApiKeySummary(apiKey), key: secret.value };
+  }
+
+  // Prefixes are 32 random bits and unique; a collision is rare but must not become an error.
+  private async uniqueSecret(): Promise<GeneratedApiKey> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const secret = this.credentials.apiKey();
+      if (!(await this.apiKeys.findByPrefix(secret.prefix))) {
+        return secret;
+      }
+    }
+    throw new Error('Could not generate an unused API key prefix.');
   }
 }
