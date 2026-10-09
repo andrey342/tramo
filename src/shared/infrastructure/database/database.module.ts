@@ -21,7 +21,7 @@ export class DatabaseModule {
         TypeOrmModule.forRootAsync({
           inject: [APP_CONFIG],
           useFactory: (config: AppConfig) => ({
-            ...typeOrmOptions(config, applicationName),
+            ...typeOrmOptions(config.database, applicationName),
             autoLoadEntities: true,
             // Logs are buffered until bootstrap finishes, so keep the silent retry window short
             // (~10 s) and let the orchestrator restart the process if the database stays away.

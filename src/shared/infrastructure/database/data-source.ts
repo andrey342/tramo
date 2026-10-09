@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 import { DataSource } from 'typeorm';
 
-import { loadDotEnv, parseConfig } from '../config';
+import { loadDotEnv, parseDatabaseConfig } from '../config';
 
 import { ENTITIES_GLOB, typeOrmOptions } from './typeorm-options';
 
@@ -11,7 +11,7 @@ import { ENTITIES_GLOB, typeOrmOptions } from './typeorm-options';
 loadDotEnv();
 
 export const dataSource = new DataSource({
-  ...typeOrmOptions(parseConfig(process.env), 'tramo-migrations'),
+  ...typeOrmOptions(parseDatabaseConfig(process.env), 'tramo-migrations'),
   entities: [ENTITIES_GLOB],
   migrationsRun: false,
 });

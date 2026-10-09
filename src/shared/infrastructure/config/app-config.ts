@@ -22,6 +22,16 @@ export interface AppConfig {
     readonly runMigrations: boolean;
   };
   readonly redis: { readonly url: string };
+  readonly auth: {
+    readonly jwtSecret: string;
+    readonly accessTokenTtlSeconds: number;
+    readonly refreshTokenTtlDays: number;
+    readonly lockout: {
+      readonly maxFailures: number;
+      readonly baseLockSeconds: number;
+      readonly maxLockSeconds: number;
+    };
+  };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -35,6 +45,30 @@ export class InvalidConfigError extends Error {
     super(`Invalid environment configuration:\n${details}`);
     this.name = 'InvalidConfigError';
   }
+}
+
+export type DatabaseConfig = AppConfig['database'];
+
+const databaseEnvSchema = envSchema.pick({
+  DATABASE_URL: true,
+  DATABASE_POOL_MAX: true,
+  DATABASE_LOG_QUERIES: true,
+  DATABASE_RUN_MIGRATIONS: true,
+});
+
+// For tools that only touch the database (migration CLI, test setup), so they do not need the
+// application's secrets.
+export function parseDatabaseConfig(source: Record<string, string | undefined>): DatabaseConfig {
+  const result = databaseEnvSchema.safeParse(source);
+  if (!result.success) {
+    throw new InvalidConfigError(z.prettifyError(result.error));
+  }
+  return {
+    url: result.data.DATABASE_URL,
+    poolMax: result.data.DATABASE_POOL_MAX,
+    logQueries: result.data.DATABASE_LOG_QUERIES,
+    runMigrations: result.data.DATABASE_RUN_MIGRATIONS,
+  };
 }
 
 export function parseConfig(source: Record<string, string | undefined>): AppConfig {
@@ -58,6 +92,16 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       runMigrations: env.DATABASE_RUN_MIGRATIONS,
     },
     redis: { url: env.REDIS_URL },
+    auth: {
+      jwtSecret: env.JWT_ACCESS_SECRET,
+      accessTokenTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
+      refreshTokenTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
+      lockout: {
+        maxFailures: env.LOGIN_MAX_FAILURES,
+        baseLockSeconds: env.LOGIN_LOCK_BASE_SECONDS,
+        maxLockSeconds: env.LOGIN_LOCK_MAX_SECONDS,
+      },
+    },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
