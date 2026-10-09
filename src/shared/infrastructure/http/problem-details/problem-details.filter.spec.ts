@@ -12,6 +12,8 @@ import { Type } from 'class-transformer';
 import { IsEmail, IsInt, Min, ValidateNested } from 'class-validator';
 import request from 'supertest';
 
+import { InvalidStateTransitionError, InvalidValueError } from '@shared/domain';
+
 import { HttpPlatformModule } from '../http-platform.module';
 
 import { PROBLEM_CONTENT_TYPE } from './problem-details';
@@ -41,6 +43,16 @@ class ProbeController {
   @Get('forbidden')
   forbidden(): never {
     throw new ForbiddenException();
+  }
+
+  @Get('transition')
+  transition(): never {
+    throw new InvalidStateTransitionError('Contract', 'DRAFT', 'ACTIVE');
+  }
+
+  @Get('invalid-value')
+  invalidValue(): never {
+    throw new InvalidValueError('nationalId', 'DNI control letter does not match.');
   }
 
   @Get('boom')
@@ -95,6 +107,27 @@ describe('ProblemDetailsFilter', () => {
 
     expect(response.status).toBe(403);
     expect(response.body).not.toHaveProperty('detail');
+  });
+
+  it('should map domain errors by category with their stable code', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/transition');
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      type: 'urn:tramo:problem:invalid-state-transition',
+      title: 'Invalid state transition',
+      code: 'invalid_state_transition',
+      detail: 'Contract cannot move from DRAFT to ACTIVE.',
+    });
+  });
+
+  it('should report the offending field of an invalid domain value', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/invalid-value');
+
+    expect(response.status).toBe(422);
+    expect(response.body.errors).toEqual([
+      { field: 'nationalId', message: 'DNI control letter does not match.' },
+    ]);
   });
 
   it('should hide internal details when the error is unexpected', async () => {
