@@ -43,6 +43,10 @@ export interface CursorOptions<T> {
 
 // Keyset pagination on (sort column, id): stable under concurrent inserts and the same cost on
 // every page. Requires an index on (sortColumn, idColumn) in the same direction.
+//
+// Timestamp sort columns must be `timestamptz(3)`. The cursor carries the value as a JS Date
+// (millisecond precision); with Postgres' default microsecond precision the next page would skip
+// rows whose timestamps fall inside the truncated millisecond.
 export async function paginateByCursor<T extends ObjectLiteral>(
   query: SelectQueryBuilder<T>,
   page: PageRequest,

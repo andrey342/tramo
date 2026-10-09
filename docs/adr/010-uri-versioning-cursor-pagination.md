@@ -16,7 +16,8 @@ are being inserted.
   the `/api` prefix. A breaking change ships as `/api/v2` for the affected controllers only.
 - List endpoints return `{ data: [...], nextCursor: string | null }`. The cursor is opaque
   (base64url of the last row's sort key and id), ordering is always stable (`created_at, id`) and
-  every cursor column is indexed.
+  every cursor column is indexed. Timestamp cursor columns are `timestamptz(3)`: the cursor goes
+  through a JavaScript `Date`, and microsecond values would be truncated and skip rows.
 
 ### Rejected options
 
