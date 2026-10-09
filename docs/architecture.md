@@ -1,0 +1,33 @@
+# Architecture
+
+Tramo is a modular monolith (ADR 001) deployed as two processes built from one image.
+
+## Containers
+
+```mermaid
+flowchart LR
+  student([Student]) -->|HTTPS| api
+  center([Training center]) -->|HTTPS + API key| api
+  ops([Operations]) -->|HTTPS| api
+
+  subgraph tramo [Tramo]
+    api[api<br/>NestJS HTTP]
+    worker[worker<br/>queues, outbox publisher]
+  end
+
+  api --> pg[(PostgreSQL<br/>schema per module)]
+  worker --> pg
+  api --> redis[(Redis<br/>queues, rate limits, idempotency)]
+  worker --> redis
+  worker -->|SMTP| mail[Mailpit]
+  worker -->|signed webhooks| sink[Center webhook endpoint]
+```
+
+## Decision records
+
+| ADR                                                | Title                                                   | Status   |
+| -------------------------------------------------- | ------------------------------------------------------- | -------- |
+| [001](adr/001-modular-monolith.md)                 | Modular monolith with separate api and worker processes | accepted |
+| [006](adr/006-problem-details-errors.md)           | RFC 9457 Problem Details for every error response       | accepted |
+| [010](adr/010-uri-versioning-cursor-pagination.md) | URI versioning and cursor pagination                    | accepted |
+| [012](adr/012-toolchain-nest12-commonjs-jest.md)   | NestJS 12 on CommonJS, TypeScript 6 and Jest            | accepted |
