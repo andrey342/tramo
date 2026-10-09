@@ -9,6 +9,13 @@ export const API_PREFIX = 'api';
 
 // Shared by main.api.ts and the e2e suite so tests exercise the same HTTP pipeline as production.
 export function configureHttpApp(app: INestApplication, config: AppConfig): void {
+  if (config.http.trustProxyHops > 0) {
+    // Express then derives req.ip from X-Forwarded-For, skipping exactly that many proxies.
+    (app.getHttpAdapter().getInstance() as { set(key: string, value: unknown): void }).set(
+      'trust proxy',
+      config.http.trustProxyHops,
+    );
+  }
   app.use(helmet());
   app.enableCors({ origin: [...config.http.corsOrigins], credentials: false });
   app.setGlobalPrefix(API_PREFIX, {
