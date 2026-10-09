@@ -2,3 +2,8 @@
 allowBuilds:
   '@parcel/watcher': true
   unrs-resolver: true
+  # Usage telemetry and optional native speedups we do not need.
+  '@scarf/scarf': false
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
