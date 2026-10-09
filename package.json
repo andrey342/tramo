@@ -18,9 +18,9 @@
     "format": "prettier --write \"{src,test,scripts,docs,docker,.github}/**/*.{ts,js,md,yml,yaml,json}\" \"*.{json,mjs,js,yml,yaml}\" README.md",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "test": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --watch",
+    "test:cov": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --coverage",
     "format:check": "prettier --check \"{src,test,scripts,docs,docker,.github}/**/*.{ts,js,md,yml,yaml,json}\" \"*.{json,mjs,js,yml,yaml}\" README.md",
     "prepare": "husky"
   },
