@@ -30,6 +30,10 @@ export class AuthorizationGuard implements CanActivate {
 
     switch (principal.kind) {
       case 'user':
+        // A route opened to API keys is not implicitly open to every user: it must name roles.
+        if (scopes && !roles) {
+          throw forbidden('This endpoint is only available to API keys.');
+        }
         if (roles && !roles.some((role) => principal.roles.includes(role))) {
           throw forbidden('Your role does not allow this operation.');
         }
