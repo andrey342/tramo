@@ -2,7 +2,7 @@ import { Inject, Logger } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { EVENT_BUS, type EventBus, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock } from '@shared/domain';
+import { CLOCK, type Clock, ConcurrentModificationError } from '@shared/domain';
 
 import {
   IamEvents,
@@ -42,32 +42,42 @@ export class RefreshSessionHandler implements ICommandHandler<RefreshSessionComm
     const now = this.clock.now();
     // Rejections commit their own side effects (revocation) and are thrown after the transaction,
     // otherwise the rollback would undo the revocation.
-    const outcome = await this.uow.run(async () => {
-      const token = await this.refreshTokens.findByTokenHash(
-        this.credentials.hash(command.refreshToken),
-      );
-      if (!token) {
-        return null;
-      }
-      const consumed = token.consume(now);
-      if (!consumed.ok) {
-        if (consumed.error === 'reused') {
-          await this.revokeAfterReuse(token, now);
+    const outcome = await this.uow
+      .run(async () => this.rotate(command.refreshToken, now))
+      .catch((error: unknown) => {
+        // Two requests raced with the same token (a retried request, a double click): one of them
+        // rotated it first. Not theft, so the session survives; the loser just has to use the
+        // winner's token.
+        if (error instanceof ConcurrentModificationError) {
+          return null;
         }
-        return null;
-      }
-      const user = await this.users.findById(token.userId);
-      if (!user?.canSignIn) {
-        await this.refreshTokens.revokeFamily(token.familyId, now);
-        return null;
-      }
-      await this.refreshTokens.save(token);
-      return this.sessions.issue(user, now, token.familyId);
-    });
+        throw error;
+      });
     if (!outcome) {
       throw new InvalidRefreshTokenError();
     }
     return outcome;
+  }
+
+  private async rotate(refreshToken: string, now: Date): Promise<SessionTokensDto | null> {
+    const token = await this.refreshTokens.findByTokenHash(this.credentials.hash(refreshToken));
+    if (!token) {
+      return null;
+    }
+    const consumed = token.consume(now);
+    if (!consumed.ok) {
+      if (consumed.error === 'reused') {
+        await this.revokeAfterReuse(token, now);
+      }
+      return null;
+    }
+    const user = await this.users.findById(token.userId);
+    if (!user?.canSignIn) {
+      await this.refreshTokens.revokeFamily(token.familyId, now);
+      return null;
+    }
+    await this.refreshTokens.save(token);
+    return this.sessions.issue(user, now, { id: token.familyId, expiresAt: token.familyExpiresAt });
   }
 
   private async revokeAfterReuse(token: RefreshToken, now: Date): Promise<void> {

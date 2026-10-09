@@ -58,5 +58,8 @@ export interface LoginAttemptTracker {
 }
 
 export interface SessionSettings {
+  // Lifetime of one refresh token; each rotation issues a new one.
   readonly refreshTokenTtlMs: number;
+  // Absolute lifetime of a session, however often it is refreshed.
+  readonly sessionMaxLifetimeMs: number;
 }

@@ -78,7 +78,7 @@ describe('Authentication (e2e)', () => {
     expect(forged.status).toBe(401);
   });
 
-  it('should rotate refresh tokens and revoke the session when an old one is replayed', async () => {
+  it('should rotate refresh tokens and reject the old one', async () => {
     const { tokens } = await registerAndLogin(uniqueEmail('rotate'));
 
     const rotated = await api()
@@ -92,11 +92,26 @@ describe('Authentication (e2e)', () => {
       .send({ refreshToken: tokens.refreshToken });
     expect(replay.status).toBe(401);
     expect(replay.body.code).toBe('invalid_refresh_token');
+    // Revoking the family when an old token comes back after the grace window is covered by the
+    // unit tests, which control the clock.
+  });
 
-    const afterTheft = await api()
+  it('should let one of two simultaneous refreshes win without ending the session', async () => {
+    const { tokens } = await registerAndLogin(uniqueEmail('race'));
+
+    const results = await Promise.all([
+      api().post('/api/v1/auth/refresh').send({ refreshToken: tokens.refreshToken }),
+      api().post('/api/v1/auth/refresh').send({ refreshToken: tokens.refreshToken }),
+    ]);
+
+    const statuses = results.map((response) => response.status).sort();
+    expect(statuses).toContain(200);
+    expect(statuses.every((status) => status === 200 || status === 401)).toBe(true);
+    const winner = results.find((response) => response.status === 200);
+    const next = await api()
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: rotated.body.refreshToken });
-    expect(afterTheft.status).toBe(401);
+      .send({ refreshToken: winner?.body.refreshToken as string });
+    expect(next.status).toBe(200);
   });
 
   it('should end the session on logout', async () => {
