@@ -181,7 +181,8 @@ describe('Event delivery through the outbox (integration)', () => {
 
     const deadLetters = app.get<Queue>(getQueueToken(QueueNames.DEAD_LETTER));
     await eventually(async () => {
-      const letter = await deadLetters.getJob('events.notifications.probe-dlq');
+      const letters = await deadLetters.getJobs(['waiting']);
+      const letter = letters.find((job) => job.id?.startsWith('events.notifications.probe-dlq.'));
       expect(letter?.data).toMatchObject({
         queue: 'events.notifications',
         jobName: 'notifications.always-fails',

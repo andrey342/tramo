@@ -53,7 +53,7 @@ describe('paginateByCursor (integration)', () => {
     app = await moduleRef.init();
     db = app.get(DataSource);
     await db.query(
-      'CREATE TABLE IF NOT EXISTS public.page_probe (id text PRIMARY KEY, created_at timestamptz NOT NULL)',
+      'CREATE TABLE IF NOT EXISTS public.page_probe (id text PRIMARY KEY, created_at timestamptz(3) NOT NULL DEFAULT now())',
     );
     await db.query('TRUNCATE public.page_probe');
     // Pairs of rows share a timestamp, so the id tie-breaker is exercised.
@@ -103,6 +103,22 @@ describe('paginateByCursor (integration)', () => {
       'row-14',
       'row-13',
     ]);
+  });
+
+  it('should not skip rows created within the same millisecond by the database clock', async () => {
+    await db.query('TRUNCATE public.page_probe');
+    await db.query(
+      "INSERT INTO public.page_probe (id) SELECT 'burst-' || lpad(n::text, 2, '0') FROM generate_series(1, 12) AS n",
+    );
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const result = await page(5, cursor);
+      seen.push(...result.data.map((row) => row.id));
+      cursor = result.nextCursor ?? undefined;
+    } while (cursor);
+
+    expect(new Set(seen).size).toBe(12);
   });
 
   it('should return a null cursor when everything fits in one page', async () => {

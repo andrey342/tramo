@@ -39,6 +39,12 @@ describe('parseConfig', () => {
     );
   });
 
+  it('should treat an empty dashboard password as not configured', () => {
+    expect(parseConfig({ ...validEnv, BULL_BOARD_PASSWORD: '' }).queueDashboard.password).toBe(
+      undefined,
+    );
+  });
+
   it('should ignore pretty logging when running in production', () => {
     const config = parseConfig({ ...validEnv, NODE_ENV: 'production', LOG_PRETTY: 'true' });
 

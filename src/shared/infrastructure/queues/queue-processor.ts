@@ -46,6 +46,14 @@ export abstract class QueueProcessor<
       );
       return;
     }
-    await this.deadLetters.bury(job, error, this.clock.now());
+    // Runs inside an event listener: a rejection here would be unhandled and stop the worker.
+    try {
+      await this.deadLetters.bury(job, error, this.clock.now());
+    } catch (buryError) {
+      this.logger.error(
+        { queue: job.queueName, jobId: job.id, err: buryError },
+        'Could not move exhausted job to the dead-letter queue; it remains in the failed set',
+      );
+    }
   }
 }

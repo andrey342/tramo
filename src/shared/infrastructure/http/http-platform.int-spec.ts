@@ -1,4 +1,4 @@
-import { Body, Controller, Inject, type INestApplication, Param, Post } from '@nestjs/common';
+import { Body, Controller, Inject, type INestApplication, Param, Post, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Throttle } from '@nestjs/throttler';
 import { IsInt, Min } from 'class-validator';
@@ -25,6 +25,7 @@ class PaymentDto {
 }
 
 let paymentsTaken = 0;
+let refundsIssued = 0;
 
 @Controller('probe')
 class ProbeController {
@@ -36,6 +37,15 @@ class ProbeController {
     paymentsTaken += 1;
     await new Promise((resolve) => setTimeout(resolve, 150));
     return { id: `payment-${paymentsTaken}`, amountCents: body.amountCents };
+  }
+
+  @Post('refunds')
+  @Idempotent()
+  @Audited({ action: 'refund.create', resource: 'refund' })
+  refund(@Res({ passthrough: true }) res: Response): { id: string } {
+    refundsIssued += 1;
+    res.setHeader('Location', '/api/v1/refunds/refund-1');
+    return { id: 'refund-1' };
   }
 
   @Post('limited')
@@ -135,6 +145,24 @@ describe('HTTP platform (integration)', () => {
       await pay('key-shared', 1000, 'student-2');
 
       expect(paymentsTaken - before).toBe(2);
+    });
+
+    it('should replay the Location header and audit only the real execution', async () => {
+      const call = (): request.Test =>
+        request(app.getHttpServer())
+          .post('/api/v1/probe/refunds')
+          .set('x-test-user', 'ops-9')
+          .set('Idempotency-Key', 'key-refund');
+      await call();
+      const replay = await call();
+
+      expect(replay.headers.location).toBe('/api/v1/refunds/refund-1');
+      expect(replay.headers['idempotent-replayed']).toBe('true');
+      expect(refundsIssued).toBe(1);
+      const entries: unknown[] = await db.query(
+        "SELECT id FROM shared.audit_log WHERE action = 'refund.create'",
+      );
+      expect(entries).toHaveLength(1);
     });
 
     it('should not keep the key when the request fails validation', async () => {
