@@ -47,9 +47,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:cov
 
+  e2e:
+    name: E2E tests
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e
+
   build:
     name: Build
-    needs: unit
+    needs: [unit, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

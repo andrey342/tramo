@@ -66,7 +66,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['*.config.mjs', '*.config.ts'],
+    files: ['*.config.mjs', '*.config.ts', 'test/setup/global-*.ts'],
     rules: { 'import-x/no-default-export': 'off' },
   },
   prettier,
