@@ -25,6 +25,13 @@ export const envSchema = z.object({
   DATABASE_LOG_QUERIES: z.stringbool().default(false),
   DATABASE_RUN_MIGRATIONS: z.stringbool().default(false),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
+  // HS256 signing key for access tokens. 32+ characters; rotate by redeploying (tokens live 15 min).
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
+  LOGIN_LOCK_BASE_SECONDS: z.coerce.number().int().min(1).default(60),
+  LOGIN_LOCK_MAX_SECONDS: z.coerce.number().int().min(1).default(3_600),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),

@@ -44,6 +44,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       this.logger.warn({ requestId: problem.requestId, detail: problem.detail }, problem.title);
     }
 
+    const retryAfter =
+      exception instanceof DomainError ? exception.details?.retryAfterSeconds : undefined;
+    if (typeof retryAfter === 'number') {
+      response.setHeader('Retry-After', String(retryAfter));
+    }
     response.status(problem.status).type(PROBLEM_CONTENT_TYPE).json(problem);
   }
 

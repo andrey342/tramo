@@ -2,6 +2,8 @@
 allowBuilds:
   '@parcel/watcher': true
   unrs-resolver: true
+  # Only checks for a matching prebuilt binary; compiles from source when none exists.
+  argon2: true
   # Usage telemetry and optional native speedups we do not need.
   '@scarf/scarf': false
   cpu-features: false

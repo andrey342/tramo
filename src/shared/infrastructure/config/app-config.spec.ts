@@ -3,6 +3,7 @@ import { InvalidConfigError, parseConfig } from './app-config';
 const validEnv = {
   DATABASE_URL: 'postgres://tramo:tramo@localhost:5432/tramo',
   REDIS_URL: 'redis://localhost:6379',
+  JWT_ACCESS_SECRET: 'a'.repeat(32),
 };
 
 describe('parseConfig', () => {

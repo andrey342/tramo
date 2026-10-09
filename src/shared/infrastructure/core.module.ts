@@ -1,4 +1,5 @@
 import { type DynamicModule, Module } from '@nestjs/common';
+import { CqrsModule } from '@nestjs/cqrs';
 
 import { ClockModule } from './clock/system-clock';
 import { ConfigModule } from './config';
@@ -19,6 +20,8 @@ export class CoreModule {
       imports: [
         ConfigModule,
         ClockModule,
+        // Command, query and event buses for every module; handlers are discovered globally.
+        CqrsModule.forRoot(),
         RequestContextModule,
         LoggingModule,
         DatabaseModule.forRoot(options.applicationName),
