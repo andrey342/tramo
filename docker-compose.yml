@@ -1,0 +1,124 @@
+# Profiles: `demo` runs the whole stack (default via COMPOSE_PROFILES in .env);
+# `dev` runs only the infrastructure so the api and worker can run on the host.
+name: tramo
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: tramo:local
+  profiles: [demo]
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  environment: &app-env
+    NODE_ENV: production
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    LOG_PRETTY: 'false'
+    PORT: 3000
+    WORKER_HEALTH_PORT: 3100
+    CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    SWAGGER_ENABLED: 'true'
+    DATABASE_URL: postgres://${POSTGRES_USER:-tramo}:${POSTGRES_PASSWORD:-tramo}@postgres:5432/${POSTGRES_DB:-tramo}
+    DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+    REDIS_URL: redis://redis:6379
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    profiles: [dev, demo]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tramo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tramo}
+      POSTGRES_DB: ${POSTGRES_DB:-tramo}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4.11-alpine
+    profiles: [dev, demo]
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    profiles: [dev, demo]
+    restart: unless-stopped
+    ports:
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+
+  webhook-sink:
+    image: node:24.19.0-alpine
+    profiles: [dev, demo]
+    restart: unless-stopped
+    command: ['node', '/srv/server.mjs']
+    environment:
+      PORT: 9099
+    ports:
+      - '${WEBHOOK_SINK_PORT:-9099}:9099'
+    volumes:
+      - ./docker/webhook-sink/server.mjs:/srv/server.mjs:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:9099/health']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    <<: *app
+    ports:
+      - '${API_PORT:-3000}:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+  worker:
+    <<: *app
+    command: ['node', '--enable-source-maps', 'dist/src/main.worker.js']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3100/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+volumes:
+  pgdata:
+  redisdata:
