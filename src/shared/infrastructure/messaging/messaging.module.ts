@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { EVENT_BUS, IDEMPOTENCY_STORE } from '@shared/application';
 
+import { AggregatePersister } from '../database/aggregate-persister';
+
 import { OutboxEventBus } from './outbox-event-bus';
 import { OutboxMessageOrmEntity } from './outbox-message.orm-entity';
 import { ProcessedEventsStore } from './processed-events.store';
@@ -13,7 +15,8 @@ import { ProcessedEventsStore } from './processed-events.store';
   providers: [
     { provide: EVENT_BUS, useClass: OutboxEventBus },
     { provide: IDEMPOTENCY_STORE, useClass: ProcessedEventsStore },
+    AggregatePersister,
   ],
-  exports: [EVENT_BUS, IDEMPOTENCY_STORE, TypeOrmModule],
+  exports: [EVENT_BUS, IDEMPOTENCY_STORE, AggregatePersister, TypeOrmModule],
 })
 export class MessagingModule {}
