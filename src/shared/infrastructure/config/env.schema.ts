@@ -30,7 +30,13 @@ export const envSchema = z.object({
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
   BULL_BOARD_USERNAME: z.string().min(1).default('ops'),
   // Bull Board is only served when a password is configured.
-  BULL_BOARD_PASSWORD: z.string().min(8).optional(),
+  BULL_BOARD_PASSWORD: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(8).optional(),
+  ),
+  // Number of reverse proxies in front of the api; the client IP for rate limiting is read from
+  // X-Forwarded-For only when this is set.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
 });
 
 export type Env = z.infer<typeof envSchema>;

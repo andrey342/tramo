@@ -6,7 +6,11 @@ export const APP_CONFIG = Symbol('APP_CONFIG');
 
 export interface AppConfig {
   readonly env: 'development' | 'test' | 'production';
-  readonly http: { readonly port: number; readonly corsOrigins: readonly string[] };
+  readonly http: {
+    readonly port: number;
+    readonly corsOrigins: readonly string[];
+    readonly trustProxyHops: number;
+  };
   readonly throttling: { readonly ttlMs: number; readonly limit: number };
   readonly worker: { readonly healthPort: number };
   readonly log: { readonly level: string; readonly pretty: boolean };
@@ -41,7 +45,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
   const env = result.data;
   return {
     env: env.NODE_ENV,
-    http: { port: env.PORT, corsOrigins: env.CORS_ORIGINS },
+    http: { port: env.PORT, corsOrigins: env.CORS_ORIGINS, trustProxyHops: env.TRUST_PROXY_HOPS },
     throttling: { ttlMs: env.THROTTLE_TTL_MS, limit: env.THROTTLE_LIMIT },
     worker: { healthPort: env.WORKER_HEALTH_PORT },
     // pino-pretty is a dev dependency and is not installed in the production image.
