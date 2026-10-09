@@ -1,7 +1,16 @@
+export {
+  API_KEY_SCOPES,
+  type ApiKeyScope,
+  isApiKeyScope,
+  isRole,
+  type Role,
+  ROLES,
+} from './access';
 export { AggregateRoot } from './aggregate-root';
 export { CLOCK, type Clock, FixedClock } from './clock';
 export { DateRange } from './date-range';
 export {
+  ConcurrentModificationError,
   DomainError,
   type DomainErrorCategory,
   EntityNotFoundError,

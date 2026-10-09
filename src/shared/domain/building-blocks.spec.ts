@@ -1,7 +1,9 @@
+import { isApiKeyScope, isRole } from './access';
 import { AggregateRoot } from './aggregate-root';
 import { FixedClock } from './clock';
 import { DateRange } from './date-range';
 import {
+  ConcurrentModificationError,
   EntityNotFoundError,
   InvalidStateTransitionError,
   InvalidValueError,
@@ -167,5 +169,26 @@ describe('edge cases', () => {
     expect(Money.fromCents(2).gt(Money.fromCents(1))).toBe(true);
     expect(Money.fromCents(1).lte(Money.fromCents(1))).toBe(true);
     expect(Money.fromCents(1).compare(Money.fromCents(1))).toBe(0);
+  });
+});
+
+describe('aggregate versions and access vocabulary', () => {
+  it('should start unpersisted and remember the version it was loaded at', () => {
+    const counter = Counter.create('c-9');
+    expect(counter.version).toBe(0);
+    counter.markPersisted(3);
+    expect(counter.version).toBe(3);
+  });
+
+  it('should describe a lost update as a conflict', () => {
+    expect(new ConcurrentModificationError('Contract', 'k-1')).toMatchObject({
+      code: 'concurrent_modification',
+      category: 'conflict',
+    });
+  });
+
+  it('should recognise roles and scopes', () => {
+    expect([isRole('ops'), isRole('root')]).toEqual([true, false]);
+    expect([isApiKeyScope('programs:read'), isApiKeyScope('everything')]).toEqual([true, false]);
   });
 });
