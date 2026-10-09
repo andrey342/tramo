@@ -16,6 +16,10 @@ export class DatabaseModule {
           useFactory: (config: AppConfig) => ({
             ...typeOrmOptions(config, applicationName),
             autoLoadEntities: true,
+            // Logs are buffered until bootstrap finishes, so keep the silent retry window short
+            // (~10 s) and let the orchestrator restart the process if the database stays away.
+            retryAttempts: 5,
+            retryDelay: 2000,
           }),
         }),
       ],
