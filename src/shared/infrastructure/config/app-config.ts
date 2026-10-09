@@ -14,6 +14,7 @@ export interface AppConfig {
     readonly url: string;
     readonly poolMax: number;
     readonly logQueries: boolean;
+    readonly runMigrations: boolean;
   };
   readonly redis: { readonly url: string };
 }
@@ -42,6 +43,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       url: env.DATABASE_URL,
       poolMax: env.DATABASE_POOL_MAX,
       logQueries: env.DATABASE_LOG_QUERIES,
+      runMigrations: env.DATABASE_RUN_MIGRATIONS,
     },
     redis: { url: env.REDIS_URL },
   };

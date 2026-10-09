@@ -21,6 +21,7 @@ export const envSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   DATABASE_LOG_QUERIES: z.stringbool().default(false),
+  DATABASE_RUN_MIGRATIONS: z.stringbool().default(false),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
 });
 

@@ -1,2 +1,3 @@
+export { ClsUnitOfWork } from './cls-unit-of-work';
 export { DatabaseModule } from './database.module';
-export { typeOrmOptions } from './typeorm-options';
+export { ENTITIES_GLOB, MIGRATIONS_GLOB, typeOrmOptions } from './typeorm-options';
