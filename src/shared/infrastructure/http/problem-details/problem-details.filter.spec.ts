@@ -14,7 +14,7 @@ import request from 'supertest';
 
 import { InvalidStateTransitionError, InvalidValueError } from '@shared/domain';
 
-import { HttpPlatformModule } from '../http-platform.module';
+import { httpErrorHandlingProviders } from '../testing';
 
 import { PROBLEM_CONTENT_TYPE } from './problem-details';
 
@@ -71,8 +71,8 @@ describe('ProblemDetailsFilter', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [HttpPlatformModule],
       controllers: [ProbeController],
+      providers: httpErrorHandlingProviders,
     }).compile();
     app = moduleRef.createNestApplication({ logger: false });
     await app.init();

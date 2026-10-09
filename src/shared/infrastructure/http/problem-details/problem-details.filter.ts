@@ -17,6 +17,7 @@ import {
   problemType,
   statusTitle,
 } from './problem-details';
+import { ProblemException } from './problem.exception';
 import { ValidationProblemException } from './validation-problem.exception';
 
 type RequestWithId = Request & { id?: unknown };
@@ -58,6 +59,15 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         detail: exception.message,
         code: 'validation_error',
         errors: exception.errors,
+      };
+    }
+    if (exception instanceof ProblemException) {
+      return {
+        type: problemType(exception.code.replace(/_/g, '-')),
+        title: exception.title,
+        status: exception.getStatus(),
+        detail: exception.message,
+        code: exception.code,
       };
     }
     if (exception instanceof HttpException) {
