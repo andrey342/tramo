@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 
 import { CoreModule } from '@shared/infrastructure/core.module';
+import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
 
 // The worker runs queue processors and the outbox publisher. Its only HTTP surface is /health,
 // which the container orchestrator probes.
 @Module({
-  imports: [CoreModule.forRoot({ applicationName: 'tramo-worker' })],
+  imports: [CoreModule.forRoot({ applicationName: 'tramo-worker' }), MessagingWorkerModule],
 })
 export class WorkerModule {}

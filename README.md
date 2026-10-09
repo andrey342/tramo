@@ -27,13 +27,14 @@ reports healthy and get the terminal back.
 
 ### Where to look
 
-| What                                 | URL                                                     |
-| ------------------------------------ | ------------------------------------------------------- |
-| API (versioned)                      | http://localhost:3000/api/v1                            |
-| OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`) |
-| Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                      |
-| Mailpit (captured email)             | http://localhost:8025                                   |
-| Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                        |
+| What                                 | URL                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| API (versioned)                      | http://localhost:3000/api/v1                                             |
+| OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`)                  |
+| Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                                       |
+| Bull Board (queues, dead letters)    | http://localhost:3000/admin/queues (user `ops`, password `tramo-queues`) |
+| Mailpit (captured email)             | http://localhost:8025                                                    |
+| Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                                         |
 
 If a port is already taken on your machine, override it in `.env` (`API_PORT`, `POSTGRES_PORT`,
 `REDIS_PORT`, `MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`, `WEBHOOK_SINK_PORT`).
@@ -75,15 +76,17 @@ missing variable stops the process with a message naming it. A local `.env` is l
 but real environment variables always win. All variables and their defaults are in
 [`.env.example`](.env.example); the main ones:
 
-| Variable                     | Purpose                                                 |
-| ---------------------------- | ------------------------------------------------------- |
-| `DATABASE_URL`               | Postgres connection string                              |
-| `REDIS_URL`                  | Redis connection string                                 |
-| `PORT`, `WORKER_HEALTH_PORT` | HTTP ports of the api and of the worker health endpoint |
-| `LOG_LEVEL`, `LOG_PRETTY`    | Pino level; pretty output for local runs only           |
-| `CORS_ORIGINS`               | Comma-separated allowlist                               |
-| `SWAGGER_ENABLED`            | Serve `/docs`                                           |
-| `DATABASE_RUN_MIGRATIONS`    | Apply pending migrations when the api starts            |
+| Variable                                       | Purpose                                                 |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| `DATABASE_URL`                                 | Postgres connection string                              |
+| `REDIS_URL`                                    | Redis connection string                                 |
+| `PORT`, `WORKER_HEALTH_PORT`                   | HTTP ports of the api and of the worker health endpoint |
+| `LOG_LEVEL`, `LOG_PRETTY`                      | Pino level; pretty output for local runs only           |
+| `CORS_ORIGINS`                                 | Comma-separated allowlist                               |
+| `SWAGGER_ENABLED`                              | Serve `/docs`                                           |
+| `DATABASE_RUN_MIGRATIONS`                      | Apply pending migrations when the api starts            |
+| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE` | Worker outbox publisher pacing                          |
+| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`   | Basic auth for `/admin/queues`; no password disables it |
 
 ## Testing
 
@@ -103,7 +106,9 @@ deployed. CI runs all of the above plus the Docker image build on every pull req
 ## Architecture
 
 A modular monolith with two runtime processes built from the same image: `api` (HTTP) and
-`worker` (queue processors and the outbox publisher, only `/health` over HTTP). Each bounded
+`worker` (queue processors and the outbox publisher, only `/health` over HTTP). State changes and
+their domain events are committed together to a transactional outbox; the worker delivers them to
+per-module BullMQ queues, and consumers apply each event exactly once. Each bounded
 context is a hexagonal module; layer and module boundaries are enforced by `pnpm arch:check`.
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
