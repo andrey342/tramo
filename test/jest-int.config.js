@@ -4,8 +4,8 @@ const base = require('../jest.config');
 module.exports = {
   ...base,
   rootDir: '..',
-  roots: ['<rootDir>/test'],
-  testRegex: '\\.e2e-spec\\.ts$',
+  roots: ['<rootDir>/src', '<rootDir>/test'],
+  testRegex: '\\.int-spec\\.ts$',
   globalSetup: '<rootDir>/test/setup/global-setup.ts',
   globalTeardown: '<rootDir>/test/setup/global-teardown.ts',
   testTimeout: 60_000,
