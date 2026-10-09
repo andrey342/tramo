@@ -55,6 +55,23 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/**/domain/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+          message: 'Domain code gets the current time from the Clock port (ADR 009).',
+        },
+        {
+          selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          message: 'Domain code gets the current time from the Clock port (ADR 009).',
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.spec.ts', '**/*.int-spec.ts', '**/*.e2e-spec.ts', 'test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
