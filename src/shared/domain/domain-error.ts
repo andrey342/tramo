@@ -1,13 +1,19 @@
 // The category tells the outer layers how to react (HTTP status, retry or not) without the
 // domain knowing about HTTP. `code` is stable and becomes part of the public error contract.
 export type DomainErrorCategory =
-  'validation' | 'not_found' | 'conflict' | 'rule_violation' | 'forbidden';
+  | 'validation'
+  | 'not_found'
+  | 'conflict'
+  | 'rule_violation'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'rate_limited';
 
 export abstract class DomainError extends Error {
   abstract readonly code: string;
   abstract readonly category: DomainErrorCategory;
 
-  protected constructor(
+  constructor(
     message: string,
     readonly details?: Readonly<Record<string, unknown>>,
   ) {
@@ -43,5 +49,17 @@ export class EntityNotFoundError extends DomainError {
 
   constructor(entity: string, id: string) {
     super(`${entity} ${id} was not found.`, { entity, id });
+  }
+}
+
+export class ConcurrentModificationError extends DomainError {
+  readonly code = 'concurrent_modification';
+  readonly category = 'conflict';
+
+  constructor(entity: string, id: string) {
+    super(`${entity} ${id} was changed by another request. Reload it and try again.`, {
+      entity,
+      id,
+    });
   }
 }

@@ -9,7 +9,9 @@ const STATUS_BY_CATEGORY: Record<DomainErrorCategory, HttpStatus> = {
   rule_violation: HttpStatus.UNPROCESSABLE_ENTITY,
   not_found: HttpStatus.NOT_FOUND,
   conflict: HttpStatus.CONFLICT,
+  unauthorized: HttpStatus.UNAUTHORIZED,
   forbidden: HttpStatus.FORBIDDEN,
+  rate_limited: HttpStatus.TOO_MANY_REQUESTS,
 };
 
 // invalid_state_transition -> "Invalid state transition"
