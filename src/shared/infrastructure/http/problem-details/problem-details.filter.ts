@@ -29,12 +29,15 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     const problem: ProblemDetails = {
       ...this.toProblem(exception),
-      instance: request.originalUrl,
+      // Path only: the query string may carry identifiers that should not be echoed back.
+      instance: request.originalUrl.split('?', 1)[0],
       requestId: typeof request.id === 'string' ? request.id : undefined,
     };
 
-    if (problem.status >= 500) {
+    if (!(exception instanceof HttpException)) {
       this.logger.error({ err: exception, requestId: problem.requestId }, 'Unhandled exception');
+    } else if (problem.status >= 500) {
+      this.logger.warn({ requestId: problem.requestId, detail: problem.detail }, problem.title);
     }
 
     response.status(problem.status).type(PROBLEM_CONTENT_TYPE).json(problem);
@@ -53,12 +56,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      return {
-        type: 'about:blank',
-        title: statusTitle(status),
-        status,
-        detail: httpExceptionDetail(exception),
-      };
+      const title = statusTitle(status);
+      const detail = httpExceptionDetail(exception);
+      // RFC 9457: detail explains this occurrence; a copy of the title adds nothing.
+      return { type: 'about:blank', title, status, detail: detail === title ? undefined : detail };
     }
     return {
       type: 'about:blank',
@@ -69,6 +70,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   }
 }
 
+// Nest's router answers unknown routes with "Cannot GET /path?query"; keep the method and path.
+const ROUTE_NOT_FOUND = /^Cannot (\w+) ([^?\s]*)/;
+
 function httpExceptionDetail(exception: HttpException): string | undefined {
   const body = exception.getResponse();
   if (typeof body === 'string') {
@@ -76,7 +80,8 @@ function httpExceptionDetail(exception: HttpException): string | undefined {
   }
   const message = (body as { message?: unknown }).message;
   if (typeof message === 'string') {
-    return message;
+    const route = ROUTE_NOT_FOUND.exec(message);
+    return route ? `No route matches ${route[1] ?? ''} ${route[2] ?? ''}.` : message;
   }
   if (Array.isArray(message)) {
     return message.filter((item): item is string => typeof item === 'string').join('; ');

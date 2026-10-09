@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   type INestApplication,
   NotFoundException,
@@ -35,6 +36,11 @@ class ProbeController {
   @Get('missing')
   missing(): never {
     throw new NotFoundException('Program 42 does not exist.');
+  }
+
+  @Get('forbidden')
+  forbidden(): never {
+    throw new ForbiddenException();
   }
 
   @Get('boom')
@@ -76,6 +82,19 @@ describe('ProblemDetailsFilter', () => {
       detail: 'Program 42 does not exist.',
       instance: '/probe/missing',
     });
+  });
+
+  it('should omit the query string from instance', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/missing?email=ana@example.com');
+
+    expect(response.body.instance).toBe('/probe/missing');
+  });
+
+  it('should omit detail when it would only repeat the title', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/forbidden');
+
+    expect(response.status).toBe(403);
+    expect(response.body).not.toHaveProperty('detail');
   });
 
   it('should hide internal details when the error is unexpected', async () => {

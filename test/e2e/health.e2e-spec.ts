@@ -32,9 +32,10 @@ describe('Health (e2e)', () => {
   });
 
   it('should serve versioned routes under /api/v1 and answer unknown ones with problem details', async () => {
-    const response = await request(app.getHttpServer()).get('/api/v1/does-not-exist');
+    const response = await request(app.getHttpServer()).get('/api/v1/does-not-exist?email=a@b.c');
 
     expect(response.status).toBe(404);
+    expect(response.body.detail).toBe('No route matches GET /api/v1/does-not-exist.');
     expect(response.headers['content-type']).toContain('application/problem+json');
     expect(response.headers['x-request-id']).toBeDefined();
   });
