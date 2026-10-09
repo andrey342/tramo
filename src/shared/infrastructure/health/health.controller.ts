@@ -9,12 +9,15 @@ import {
 import { SkipThrottle } from '@nestjs/throttler';
 import { type Response } from 'express';
 
+import { Public } from '../http/access.decorators';
+
 import { RedisHealthIndicator } from './redis.health';
 
 const CHECK_TIMEOUT_MS = 1500;
 
 @ApiTags('health')
 @SkipThrottle()
+@Public()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(

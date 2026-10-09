@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { IamHttpModule } from '@modules/iam/iam-http.module';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { HttpPlatformModule } from '@shared/infrastructure/http';
 import { QueueDashboardModule } from '@shared/infrastructure/queues/queue-dashboard.module';
@@ -9,6 +10,7 @@ import { QueueDashboardModule } from '@shared/infrastructure/queues/queue-dashbo
     CoreModule.forRoot({ applicationName: 'tramo-api' }),
     HttpPlatformModule,
     QueueDashboardModule,
+    IamHttpModule,
   ],
 })
 export class AppModule {}
