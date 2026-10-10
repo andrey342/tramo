@@ -5,7 +5,10 @@ export const CatalogEvents = {
   CenterRegistered: 'CenterRegistered',
   CenterActivated: 'CenterActivated',
   CenterSuspended: 'CenterSuspended',
+  CenterRenamed: 'CenterRenamed',
+  CenterPlatformFeeChanged: 'CenterPlatformFeeChanged',
   CenterPayoutAccountChanged: 'CenterPayoutAccountChanged',
+  CenterVatInvalidated: 'CenterVatInvalidated',
   ProgramPublished: 'ProgramPublished',
   ProgramDetailsChanged: 'ProgramDetailsChanged',
   ProgramFinancingChanged: 'ProgramFinancingChanged',
@@ -26,6 +29,24 @@ export type CenterActivatedPayload = {
 export type CenterSuspendedPayload = {
   readonly centerId: string;
   readonly reason: string;
+};
+
+export type CenterRenamedPayload = {
+  readonly centerId: string;
+  readonly name: string;
+};
+
+// The commission Tramo keeps on every disbursement to the center from now on.
+export type CenterPlatformFeeChangedPayload = {
+  readonly centerId: string;
+  readonly platformFeeBasisPoints: number;
+};
+
+// The registry no longer knows a VAT number that was valid. The center keeps its status; ops
+// decide whether to suspend it, and this event is how they hear about it.
+export type CenterVatInvalidatedPayload = {
+  readonly centerId: string;
+  readonly provider: string;
 };
 
 // Only the last digits: notifications warn the center, and nobody downstream needs the account.

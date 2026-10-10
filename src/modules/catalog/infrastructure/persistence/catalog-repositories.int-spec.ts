@@ -8,7 +8,11 @@ import { FieldDecryptionError } from '@shared/infrastructure/crypto';
 
 import { catalogRepositoriesContract } from '../../../../../test/contracts/catalog-repositories.contract';
 import { programCatalogContract } from '../../../../../test/contracts/program-catalog.contract';
-import { aTrainingCenter, VALID_IBAN } from '../../../../../test/factories/catalog';
+import {
+  anActiveTrainingCenter,
+  aTrainingCenter,
+  VALID_IBAN,
+} from '../../../../../test/factories/catalog';
 import { PROGRAM_CATALOG } from '../../application/ports/catalog-ports';
 import { CatalogModule } from '../../catalog.module';
 import {
@@ -69,6 +73,19 @@ describe('catalog repositories (integration)', () => {
     );
 
     await expect(centers.findById(victim.id)).rejects.toThrow(FieldDecryptionError);
+  });
+
+  it('should save an active center whose VAT number the registry no longer knows', async () => {
+    const center = anActiveTrainingCenter();
+    await uow.run(() => centers.save(center));
+    center.recordVatCheck({ outcome: 'invalid', provider: 'vies' }, new Date());
+
+    await uow.run(() => centers.save(center));
+
+    expect(await centers.findById(center.id)).toMatchObject({
+      status: 'active',
+      vatValidation: expect.objectContaining({ status: 'invalid' }) as object,
+    });
   });
 
   it('should write the registration event to the outbox with the center', async () => {
