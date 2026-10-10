@@ -32,7 +32,7 @@ export class RegisterTrainingCenterRequest {
   @ApiProperty({
     example: 'B12345678',
     description:
-      'National VAT number, with or without the country prefix. With VIES_MODE=test, 100 is valid, 200 invalid and 300 simulates an outage.',
+      'National VAT number, with or without the country prefix. With VIES_MODE=test, 100 is valid, 200 invalid and any other number looks like a VIES outage.',
   })
   @IsString()
   @MaxLength(20)
