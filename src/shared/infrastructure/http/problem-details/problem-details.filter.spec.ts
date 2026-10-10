@@ -93,6 +93,7 @@ describe('ProblemDetailsFilter', () => {
       status: 404,
       detail: 'Program 42 does not exist.',
       instance: '/probe/missing',
+      code: 'not_found',
     });
   });
 

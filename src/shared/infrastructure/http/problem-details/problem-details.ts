@@ -29,3 +29,12 @@ export function problemType(slug: string): string {
 export function statusTitle(status: number): string {
   return STATUS_CODES[status] ?? 'Error';
 }
+
+// Errors without a domain code still get one, derived from the status ("Not Found" ->
+// "not_found"), so clients can always branch on `code`.
+export function statusCode(status: number): string {
+  return statusTitle(status)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
