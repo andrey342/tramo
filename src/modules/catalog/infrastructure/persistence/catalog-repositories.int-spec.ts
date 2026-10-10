@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CoreModule } from '@shared/infrastructure/core.module';
+import { FieldDecryptionError } from '@shared/infrastructure/crypto';
 
 import { catalogRepositoriesContract } from '../../../../../test/contracts/catalog-repositories.contract';
 import { programCatalogContract } from '../../../../../test/contracts/program-catalog.contract';
@@ -47,9 +48,27 @@ describe('catalog repositories (integration)', () => {
       [center.id],
     );
 
-    expect(row?.payout_iban_encrypted.startsWith('v1.')).toBe(true);
+    expect(row?.payout_iban_encrypted.startsWith('v2.')).toBe(true);
     expect(row?.payout_iban_encrypted).not.toContain(VALID_IBAN.slice(4));
     expect(row?.payout_iban_last4).toBe('1332');
+  });
+
+  it('should refuse a payout IBAN copied from another center', async () => {
+    const victim = aTrainingCenter();
+    const attacker = aTrainingCenter();
+    await uow.run(async () => {
+      await centers.save(victim);
+      await centers.save(attacker);
+    });
+
+    await db.query(
+      `UPDATE catalog.training_centers SET payout_iban_encrypted = (
+         SELECT payout_iban_encrypted FROM catalog.training_centers WHERE id = $1
+       ) WHERE id = $2`,
+      [attacker.id, victim.id],
+    );
+
+    await expect(centers.findById(victim.id)).rejects.toThrow(FieldDecryptionError);
   });
 
   it('should write the registration event to the outbox with the center', async () => {

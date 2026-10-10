@@ -28,8 +28,11 @@ values kept unreadable outside the code paths that need them?
 ## Decision outcome
 
 Option 3. `FieldCipher` (`src/shared/infrastructure/crypto`) encrypts single values with
-AES-256-GCM and a random 96-bit IV, stored as `v1.<iv>.<tag>.<ciphertext>`. Repositories encrypt
-on save and decrypt on load, so the domain keeps working with `Iban`. Next to each encrypted column
+AES-256-GCM, a random 96-bit IV and a full 128-bit tag, stored as `v2.<iv>.<tag>.<ciphertext>`. Each
+value is bound to where it lives as associated data (`catalog.training_centers.payout_iban:<id>`),
+so a ciphertext copied into another row fails to decrypt. Values in the first format (`v1`, no
+associated data) are still read and become `v2` on the next save. Repositories encrypt on save and
+decrypt on load, so the domain keeps working with `Iban`. Next to each encrypted column
 the table keeps what listings may show (the last four characters of an IBAN). The key comes from
 `FIELD_ENCRYPTION_KEY`; a production process refuses the development key published in the repo.
 
@@ -39,9 +42,9 @@ to the database with every query, where it can end up in logs and `pg_stat_state
 ### Consequences
 
 - Good: dumps, backups and `tramo_ro` see ciphertext; GCM also rejects a value modified in the
-  database instead of paying into it.
-- Good: the version prefix allows rotation: add a `v2` key, decrypt with either, re-encrypt in a
-  background job, then retire `v1`.
+  database, or moved there from another center's row, instead of paying into it.
+- Good: the version prefix allows format and key changes: decrypt every known version, write only
+  the newest, re-encrypt old rows in a background job, then stop reading the old version.
 - Bad: encrypted columns cannot be searched or indexed by value. Nothing needs to find a center by
   its IBAN; if something does, store a keyed hash (HMAC) of the value next to it.
 - Bad: the key is now the secret that matters. It lives in the environment like the JWT secret;

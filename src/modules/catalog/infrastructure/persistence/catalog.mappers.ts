@@ -8,6 +8,10 @@ import { FinancingOptions, Program, TrainingCenter } from '../../domain';
 import { type ProgramOrmEntity } from './program.orm-entity';
 import { type TrainingCenterOrmEntity } from './training-center.orm-entity';
 
+// Binds the ciphertext to its row: copied into another center, it no longer decrypts (ADR 014).
+const payoutIbanContext = (centerId: string): string =>
+  `catalog.training_centers.payout_iban:${centerId}`;
+
 // A class rather than a plain object like iam's mappers: it needs the cipher for the IBAN.
 @Injectable()
 export class TrainingCenterMapper {
@@ -27,7 +31,9 @@ export class TrainingCenterMapper {
               registeredName: row.vatRegisteredName,
             }
           : null,
-      payoutIban: unwrap(Iban.create(this.cipher.decrypt(row.payoutIbanEncrypted))),
+      payoutIban: unwrap(
+        Iban.create(this.cipher.decrypt(row.payoutIbanEncrypted, payoutIbanContext(row.id))),
+      ),
       platformFee: Percentage.fromBasisPoints(row.platformFeeBps),
       createdAt: row.createdAt,
     });
@@ -49,7 +55,10 @@ export class TrainingCenterMapper {
       vatCheckedAt: vat?.checkedAt ?? null,
       vatProvider: vat?.provider ?? null,
       vatRegisteredName: vat?.registeredName ?? null,
-      payoutIbanEncrypted: this.cipher.encrypt(center.payoutIban.value),
+      payoutIbanEncrypted: this.cipher.encrypt(
+        center.payoutIban.value,
+        payoutIbanContext(center.id),
+      ),
       payoutIbanLast4: center.payoutIban.lastFour,
       platformFeeBps: center.platformFee.basisPoints,
       createdAt: center.createdAt,
