@@ -29,6 +29,10 @@ export const envSchema = z.object({
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
   // HS256 signing key for access tokens. 32+ characters; rotate by redeploying (tokens live 15 min).
   JWT_ACCESS_SECRET: z.string().min(32),
+  // AES-256 key for encrypted columns (payout IBANs, webhook secrets): 32 bytes in base64.
+  FIELD_ENCRYPTION_KEY: z.string().refine((value) => Buffer.from(value, 'base64').length === 32, {
+    message: 'must be 32 bytes encoded in base64 (openssl rand -base64 32)',
+  }),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   SESSION_MAX_DAYS: z.coerce.number().int().min(1).max(365).default(90),

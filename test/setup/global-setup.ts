@@ -15,6 +15,7 @@ export default async function globalSetup(): Promise<void> {
   process.env.DATABASE_URL = infra.postgres.getConnectionUri();
   process.env.REDIS_URL = infra.redis.getConnectionUrl();
   process.env.JWT_ACCESS_SECRET = 'test-secret-that-is-at-least-32-characters';
+  process.env.FIELD_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   // Every request of the suites comes from one IP; the limits themselves have their own tests.
   process.env.THROTTLE_LIMIT = '100000';
   process.env.THROTTLE_AUTH_LIMIT = '100000';

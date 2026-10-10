@@ -37,6 +37,7 @@ export interface AppConfig {
       readonly maxLockSeconds: number;
     };
   };
+  readonly crypto: { readonly fieldEncryptionKey: string };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -82,6 +83,7 @@ export function parseDatabaseConfig(source: Record<string, string | undefined>):
 const PUBLISHED_SECRETS = {
   JWT_ACCESS_SECRET: (value: string) => /change-me/i.test(value),
   BULL_BOARD_PASSWORD: (value: string | undefined) => value === 'tramo-queues',
+  FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
 } as const;
 
 function assertProductionSecrets(env: Env): void {
@@ -92,6 +94,9 @@ function assertProductionSecrets(env: Env): void {
     PUBLISHED_SECRETS.JWT_ACCESS_SECRET(env.JWT_ACCESS_SECRET) ? 'JWT_ACCESS_SECRET' : undefined,
     PUBLISHED_SECRETS.BULL_BOARD_PASSWORD(env.BULL_BOARD_PASSWORD)
       ? 'BULL_BOARD_PASSWORD'
+      : undefined,
+    PUBLISHED_SECRETS.FIELD_ENCRYPTION_KEY(env.FIELD_ENCRYPTION_KEY)
+      ? 'FIELD_ENCRYPTION_KEY'
       : undefined,
   ].filter((name) => name !== undefined);
   if (published.length > 0) {
@@ -140,6 +145,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
         maxLockSeconds: env.LOGIN_LOCK_MAX_SECONDS,
       },
     },
+    crypto: { fieldEncryptionKey: env.FIELD_ENCRYPTION_KEY },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,

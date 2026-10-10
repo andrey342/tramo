@@ -4,6 +4,7 @@ const validEnv = {
   DATABASE_URL: 'postgres://tramo:tramo@localhost:5432/tramo',
   REDIS_URL: 'redis://localhost:6379',
   JWT_ACCESS_SECRET: 'a'.repeat(32),
+  FIELD_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
 describe('parseConfig', () => {
@@ -58,6 +59,12 @@ describe('parseConfig', () => {
     expect(() => parseConfig({ ...production, BULL_BOARD_PASSWORD: 'tramo-queues' })).toThrow(
       /BULL_BOARD_PASSWORD/,
     );
+    expect(() =>
+      parseConfig({
+        ...production,
+        FIELD_ENCRYPTION_KEY: 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
+      }),
+    ).toThrow(/FIELD_ENCRYPTION_KEY/);
     expect(
       parseConfig({
         ...validEnv,
@@ -72,6 +79,12 @@ describe('parseConfig', () => {
     expect(
       parseConfig({ ...validEnv, NODE_ENV: 'production', SWAGGER_ENABLED: 'true' }).docs.enabled,
     ).toBe(true);
+  });
+
+  it('should require a field encryption key of exactly 32 bytes', () => {
+    expect(() => parseConfig({ ...validEnv, FIELD_ENCRYPTION_KEY: 'c2hvcnQ=' })).toThrow(
+      /FIELD_ENCRYPTION_KEY/,
+    );
   });
 
   it('should ignore pretty logging when running in production', () => {
