@@ -151,6 +151,17 @@ curl -s localhost:3000/api/v1/me -H "Authorization: Bearer <accessToken>"
 Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
 progressively after five failed attempts.
 
+## Developer tooling
+
+The repo carries its Claude Code configuration, so routine work follows the repo's conventions
+whether it is done by hand or with the agent (ADR 011). [`CLAUDE.md`](CLAUDE.md) is the short map:
+commands, architecture principles and workflow. Under `.claude/`:
+
+- `rules/`: conventions loaded only for the paths they cover (domain, migrations, HTTP, tests).
+- `agents/`: read-only reviewers for architecture and security, each with a fixed checklist.
+- `settings.json`: edited files are formatted and linted after each change; force pushes,
+  `schema:sync` and deleting compose volumes are denied.
+
 ## Roadmap
 
 - Catalog of centers and programs, origination and scoring, lending, billing and dunning,
