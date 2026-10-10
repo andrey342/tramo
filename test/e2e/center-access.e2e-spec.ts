@@ -2,19 +2,21 @@ import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { uuidv7 } from 'uuidv7';
 
+import { registerCenter } from '../helpers/centers';
 import { createApiApp } from '../helpers/create-api-app';
 import { accessTokenFor, createStaffUser, TEST_PASSWORD } from '../helpers/users';
 
 describe('Center users and API keys (e2e)', () => {
   let app: INestApplication;
   let adminToken: string;
-  const centerId = uuidv7();
+  let centerId: string;
   const api = () => request(app.getHttpServer());
   const bearer = (token: string): [string, string] => ['Authorization', `Bearer ${token}`];
 
   beforeAll(async () => {
     app = await createApiApp();
     adminToken = await accessTokenFor(app, await createStaffUser(app, 'admin'));
+    centerId = await registerCenter(app, adminToken);
   });
 
   afterAll(async () => {
@@ -129,6 +131,22 @@ describe('Center users and API keys (e2e)', () => {
     expect(response.status).toBe(403);
   });
 
+  it('should refuse users and keys for a center that does not exist', async () => {
+    const missing = uuidv7();
+
+    const user = await api()
+      .post(`/api/v1/centers/${missing}/users`)
+      .set(...bearer(adminToken))
+      .send({ email: `ghost-${uuidv7().slice(-12)}@center.test`, password: TEST_PASSWORD });
+    const key = await api()
+      .post(`/api/v1/centers/${missing}/api-keys`)
+      .set(...bearer(adminToken))
+      .send({ name: 'x', scopes: ['programs:read'] });
+
+    expect(user.status).toBe(404);
+    expect(key.status).toBe(404);
+  });
+
   it('should not let a center admin manage another center', async () => {
     const token = await centerAdminToken();
 
@@ -147,8 +165,8 @@ describe('Center users and API keys (e2e)', () => {
       .get(DataSource)
       .query('SELECT action FROM shared.audit_log WHERE resource_id = $1', [centerId]);
 
-    expect(new Set(rows.map((row) => row.action))).toEqual(
-      new Set(['center_user.create', 'api_key.issue']),
+    expect(rows.map((row) => row.action)).toEqual(
+      expect.arrayContaining(['center_user.create', 'api_key.issue']),
     );
   });
 });

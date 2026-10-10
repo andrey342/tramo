@@ -9,7 +9,7 @@ import {
   UNIT_OF_WORK,
   type UnitOfWork,
 } from '@shared/application';
-import { CLOCK, type Clock, Email, unwrap } from '@shared/domain';
+import { CLOCK, type Clock, Email, EntityNotFoundError, unwrap } from '@shared/domain';
 
 import {
   assertPasswordPolicy,
@@ -19,7 +19,12 @@ import {
   type UserRepository,
 } from '../../domain';
 import { assertIsAdmin } from '../center-access';
-import { PASSWORD_HASHER, type PasswordHasher } from '../ports/iam-ports';
+import {
+  CENTER_DIRECTORY,
+  type CenterDirectory,
+  PASSWORD_HASHER,
+  type PasswordHasher,
+} from '../ports/iam-ports';
 
 export class CreateCenterUserCommand extends Command<{ userId: string }> {
   constructor(
@@ -41,11 +46,15 @@ export class CreateCenterUserHandler implements ICommandHandler<CreateCenterUser
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
     @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
+    @Inject(CENTER_DIRECTORY) private readonly centers: CenterDirectory,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async execute(command: CreateCenterUserCommand): Promise<{ userId: string }> {
     assertIsAdmin(command.actor, command.centerId);
+    if (!(await this.centers.exists(command.centerId))) {
+      throw new EntityNotFoundError('TrainingCenter', command.centerId);
+    }
     const email = unwrap(Email.create(command.email));
     assertPasswordPolicy(command.password);
     const passwordHash = await this.hasher.hash(command.password);

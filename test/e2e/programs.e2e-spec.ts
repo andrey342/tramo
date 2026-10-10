@@ -2,7 +2,7 @@ import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { uuidv7 } from 'uuidv7';
 
-import { aTaxId, VALID_IBAN } from '../factories/catalog';
+import { registerCenter } from '../helpers/centers';
 import { createApiApp } from '../helpers/create-api-app';
 import { accessTokenFor, createStaffUser, TEST_PASSWORD } from '../helpers/users';
 
@@ -57,24 +57,8 @@ describe('Programs (e2e)', () => {
     await app.close();
   });
 
-  async function activeCenter(): Promise<string> {
-    const created = await api()
-      .post('/api/v1/centers')
-      .set(...bearer(adminToken))
-      .set('Idempotency-Key', uuidv7())
-      .send({
-        name: 'Programs School',
-        country: 'ES',
-        taxId: aTaxId(),
-        payoutIban: VALID_IBAN,
-        platformFeeBasisPoints: 500,
-      });
-    const id = created.body.id as string;
-    await api()
-      .post(`/api/v1/centers/${id}/verify-vat`)
-      .set(...bearer(adminToken));
-    return id;
-  }
+  const activeCenter = (): Promise<string> =>
+    registerCenter(app, adminToken, { name: 'Programs School' });
 
   const createProgram = (
     body: object = PROGRAM,

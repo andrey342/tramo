@@ -66,3 +66,11 @@ export interface SessionSettings {
   // Absolute lifetime of a session, however often it is refreshed.
   readonly sessionMaxLifetimeMs: number;
 }
+
+export const CENTER_DIRECTORY = Symbol('CENTER_DIRECTORY');
+
+// Training centers belong to the catalog module; iam only needs to know that one exists before
+// giving it users or API keys.
+export interface CenterDirectory {
+  exists(centerId: string): Promise<boolean>;
+}

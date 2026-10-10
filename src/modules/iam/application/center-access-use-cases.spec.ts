@@ -3,6 +3,7 @@ import { EntityNotFoundError, FixedClock } from '@shared/domain';
 
 import { aCenterAdmin, aStaffUser, DEFAULT_CENTER_ID } from '../../../../test/factories/iam';
 import {
+  FakeCenterDirectory,
   FakePasswordHasher,
   InMemoryApiKeyRepository,
   InMemoryUserRepository,
@@ -31,7 +32,7 @@ const asUser = (user: {
 }): Principal =>
   ({ kind: 'user', userId: user.id, roles: user.roles, centerId: user.centerId }) as Principal;
 
-function setup() {
+function setup(knownCenters?: ReadonlySet<string>) {
   const clock = new FixedClock(new Date('2026-10-09T10:00:00Z'));
   const uow = new InlineUnitOfWork();
   const events = new RecordingEventBus();
@@ -39,6 +40,7 @@ function setup() {
   const apiKeys = new InMemoryApiKeyRepository(events);
   const credentials = new SequentialCredentialGenerator();
   const changes: unknown[] = [];
+  const centers = new FakeCenterDirectory(knownCenters);
   return {
     clock,
     events,
@@ -50,9 +52,10 @@ function setup() {
       users,
       new FakePasswordHasher(),
       { describeChanges: (change) => changes.push(change) },
+      centers,
       clock,
     ),
-    issue: new IssueApiKeyHandler(uow, apiKeys, credentials, clock),
+    issue: new IssueApiKeyHandler(uow, apiKeys, credentials, centers, clock),
     revoke: new RevokeApiKeyHandler(uow, apiKeys, clock),
     list: new ListApiKeysHandler(apiKeys),
     authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, clock),
@@ -81,6 +84,26 @@ describe('center access use cases', () => {
       expect(created?.centerId).toBe(DEFAULT_CENTER_ID);
       expect(t.events.ofType(IamEvents.CenterUserCreated)).toHaveLength(1);
       expect(t.changes).toEqual([{ roles: { before: null, after: ['center_admin'] } }]);
+    });
+
+    it('should refuse a center that does not exist', async () => {
+      const t = setup(new Set());
+
+      await expect(
+        t.createCenterUser.execute(
+          new CreateCenterUserCommand(
+            asUser(admin),
+            DEFAULT_CENTER_ID,
+            'x@center.test',
+            'a long password',
+          ),
+        ),
+      ).rejects.toThrow(EntityNotFoundError);
+      await expect(
+        t.issue.execute(
+          new IssueApiKeyCommand(asUser(admin), DEFAULT_CENTER_ID, 'x', ['programs:read']),
+        ),
+      ).rejects.toThrow(EntityNotFoundError);
     });
 
     it('should not let anyone else do it', async () => {

@@ -3,6 +3,7 @@ import { type Clock } from '@shared/domain';
 import {
   type AccessTokenClaims,
   type AccessTokenIssuer,
+  type CenterDirectory,
   type CredentialGenerator,
   type GeneratedApiKey,
   type GeneratedSecret,
@@ -194,5 +195,14 @@ export class InMemoryLoginAttemptTracker implements LoginAttemptTracker {
     this.failures.delete(account);
     this.lockedUntil.delete(account);
     return Promise.resolve();
+  }
+}
+
+// Without a list every center exists, which is what most handler tests want.
+export class FakeCenterDirectory implements CenterDirectory {
+  constructor(private readonly known?: ReadonlySet<string>) {}
+
+  exists(centerId: string): Promise<boolean> {
+    return Promise.resolve(this.known?.has(centerId) ?? true);
   }
 }

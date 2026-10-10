@@ -13,6 +13,7 @@ import { RegisterStudentHandler } from './application/commands/register-student.
 import { RevokeApiKeyHandler } from './application/commands/revoke-api-key.command';
 import {
   ACCESS_TOKEN_ISSUER,
+  CENTER_DIRECTORY,
   CREDENTIAL_GENERATOR,
   LOGIN_ATTEMPTS,
   PASSWORD_HASHER,
@@ -25,6 +26,7 @@ import { ListApiKeysHandler } from './application/queries/list-api-keys.query';
 import { SessionIssuer } from './application/session-issuer';
 import { API_KEY_REPOSITORY, REFRESH_TOKEN_REPOSITORY, USER_REPOSITORY } from './domain';
 import { Argon2PasswordHasher } from './infrastructure/adapters/argon2-password.hasher';
+import { CatalogCenterDirectory } from './infrastructure/adapters/catalog-center-directory';
 import { CryptoCredentialGenerator } from './infrastructure/adapters/crypto-credential.generator';
 import { JwtAccessTokenIssuer } from './infrastructure/adapters/jwt-access-token.issuer';
 import { RedisLoginAttemptTracker } from './infrastructure/adapters/redis-login-attempt.tracker';
@@ -69,6 +71,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     { provide: ACCESS_TOKEN_ISSUER, useClass: JwtAccessTokenIssuer },
     { provide: CREDENTIAL_GENERATOR, useClass: CryptoCredentialGenerator },
     { provide: LOGIN_ATTEMPTS, useClass: RedisLoginAttemptTracker },
+    { provide: CENTER_DIRECTORY, useClass: CatalogCenterDirectory },
     {
       provide: SESSION_SETTINGS,
       inject: [APP_CONFIG],

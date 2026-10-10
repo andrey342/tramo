@@ -3,12 +3,14 @@ import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { type ApiKeyScope, CLOCK, type Clock } from '@shared/domain';
+import { type ApiKeyScope, CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import { API_KEY_REPOSITORY, ApiKey, type ApiKeyRepository } from '../../domain';
 import { actorId, assertCanManageCenter } from '../center-access';
 import { type IssuedApiKeyDto } from '../dto/api-key.dto';
 import {
+  CENTER_DIRECTORY,
+  type CenterDirectory,
   CREDENTIAL_GENERATOR,
   type CredentialGenerator,
   type GeneratedApiKey,
@@ -33,11 +35,15 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(API_KEY_REPOSITORY) private readonly apiKeys: ApiKeyRepository,
     @Inject(CREDENTIAL_GENERATOR) private readonly credentials: CredentialGenerator,
+    @Inject(CENTER_DIRECTORY) private readonly centers: CenterDirectory,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async execute(command: IssueApiKeyCommand): Promise<IssuedApiKeyDto> {
     assertCanManageCenter(command.actor, command.centerId);
+    if (!(await this.centers.exists(command.centerId))) {
+      throw new EntityNotFoundError('TrainingCenter', command.centerId);
+    }
     const secret = await this.uniqueSecret();
     const apiKey = ApiKey.issue({
       id: uuidv7(),
