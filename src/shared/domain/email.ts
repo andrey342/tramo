@@ -11,8 +11,14 @@ export class Email extends ValueObject<{ value: string }> {
     super({ value });
   }
 
+  // The form addresses are stored and looked up in. Lookups of possibly invalid input (sign-in)
+  // use it directly, so they always match what create() stored.
+  static normalize(raw: string): string {
+    return raw.trim().toLowerCase();
+  }
+
   static create(raw: string): Result<Email, InvalidValueError> {
-    const value = raw.trim().toLowerCase();
+    const value = Email.normalize(raw);
     if (value.length > MAX_LENGTH || !EMAIL_PATTERN.test(value)) {
       return err(new InvalidValueError('email', 'Email address is not valid.'));
     }

@@ -1,5 +1,6 @@
 import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { uuidv7 } from 'uuidv7';
 
 import { createApiApp } from '../helpers/create-api-app';
 
@@ -8,8 +9,7 @@ const PASSWORD = 'correct horse battery staple';
 describe('Authentication (e2e)', () => {
   let app: INestApplication;
   const api = () => request(app.getHttpServer());
-  const uniqueEmail = (label: string): string =>
-    `${label}.${String(Date.now())}.${String(Math.random()).slice(2, 8)}@example.com`;
+  const uniqueEmail = (label: string): string => `${label}.${uuidv7().slice(-12)}@example.com`;
 
   beforeAll(async () => {
     app = await createApiApp();

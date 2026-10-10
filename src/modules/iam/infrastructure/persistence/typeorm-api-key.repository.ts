@@ -4,40 +4,10 @@ import { type TransactionalAdapterTypeOrm } from '@nestjs-cls/transactional-adap
 
 import { AggregatePersister } from '@shared/infrastructure/database/aggregate-persister';
 
-import { ApiKey, type ApiKeyRepository } from '../../domain';
+import { type ApiKey, type ApiKeyRepository } from '../../domain';
 
 import { ApiKeyOrmEntity } from './api-key.orm-entity';
-
-function toDomain(row: ApiKeyOrmEntity): ApiKey {
-  const apiKey = ApiKey.reconstitute(row.id, {
-    centerId: row.centerId,
-    name: row.name,
-    prefix: row.prefix,
-    secretHash: row.secretHash,
-    scopes: row.scopes,
-    createdBy: row.createdBy,
-    createdAt: row.createdAt,
-    lastUsedAt: row.lastUsedAt,
-    revokedAt: row.revokedAt,
-  });
-  apiKey.markPersisted(row.version);
-  return apiKey;
-}
-
-function toRow(apiKey: ApiKey): Omit<ApiKeyOrmEntity, 'version'> {
-  return {
-    id: apiKey.id,
-    centerId: apiKey.centerId,
-    name: apiKey.name,
-    prefix: apiKey.prefix,
-    secretHash: apiKey.secretHash,
-    scopes: [...apiKey.scopes],
-    createdBy: apiKey.createdBy,
-    createdAt: apiKey.createdAt,
-    lastUsedAt: apiKey.lastUsedAt,
-    revokedAt: apiKey.revokedAt,
-  };
-}
+import { ApiKeyMapper } from './iam.mappers';
 
 @Injectable()
 export class TypeOrmApiKeyRepository implements ApiKeyRepository {
@@ -48,12 +18,12 @@ export class TypeOrmApiKeyRepository implements ApiKeyRepository {
 
   async findById(id: string): Promise<ApiKey | null> {
     const row = await this.txHost.tx.findOneBy(ApiKeyOrmEntity, { id });
-    return row ? toDomain(row) : null;
+    return row ? ApiKeyMapper.toDomain(row) : null;
   }
 
   async findByPrefix(prefix: string): Promise<ApiKey | null> {
     const row = await this.txHost.tx.findOneBy(ApiKeyOrmEntity, { prefix });
-    return row ? toDomain(row) : null;
+    return row ? ApiKeyMapper.toDomain(row) : null;
   }
 
   async listByCenter(centerId: string): Promise<ApiKey[]> {
@@ -61,7 +31,7 @@ export class TypeOrmApiKeyRepository implements ApiKeyRepository {
       where: { centerId },
       order: { createdAt: 'DESC' },
     });
-    return rows.map(toDomain);
+    return rows.map((row) => ApiKeyMapper.toDomain(row));
   }
 
   async recordUse(id: string, usedAt: Date): Promise<void> {
@@ -73,6 +43,6 @@ export class TypeOrmApiKeyRepository implements ApiKeyRepository {
   }
 
   save(apiKey: ApiKey): Promise<void> {
-    return this.persister.save(ApiKeyOrmEntity, apiKey, toRow(apiKey), 'ApiKey');
+    return this.persister.save(ApiKeyOrmEntity, apiKey, ApiKeyMapper.toRow(apiKey), 'ApiKey');
   }
 }

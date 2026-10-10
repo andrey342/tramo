@@ -2,7 +2,7 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock, ConcurrentModificationError } from '@shared/domain';
+import { CLOCK, type Clock, ConcurrentModificationError, Email } from '@shared/domain';
 
 import {
   AccountTemporarilyLockedError,
@@ -41,7 +41,7 @@ export class LoginHandler implements ICommandHandler<LoginCommand> {
   ) {}
 
   async execute(command: LoginCommand): Promise<SessionTokensDto> {
-    const account = command.email.trim().toLowerCase();
+    const account = Email.normalize(command.email);
     // The attempt counts as failed until the password checks out.
     const lockedFor = await this.attempts.begin(account);
     if (lockedFor > 0) {

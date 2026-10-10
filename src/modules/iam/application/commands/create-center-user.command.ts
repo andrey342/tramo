@@ -13,12 +13,12 @@ import { CLOCK, type Clock, Email, unwrap } from '@shared/domain';
 
 import {
   assertPasswordPolicy,
-  CenterAccessDeniedError,
   EmailAlreadyRegisteredError,
   User,
   USER_REPOSITORY,
   type UserRepository,
 } from '../../domain';
+import { assertIsAdmin } from '../center-access';
 import { PASSWORD_HASHER, type PasswordHasher } from '../ports/iam-ports';
 
 export class CreateCenterUserCommand extends Command<{ userId: string }> {
@@ -45,9 +45,7 @@ export class CreateCenterUserHandler implements ICommandHandler<CreateCenterUser
   ) {}
 
   async execute(command: CreateCenterUserCommand): Promise<{ userId: string }> {
-    if (command.actor.kind !== 'user' || !command.actor.roles.includes('admin')) {
-      throw new CenterAccessDeniedError(command.centerId);
-    }
+    assertIsAdmin(command.actor, command.centerId);
     const email = unwrap(Email.create(command.email));
     assertPasswordPolicy(command.password);
     const passwordHash = await this.hasher.hash(command.password);

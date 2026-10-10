@@ -1,7 +1,8 @@
 import { Email, unwrap } from '@shared/domain';
 
-import { RefreshToken, User } from '../../domain';
+import { ApiKey, RefreshToken, User } from '../../domain';
 
+import { type ApiKeyOrmEntity } from './api-key.orm-entity';
 import { type RefreshTokenOrmEntity } from './refresh-token.orm-entity';
 import { type UserOrmEntity } from './user.orm-entity';
 
@@ -59,6 +60,39 @@ export const RefreshTokenMapper = {
       expiresAt: token.expiresAt,
       familyExpiresAt: token.familyExpiresAt,
       usedAt: token.usedAt,
+    };
+  },
+};
+
+export const ApiKeyMapper = {
+  toDomain(row: ApiKeyOrmEntity): ApiKey {
+    const apiKey = ApiKey.reconstitute(row.id, {
+      centerId: row.centerId,
+      name: row.name,
+      prefix: row.prefix,
+      secretHash: row.secretHash,
+      scopes: row.scopes,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
+      lastUsedAt: row.lastUsedAt,
+      revokedAt: row.revokedAt,
+    });
+    apiKey.markPersisted(row.version);
+    return apiKey;
+  },
+
+  toRow(apiKey: ApiKey): Omit<ApiKeyOrmEntity, 'version'> {
+    return {
+      id: apiKey.id,
+      centerId: apiKey.centerId,
+      name: apiKey.name,
+      prefix: apiKey.prefix,
+      secretHash: apiKey.secretHash,
+      scopes: [...apiKey.scopes],
+      createdBy: apiKey.createdBy,
+      createdAt: apiKey.createdAt,
+      lastUsedAt: apiKey.lastUsedAt,
+      revokedAt: apiKey.revokedAt,
     };
   },
 };
