@@ -162,6 +162,16 @@ commands, architecture principles and workflow. Under `.claude/`:
 - `settings.json`: edited files are formatted and linted after each change; force pushes,
   `schema:sync` and deleting compose volumes are denied.
 
+[`.mcp.json`](.mcp.json) adds two MCP servers: Context7 for current library documentation, and
+Postgres MCP Pro in restricted mode (read-only transactions, time limit) for query plans,
+hypothetical indexes (`hypopg`) and workload analysis (`pg_stat_statements`). It connects as
+`tramo_ro`, a role that can only read the module schemas. The compose Postgres image adds both
+extensions and creates the role on a new volume; an existing volume catches up with:
+
+```bash
+docker compose exec postgres psql -U tramo -d tramo -f /docker-entrypoint-initdb.d/02-diagnostics.sql
+```
+
 ## Roadmap
 
 - Catalog of centers and programs, origination and scoring, lending, billing and dunning,
