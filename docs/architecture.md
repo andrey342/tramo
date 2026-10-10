@@ -50,10 +50,13 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   stricter limits with `@Throttle`; health checks are exempt. Exceeding the limit returns 429 with
   `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
-  scoped to the caller (user or API key). A short-lived "in progress" record (60 s) makes a
+  scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
   `Idempotent-Replayed: true`. The same key with a different method, path or body returns 422.
   Failed requests are not stored, so a client can fix the request and retry with the same key.
+  The in-progress record is renewed while the handler runs; if the response cannot be stored after
+  a success, the record is left to expire instead of being released: an immediate retry gets 409
+  rather than running the operation a second time.
 - **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
   `shared.audit_log` per call: actor, action, resource, outcome, error code, request id and the
   changes the handler described through the `AuditTrail` port. The row is written after the

@@ -6,12 +6,13 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   type NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { type Response } from 'express';
 import { Redis } from 'ioredis';
-import { catchError, concatMap, from, type Observable, of, throwError } from 'rxjs';
+import { catchError, concatMap, finalize, from, type Observable, of, throwError } from 'rxjs';
 
 import { REDIS_CLIENT } from '../../redis';
 import { principalOf, type RequestWithPrincipal } from '../principal';
@@ -25,8 +26,8 @@ import {
 
 const KEY_PATTERN = /^[\x21-\x7e]{1,255}$/;
 const COMPLETED_TTL_MS = 24 * 60 * 60 * 1000;
-// Long enough for any request to finish; short enough that a crashed request does not block
-// retries for a day.
+// A crashed request blocks retries for at most this long. While the handler runs, the marker is
+// renewed every third of it, so a slow request keeps its key.
 const IN_PROGRESS_TTL_MS = 60 * 1000;
 // Response headers a client may rely on after a create; replayed along with status and body.
 const REPLAYED_HEADERS = ['location', 'content-location', 'etag'] as const;
@@ -45,6 +46,8 @@ type IdempotencyRecord =
 // "key reused for a different request".
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(IdempotencyInterceptor.name);
+
   constructor(
     private readonly reflector: Reflector,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
@@ -77,23 +80,46 @@ export class IdempotencyInterceptor implements NestInterceptor {
       throw inProgress();
     }
 
+    const renewal = setInterval(() => {
+      this.redis.pexpire(storageKey, IN_PROGRESS_TTL_MS).catch(() => undefined);
+    }, IN_PROGRESS_TTL_MS / 3);
     return next.handle().pipe(
+      // Only failures of the handler release the key, so the client can fix the request and retry.
+      catchError((error: unknown) => {
+        clearInterval(renewal);
+        return from(this.redis.del(storageKey).catch(() => 0)).pipe(
+          concatMap(() => throwError(() => error)),
+        );
+      }),
       concatMap(async (body: unknown) => {
-        const record: IdempotencyRecord = {
+        clearInterval(renewal);
+        await this.storeCompleted(storageKey, {
           state: 'completed',
           fingerprint,
           status: response.statusCode,
           headers: replayableHeaders(response),
           body: body ?? null,
-        };
-        await this.redis.set(storageKey, JSON.stringify(record), 'PX', COMPLETED_TTL_MS);
+        });
         return body;
       }),
-      // A failed request leaves nothing behind, so the client can retry with the same key.
-      catchError((error: unknown) =>
-        from(this.redis.del(storageKey)).pipe(concatMap(() => throwError(() => error))),
-      ),
+      finalize(() => {
+        clearInterval(renewal);
+      }),
     );
+  }
+
+  // The handler's work is committed by now. If the record cannot be stored, the in-progress
+  // marker stays until it expires: a retry gets 409 for a minute and then runs again, the lesser
+  // evil compared to failing a request that succeeded.
+  private async storeCompleted(storageKey: string, record: IdempotencyRecord): Promise<void> {
+    try {
+      await this.redis.set(storageKey, JSON.stringify(record), 'PX', COMPLETED_TTL_MS);
+    } catch (error) {
+      this.logger.error(
+        { err: error instanceof Error ? error.message : error },
+        'Could not store the idempotent response',
+      );
+    }
   }
 
   private readKey(request: RequestWithPrincipal): string {
@@ -145,12 +171,13 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
   private storageKey(request: RequestWithPrincipal, key: string): string {
     const principal = principalOf(request);
+    // Keys are only unique per client. Anonymous callers would share one scope and could replay
+    // each other's responses, so @Idempotent() routes must be authenticated.
+    if (principal.kind === 'anonymous') {
+      throw new Error('@Idempotent() requires an authenticated route.');
+    }
     const scope =
-      principal.kind === 'user'
-        ? `user:${principal.userId}`
-        : principal.kind === 'api_key'
-          ? `api_key:${principal.apiKeyId}`
-          : 'anonymous';
+      principal.kind === 'user' ? `user:${principal.userId}` : `api_key:${principal.apiKeyId}`;
     return `tramo:idempotency:${sha256(`${scope}\n${key}`)}`;
   }
 
