@@ -26,6 +26,8 @@ export function typeOrmOptions(
     // The schema is owned by migrations; nothing is ever synchronized from entity metadata.
     synchronize: false,
     migrations: [MIGRATIONS_GLOB],
+    // Read by DatabaseModule, which applies migrations itself under an advisory lock; TypeORM's
+    // own run at initialisation has no lock and races between replicas.
     migrationsRun: database.runMigrations,
     migrationsTableName: 'migrations',
     migrationsTransactionMode: 'each',

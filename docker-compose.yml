@@ -99,7 +99,7 @@ services:
     <<: *app
     environment:
       <<: *app-env
-      # Only the api migrates, so two processes never race on the same migration.
+      # Only the api migrates; replicas take turns through a Postgres advisory lock.
       DATABASE_RUN_MIGRATIONS: 'true'
     ports:
       - '${API_PORT:-3000}:3000'
