@@ -26,6 +26,7 @@ describe('Authentication (e2e)', () => {
     expect(registered.status).toBe(201);
     const login = await api().post('/api/v1/auth/login').send({ email, password: PASSWORD });
     expect(login.status).toBe(200);
+    expect(login.headers['cache-control']).toBe('no-store');
     return { userId: registered.body.userId as string, tokens: login.body };
   }
 
@@ -33,7 +34,7 @@ describe('Authentication (e2e)', () => {
     const email = uniqueEmail('ana');
     const { userId, tokens } = await registerAndLogin(email);
 
-    expect(tokens).toMatchObject({ tokenType: 'Bearer', expiresIn: expect.any(Number) });
+    expect(tokens).toMatchObject({ tokenType: 'Bearer', expiresIn: 900 });
     const me = await api().get('/api/v1/me').set('Authorization', `Bearer ${tokens.accessToken}`);
 
     expect(me.status).toBe(200);

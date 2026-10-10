@@ -109,6 +109,7 @@ export class FakeAccessTokenIssuer implements AccessTokenIssuer {
     return Promise.resolve({
       token: `access:${claims.userId}:${claims.roles.join(',')}`,
       expiresAt: new Date(this.clock.now().getTime() + 15 * 60_000),
+      expiresInSeconds: 15 * 60,
     });
   }
 }

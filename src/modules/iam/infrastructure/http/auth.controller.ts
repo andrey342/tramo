@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Header, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -34,8 +34,10 @@ export class AuthController {
     return this.commands.execute(new RegisterStudentCommand(body.email, body.password));
   }
 
+  // Responses carrying tokens must not be stored by any cache (RFC 6749, section 5.1).
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Exchange email and password for an access and a refresh token' })
   async login(@Body() body: LoginRequest): Promise<SessionTokensResponse> {
     return toResponse(await this.commands.execute(new LoginCommand(body.email, body.password)));
@@ -43,6 +45,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Rotate the refresh token',
     description:
@@ -65,7 +68,7 @@ function toResponse(session: SessionTokensDto): SessionTokensResponse {
   return {
     accessToken: session.accessToken,
     tokenType: 'Bearer',
-    expiresIn: Math.round((session.accessTokenExpiresAt.getTime() - Date.now()) / 1000),
+    expiresIn: session.accessTokenExpiresIn,
     accessTokenExpiresAt: session.accessTokenExpiresAt,
     refreshToken: session.refreshToken,
     refreshTokenExpiresAt: session.refreshTokenExpiresAt,

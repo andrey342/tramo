@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { type Redis } from 'ioredis';
 
-import { CLOCK } from '@shared/domain';
+import { CLOCK, FixedClock } from '@shared/domain';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { REDIS_CLIENT } from '@shared/infrastructure/redis';
@@ -108,6 +108,19 @@ describe('iam adapters (integration)', () => {
 
       expect(payload).toMatchObject({ sub: 'u-1', roles: ['ops'], cid: null });
       expect(Number(payload.exp) - Number(payload.iat)).toBe(config.auth.accessTokenTtlSeconds);
+    });
+
+    it('should take the issue time from the clock, so exp and expiresAt agree', async () => {
+      const jwt = new JwtService({ secret: config.auth.jwtSecret });
+      const clock = new FixedClock(new Date('2030-01-01T00:00:00Z'));
+      const issuer = new JwtAccessTokenIssuer(jwt, config, clock);
+
+      const issued = await issuer.issue({ userId: 'u-1', roles: ['ops'], centerId: null });
+      const payload = jwt.decode<Record<string, unknown>>(issued.token);
+
+      expect(Number(payload.iat) * 1000).toBe(clock.now().getTime());
+      expect(Number(payload.exp) * 1000).toBe(issued.expiresAt.getTime());
+      expect(issued.expiresInSeconds).toBe(config.auth.accessTokenTtlSeconds);
     });
   });
 });
