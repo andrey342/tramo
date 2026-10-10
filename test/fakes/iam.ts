@@ -54,6 +54,11 @@ export class InMemoryRefreshTokenRepository
     return Promise.resolve(this.all().find((token) => token.tokenHash === tokenHash) ?? null);
   }
 
+  // Single-threaded: there is nothing to serialise.
+  lockFamily(): Promise<void> {
+    return Promise.resolve();
+  }
+
   // Mirrors the bulk UPDATE of the real repository: every non-revoked token of the family is
   // stored again as revoked.
   revokeFamily(familyId: string, now: Date): Promise<number> {

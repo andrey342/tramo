@@ -60,7 +60,15 @@ export class RefreshSessionHandler implements ICommandHandler<RefreshSessionComm
   }
 
   private async rotate(refreshToken: string, now: Date): Promise<SessionTokensDto | null> {
-    const token = await this.refreshTokens.findByTokenHash(this.credentials.hash(refreshToken));
+    const tokenHash = this.credentials.hash(refreshToken);
+    const found = await this.refreshTokens.findByTokenHash(tokenHash);
+    if (!found) {
+      return null;
+    }
+    // Serialised with logout and reuse revocation of the same family; reading the token again
+    // after the lock sees a revocation that committed meanwhile.
+    await this.refreshTokens.lockFamily(found.familyId);
+    const token = await this.refreshTokens.findByTokenHash(tokenHash);
     if (!token) {
       return null;
     }
