@@ -158,6 +158,17 @@ whether it is done by hand or with the agent (ADR 011). [`CLAUDE.md`](CLAUDE.md)
 commands, architecture principles and workflow. Under `.claude/`:
 
 - `rules/`: conventions loaded only for the paths they cover (domain, migrations, HTTP, tests).
+- `skills/`: procedures backed by scripts that also run on their own, e.g. `/new-module payouts`
+  or `pnpm scaffold:module payouts --responsibility "..."`.
+
+  | Script                                                      | What it does                                                                                    |
+  | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+  | `pnpm scaffold:module <name>`                               | New bounded context shaped like `iam`, registered in the app, worker, queues, schema and README |
+  | `pnpm scaffold:use-case <module> <Name> --command\|--query` | Command or query, handler, DTO and spec on in-memory fakes                                      |
+  | `pnpm scaffold:adapter <module> <Port> <name>`              | Adapter stub, shared contract suite, fake and the specs that run the contract on both           |
+  | `pnpm migration:verify generate\|new\|check\|lint`          | Write a migration; run, revert and run again comparing schema dumps                             |
+  | `pnpm adr:new "<title>"`                                    | Next decision record and its row in `docs/architecture.md`                                      |
+
 - `agents/`: read-only reviewers for architecture and security, each with a fixed checklist.
 - `settings.json`: edited files are formatted and linted after each change; force pushes,
   `schema:sync` and deleting compose volumes are denied.
