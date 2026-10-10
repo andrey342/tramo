@@ -174,8 +174,9 @@ commands, architecture principles and workflow. Under `.claude/`:
 
 - `agents/`: read-only reviewers for architecture and security, each with a fixed checklist;
   `/review-module <module>` runs both with the dependency rules and the module's coverage.
-- `settings.json`: edited files are formatted and linted after each change; force pushes,
-  `schema:sync` and deleting compose volumes are denied.
+- `settings.json`: edited files are formatted and linted after each change; commands starting
+  with `git push --force`/`-f` or `docker compose down -v`, or containing `schema:sync`, are
+  denied. The rules match command prefixes: a guardrail against slips, not a sandbox.
 
 [`.mcp.json`](.mcp.json) adds two MCP servers: Context7 for current library documentation, and
 Postgres MCP Pro in restricted mode (read-only transactions, time limit) for query plans,

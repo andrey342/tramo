@@ -1,5 +1,5 @@
-// Accounts of the demo data set, one per role. The seed creates them and the try-endpoint skill
-// signs in with them, so both read this one list. Local and demo use only.
+// Accounts of the demo data set, one per role. The demo seed (to come) creates them and the
+// try-endpoint skill signs in with them, so both read this one list. Local and demo use only.
 export const DEMO_PASSWORD = 'tramo demo password';
 
 export const DEMO_USERS = {
