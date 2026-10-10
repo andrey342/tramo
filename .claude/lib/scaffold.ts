@@ -202,7 +202,7 @@ export function parseArgs(argv: readonly string[]): {
 }
 
 // Options that take a value; anything else after `--` is a boolean flag.
-const VALUE_OPTIONS = new Set(['as', 'token', 'body', 'limit', 'responsibility', 'returns']);
+const VALUE_OPTIONS = new Set(['as', 'token', 'body', 'limit', 'responsibility', 'repository']);
 
 // Migration file stamp `YYYYMMDDHHMM` and the matching class-name timestamp (ms, UTC).
 export function migrationStamp(now = new Date()): { file: string; ms: number } {
