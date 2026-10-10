@@ -133,6 +133,13 @@ describe('ValueObject equality', () => {
     expect(Pair.of(Money.fromCents(1)).equals(Pair.of(Money.fromCents(2)))).toBe(false);
   });
 
+  it('should compare arrays and plain objects inside by content', () => {
+    expect(Pair.of([1, { terms: [6, 12] }]).equals(Pair.of([1, { terms: [6, 12] }]))).toBe(true);
+    expect(Pair.of([1, { terms: [6, 12] }]).equals(Pair.of([1, { terms: [6, 24] }]))).toBe(false);
+    expect(Pair.of({ a: 1 }).equals(Pair.of({ a: 1, b: 2 }))).toBe(false);
+    expect(Pair.of([1]).equals(Pair.of({ 0: 1 }))).toBe(false);
+  });
+
   it('should not be equal to null, another type or a different shape', () => {
     expect(Pair.of(1).equals(null)).toBe(false);
     expect(Pair.of(1).equals(OtherPair.of(1))).toBe(false);
