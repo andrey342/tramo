@@ -25,7 +25,13 @@ export class User extends AggregateRoot {
     private props: UserProps,
   ) {
     super(id);
+  }
+
+  // Factories validate; reconstitute trusts what was stored, so a rule tightened later never makes
+  // existing accounts impossible to load.
+  private static validated(id: string, props: UserProps): User {
     User.assertRoles(props.roles, props.centerId);
+    return new User(id, props);
   }
 
   static registerStudent(input: {
@@ -34,7 +40,7 @@ export class User extends AggregateRoot {
     passwordHash: string;
     now: Date;
   }): User {
-    const user = new User(input.id, {
+    const user = User.validated(input.id, {
       email: input.email,
       passwordHash: input.passwordHash,
       roles: ['student'],
@@ -63,7 +69,7 @@ export class User extends AggregateRoot {
     if (input.roles.some((role) => !CENTER_ROLES.includes(role))) {
       throw new InvalidRoleAssignmentError('A center user can only have center roles.');
     }
-    const user = new User(input.id, {
+    const user = User.validated(input.id, {
       email: input.email,
       passwordHash: input.passwordHash,
       roles: [...new Set(input.roles)],
@@ -97,7 +103,7 @@ export class User extends AggregateRoot {
     if (input.roles.some((role) => !STAFF_ROLES.includes(role))) {
       throw new InvalidRoleAssignmentError('A staff account can only have staff roles.');
     }
-    return new User(input.id, {
+    return User.validated(input.id, {
       email: input.email,
       passwordHash: input.passwordHash,
       roles: [...new Set(input.roles)],

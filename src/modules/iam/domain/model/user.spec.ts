@@ -59,23 +59,36 @@ describe('User', () => {
     ).toThrow(InvalidRoleAssignmentError);
   });
 
-  it('should refuse center roles without a center and mixed role kinds', () => {
-    const props = {
-      email: email('x@tramo.test'),
-      passwordHash: 'hash',
-      status: 'active' as const,
-      createdAt: NOW,
-    };
+  it('should refuse accounts without roles and mixed role kinds', () => {
+    const input = { email: email('x@tramo.test'), passwordHash: 'hash', now: NOW };
 
-    expect(() =>
-      User.reconstitute('u-4', { ...props, roles: ['center_admin'], centerId: null }),
-    ).toThrow(InvalidRoleAssignmentError);
-    expect(() =>
-      User.reconstitute('u-5', { ...props, roles: ['student', 'ops'], centerId: null }),
-    ).toThrow(InvalidRoleAssignmentError);
-    expect(() => User.reconstitute('u-6', { ...props, roles: [], centerId: null })).toThrow(
+    expect(() => User.createStaff({ ...input, id: 'u-4', roles: [] })).toThrow(
       InvalidRoleAssignmentError,
     );
+    expect(() => User.createStaff({ ...input, id: 'u-5', roles: ['ops', 'student'] })).toThrow(
+      InvalidRoleAssignmentError,
+    );
+    expect(() =>
+      User.createCenterUser({
+        ...input,
+        id: 'u-6',
+        centerId: 'c-1',
+        roles: ['center_admin', 'student'],
+      }),
+    ).toThrow(InvalidRoleAssignmentError);
+  });
+
+  it('should load a stored account as it is, without validating it again', () => {
+    const stored = User.reconstitute('u-7', {
+      email: email('legacy@tramo.test'),
+      passwordHash: 'hash',
+      roles: ['center_admin'],
+      centerId: null,
+      status: 'active',
+      createdAt: NOW,
+    });
+
+    expect(stored.roles).toEqual(['center_admin']);
   });
 
   it('should create staff accounts without events and only with staff roles', () => {
