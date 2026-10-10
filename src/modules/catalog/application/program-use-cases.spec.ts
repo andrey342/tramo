@@ -1,4 +1,4 @@
-import { ANONYMOUS, type Principal } from '@shared/application';
+import { ANONYMOUS, type AuditChanges, type Principal } from '@shared/application';
 import {
   type ApiKeyScope,
   EntityNotFoundError,
@@ -58,6 +58,7 @@ const centerAdmin = (centerId: string): Principal => ({
 const ADMIN: Principal = { kind: 'user', userId: 'a-1', roles: ['admin'], centerId: null };
 
 function setup() {
+  const audited: AuditChanges[] = [];
   const clock = new FixedClock(new Date('2026-10-09T10:00:00Z'));
   const uow = new InlineUnitOfWork();
   const events = new RecordingEventBus();
@@ -68,8 +69,15 @@ function setup() {
     events,
     centers,
     programs,
+    audited,
     create: new CreateProgramHandler(uow, programs, centers, clock),
-    update: new UpdateProgramHandler(uow, programs, centers, clock),
+    update: new UpdateProgramHandler(
+      uow,
+      programs,
+      centers,
+      { describeChanges: (changes) => audited.push(changes) },
+      clock,
+    ),
     get: new GetProgramHandler(catalog, programs, centers),
     list: new ListProgramsHandler(catalog),
   };
@@ -149,6 +157,12 @@ describe('program use cases', () => {
       );
 
       expect(published).toMatchObject({ status: 'published', priceCents: 690_000 });
+      expect(t.audited).toEqual([
+        {
+          priceCents: { before: 750_000, after: 690_000 },
+          status: { before: 'draft', after: 'published' },
+        },
+      ]);
       expect(t.events.ofType(CatalogEvents.ProgramPublished)).toEqual([
         expect.objectContaining({
           payload: expect.objectContaining({ priceCents: 690_000 }) as object,
