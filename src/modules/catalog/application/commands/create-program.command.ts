@@ -12,7 +12,7 @@ import {
   TRAINING_CENTER_REPOSITORY,
   type TrainingCenterRepository,
 } from '../../domain';
-import { assertCanManagePrograms } from '../center-access';
+import { assertCanManagePrograms, assertCenterMayChangePrograms } from '../center-access';
 import { type ProgramDto } from '../dto/program.dto';
 import {
   type FinancingInput,
@@ -50,9 +50,11 @@ export class CreateProgramHandler implements ICommandHandler<CreateProgramComman
     const financing = toFinancingOptions(command.financing);
 
     return this.uow.run(async () => {
-      if (!(await this.centers.findById(command.centerId))) {
+      const center = await this.centers.findById(command.centerId);
+      if (!center) {
         throw new EntityNotFoundError('TrainingCenter', command.centerId);
       }
+      assertCenterMayChangePrograms(command.actor, center);
       const program = Program.create({
         id: uuidv7(),
         centerId: command.centerId,

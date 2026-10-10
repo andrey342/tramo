@@ -16,7 +16,7 @@ import {
   TRAINING_CENTER_REPOSITORY,
   type TrainingCenterRepository,
 } from '../../domain';
-import { canManagePrograms } from '../center-access';
+import { assertCenterMayChangePrograms, canManagePrograms } from '../center-access';
 import { type ProgramDto } from '../dto/program.dto';
 import {
   type FinancingInput,
@@ -75,14 +75,18 @@ export class UpdateProgramHandler implements ICommandHandler<UpdateProgramComman
       if (!program || !canManagePrograms(command.actor, program.centerId)) {
         throw new EntityNotFoundError('Program', command.programId);
       }
+      const center = await this.centers.findById(program.centerId);
+      if (!center) {
+        throw new Error(
+          `Program ${program.id} belongs to center ${program.centerId}, which does not exist.`,
+        );
+      }
+      assertCenterMayChangePrograms(command.actor, center);
       const before = toProgramDto(program);
       const now = this.clock.now();
       if (changes.details) program.updateDetails(toProgramDetailChanges(changes.details), now);
       if (changes.financing) program.changeFinancing(toFinancingOptions(changes.financing), now);
-      if (changes.status === 'published') {
-        const center = await this.centers.findById(program.centerId);
-        program.publish({ isActive: center?.isActive ?? false }, now);
-      }
+      if (changes.status === 'published') program.publish(center, now);
       if (changes.status === 'archived') program.archive(now);
       await this.programs.save(program);
 

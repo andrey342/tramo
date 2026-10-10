@@ -18,6 +18,16 @@ export class CenterAccessDeniedError extends DomainError {
   }
 }
 
+// While Tramo has a center suspended, only Tramo's staff change what it offers.
+export class CenterSuspendedError extends DomainError {
+  readonly code = 'center_suspended';
+  readonly category = 'forbidden';
+
+  constructor(centerId: string) {
+    super('The training center is suspended; its programs cannot be changed.', { centerId });
+  }
+}
+
 export class InvalidPlatformFeeError extends DomainError {
   readonly code = 'invalid_platform_fee';
   readonly category = 'rule_violation';

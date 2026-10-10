@@ -16,6 +16,7 @@ import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shar
 import {
   CatalogEvents,
   CenterAccessDeniedError,
+  CenterSuspendedError,
   InvalidFinancingOptionError,
   ProgramNotPublishableError,
   type TrainingCenter,
@@ -199,6 +200,33 @@ describe('program use cases', () => {
 
       expect(t.events.ofType(CatalogEvents.ProgramFinancingChanged)).toHaveLength(1);
       expect(archived.status).toBe('archived');
+    });
+
+    it('should leave the programs of a suspended center to Tramo admins', async () => {
+      const t = setup();
+      const center = await withCenter(t);
+      const draft = await t.create.execute(
+        new CreateProgramCommand(ADMIN, center.id, DETAILS, INSTALLMENTS),
+      );
+      center.suspend('Unpaid invoices', new Date('2026-10-09T11:00:00Z'));
+      await t.centers.save(center);
+
+      await expect(
+        t.create.execute(
+          new CreateProgramCommand(centerAdmin(center.id), center.id, DETAILS, INSTALLMENTS),
+        ),
+      ).rejects.toThrow(CenterSuspendedError);
+      await expect(
+        t.update.execute(
+          new UpdateProgramCommand(centerAdmin(center.id), draft.id, {
+            details: { priceCents: 1 },
+          }),
+        ),
+      ).rejects.toThrow(CenterSuspendedError);
+      expect(
+        (await t.update.execute(new UpdateProgramCommand(ADMIN, draft.id, { status: 'archived' })))
+          .status,
+      ).toBe('archived');
     });
 
     it("should report another center's program as missing", async () => {

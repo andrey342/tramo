@@ -1,7 +1,7 @@
 import { type Principal } from '@shared/application';
 import { type ApiKeyScope } from '@shared/domain';
 
-import { CenterAccessDeniedError } from '../domain';
+import { CenterAccessDeniedError, type CenterStatus, CenterSuspendedError } from '../domain';
 
 // Background work (event consumers) acts as the system, not as a person.
 export type Actor = Principal | 'system';
@@ -59,6 +59,17 @@ function managesPrograms(actor: Actor, centerId: string, scopes: readonly ApiKey
 export function assertCanManagePrograms(actor: Actor, centerId: string): void {
   if (!managesPrograms(actor, centerId, ['programs:write'])) {
     throw new CenterAccessDeniedError(centerId);
+  }
+}
+
+// A suspended center keeps reading its programs but no longer changes them; admins still can
+// (to archive one, for instance).
+export function assertCenterMayChangePrograms(
+  actor: Actor,
+  center: { readonly id: string; readonly status: CenterStatus },
+): void {
+  if (center.status === 'suspended' && actor !== 'system' && !isUserWith(actor, 'admin')) {
+    throw new CenterSuspendedError(center.id);
   }
 }
 
