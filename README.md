@@ -57,20 +57,20 @@ pnpm worker:dev                      # worker, health on :3100
 The `dev` profile on the command line takes precedence over `COMPOSE_PROFILES=demo` from `.env`,
 so the api and worker containers are not started and the host processes own ports 3000 and 3100.
 
-| Script                                     | What it does                                                                     |
-| ------------------------------------------ | -------------------------------------------------------------------------------- |
-| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                                   |
-| `pnpm build`                               | Compile to `dist/`                                                               |
-| `pnpm start`                               | Run the compiled api                                                             |
-| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                                   |
-| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                                   |
-| `pnpm arch:check`                          | Dependency rules between layers and modules                                      |
-| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                                       |
-| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers)          |
-| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                           |
-| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                              |
-| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                             |
-| `pnpm seed`                                | Build, then create the demo accounts and a verified training center (idempotent) |
+| Script                                     | What it does                                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                                                           |
+| `pnpm build`                               | Compile to `dist/`                                                                                       |
+| `pnpm start`                               | Run the compiled api                                                                                     |
+| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                                                           |
+| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                                                           |
+| `pnpm arch:check`                          | Dependency rules between layers and modules                                                              |
+| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                                                               |
+| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers)                                  |
+| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                                                   |
+| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                                                      |
+| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                                                     |
+| `pnpm seed`                                | Build, then create the demo accounts, a verified training center and its published programs (idempotent) |
 
 Demo accounts, created by `pnpm seed` against the database in `.env` (the student registers on
 first use of `pnpm api:call`). All share the password `tramo demo password`; local use only.
@@ -134,17 +134,18 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module    | Responsibility                                                           | Main endpoints                                                  |
-| --------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `iam`     | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
-| `catalog` | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`                           |
+| Module    | Responsibility                                                           | Main endpoints                                                                       |
+| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `iam`     | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                      |
+| `catalog` | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public) |
 
 ## API overview
 
 The OpenAPI document at `/docs` lists every endpoint with its schemas and error responses.
 Errors are `application/problem+json` (RFC 9457) with a stable `code`.
 
-Every route requires authentication unless documented otherwise. Two ways in:
+The program catalog (`GET /api/v1/programs`, `GET /api/v1/programs/:id`) is public. Every other
+route requires authentication unless documented otherwise. Two ways in:
 
 - **Users** (students, center staff, operations, admins): `POST /api/v1/auth/login` returns a
   15-minute bearer access token and a single-use refresh token. Send
