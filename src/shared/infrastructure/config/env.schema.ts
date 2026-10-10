@@ -39,6 +39,11 @@ export const envSchema = z.object({
   LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
   LOGIN_LOCK_BASE_SECONDS: z.coerce.number().int().min(1).default(60),
   LOGIN_LOCK_MAX_SECONDS: z.coerce.number().int().min(1).default(3_600),
+  // VAT checks: `live` asks VIES, `test` its test service (100 valid, 200 invalid, 300 down),
+  // `fake` answers locally with the same table and needs no network.
+  VIES_MODE: z.enum(['live', 'test', 'fake']).default('live'),
+  VIES_BASE_URL: z.url().default('https://ec.europa.eu/taxation_customs/vies/rest-api'),
+  VIES_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5_000),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),

@@ -1,7 +1,7 @@
 ---
 name: add-adapter
 description: Add an implementation of a port (application/ports or domain/ports) with a stubbed class, the shared contract suite, a fake if the port has none, and specs that run the contract against both. Use for every new adapter (VIES client, SMTP sender, PSP, e-signature).
-argument-hint: <module> <Port> <name> [--integration] [--token <NAME>]
+argument-hint: <module> <Port> <name> [--integration] [--runtime-fake] [--token <NAME>]
 allowed-tools: Bash(pnpm scaffold:adapter*), Bash(pnpm typecheck*), Bash(pnpm lint*), Bash(pnpm test*), Read, Edit, Write
 ---
 
@@ -17,7 +17,9 @@ kebab-case (`vies`), giving `ViesVatValidator`.
      signatures use already imported;
    - `test/contracts/<port>.contract.ts` (if missing): `<port>Contract(name, create)`, the
      behaviour every implementation shares;
-   - a fake in `test/fakes/<module>.ts` when the port has none;
+   - a fake in `test/fakes/<module>.ts` when the port has none, or, with `--runtime-fake`, in
+     `infrastructure/adapters/fake-<port>.ts` registered in the module: for providers whose fake is
+     chosen by configuration (e2e, offline demo), such as VIES or the PSP;
    - `<port>.contract.spec.ts` (fake, and the adapter unless `--integration`) and
      `<port>.contract.int-spec.ts` (adapter, with `--integration`);
    - the adapter as a provider of `<module>.module.ts`.

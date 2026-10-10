@@ -38,6 +38,11 @@ export interface AppConfig {
     };
   };
   readonly crypto: { readonly fieldEncryptionKey: string };
+  readonly vies: {
+    readonly mode: 'live' | 'test' | 'fake';
+    readonly baseUrl: string;
+    readonly timeoutMs: number;
+  };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -146,6 +151,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       },
     },
     crypto: { fieldEncryptionKey: env.FIELD_ENCRYPTION_KEY },
+    vies: { mode: env.VIES_MODE, baseUrl: env.VIES_BASE_URL, timeoutMs: env.VIES_TIMEOUT_MS },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,

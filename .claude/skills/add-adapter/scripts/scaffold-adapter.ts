@@ -1,6 +1,8 @@
 // Scaffolds a new implementation of a port, the shared contract suite every implementation of the
 // port must pass, and the specs that run it against the fake and the new adapter.
-//   pnpm scaffold:adapter <module> <Port> <name> [--integration] [--dry-run]
+//   pnpm scaffold:adapter <module> <Port> <name> [--integration] [--runtime-fake] [--dry-run]
+// --runtime-fake puts the fake in infrastructure/adapters and registers it, for ports whose fake is
+// chosen by configuration at runtime (e2e, demo without network), not only in unit tests.
 // e.g. `pnpm scaffold:adapter catalog VatValidator vies --integration` creates ViesVatValidator.
 import { readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -26,7 +28,8 @@ import {
   tidy,
 } from '../../../lib/scaffold';
 
-const USAGE = 'usage: scaffold-adapter <module> <Port> <name> [--integration] [--token <NAME>]';
+const USAGE =
+  'usage: scaffold-adapter <module> <Port> <name> [--integration] [--runtime-fake] [--token <NAME>]';
 const { positional, flags, options } = parseArgs(process.argv.slice(2));
 const [module = '', Port = '', name = ''] = positional;
 if (!module || !Port || !name) {
@@ -36,6 +39,7 @@ assertKebab(module, 'module');
 assertPascal(Port, 'port');
 assertKebab(name, 'adapter name');
 const integration = flags.has('integration');
+const runtimeFake = flags.has('runtime-fake');
 const dryRun = flags.has('dry-run');
 
 const base = `src/modules/${module}`;
@@ -52,7 +56,9 @@ const contractFile = `test/contracts/${portKebab}.contract.ts`;
 const contractFn = `${camel(portKebab)}Contract`;
 const unitSpec = `${base}/infrastructure/adapters/${portKebab}.contract.spec.ts`;
 const intSpec = `${base}/infrastructure/adapters/${portKebab}.contract.int-spec.ts`;
-const fakesFile = `test/fakes/${module}.ts`;
+const fakesFile = runtimeFake
+  ? `${base}/infrastructure/adapters/fake-${portKebab}.ts`
+  : `test/fakes/${module}.ts`;
 const moduleFile = `${base}/${module}.module.ts`;
 const fake = exists(fakesFile)
   ? new RegExp(`export class (\\w+)\\s+(?:extends [^{]+)?implements ${Port}\\b`).exec(
@@ -110,8 +116,11 @@ if (!fake) {
   }
   changes.edit(
     fakesFile,
-    (content) => `${addImport(content, portImport(fakesFile))}
-export class ${FakeName} implements ${Port} {
+    (content) => `${addImport(
+      runtimeFake ? addImport(content, "import { Injectable } from '@nestjs/common';") : content,
+      portImport(fakesFile),
+    )}
+${runtimeFake ? '// Deterministic stand-in, selected by configuration where the real service is not wanted.\n@Injectable()\n' : ''}export class ${FakeName} implements ${Port} {
 ${stubMembers(FakeName)}
 }
 `,
@@ -226,9 +235,25 @@ changes.edit(moduleFile, (content) => {
     content,
     `import { ${Adapter} } from './infrastructure/adapters/${name}-${portKebab}';`,
   );
-  return /^ {4}\w+Handler,$/m.test(withImport)
-    ? insertAfterLast(withImport, /^ {4}\w+Handler,$/gm, `    ${Adapter},\n`, moduleFile)
-    : appendToArray(withImport, /providers: \[/, Adapter, moduleFile);
+  const registered = runtimeFake && !fake ? [Adapter, FakeName] : [Adapter];
+  const withFake =
+    runtimeFake && !fake
+      ? addImport(
+          withImport,
+          `import { ${FakeName} } from './infrastructure/adapters/fake-${portKebab}';`,
+        )
+      : withImport;
+  return /^ {4}\w+Handler,$/m.test(withFake)
+    ? insertAfterLast(
+        withFake,
+        /^ {4}\w+Handler,$/gm,
+        registered.map((provider) => `    ${provider},\n`).join(''),
+        moduleFile,
+      )
+    : registered.reduce(
+        (text, provider) => appendToArray(text, /providers: \[/, provider, moduleFile),
+        withFake,
+      );
 });
 
 const touched = changes.apply(dryRun);
