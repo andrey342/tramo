@@ -6,7 +6,9 @@ import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CoreModule } from '@shared/infrastructure/core.module';
 
 import { catalogRepositoriesContract } from '../../../../../test/contracts/catalog-repositories.contract';
+import { programCatalogContract } from '../../../../../test/contracts/program-catalog.contract';
 import { aTrainingCenter, VALID_IBAN } from '../../../../../test/factories/catalog';
+import { PROGRAM_CATALOG } from '../../application/ports/catalog-ports';
 import { CatalogModule } from '../../catalog.module';
 import {
   CatalogEvents,
@@ -62,6 +64,13 @@ describe('catalog repositories (integration)', () => {
   });
 
   catalogRepositoriesContract('TypeORM repositories', () => ({
+    centers,
+    programs: app.get(PROGRAM_REPOSITORY),
+    run: (work) => uow.run(work),
+  }));
+
+  programCatalogContract('TypeOrmProgramCatalog', () => ({
+    catalog: app.get(PROGRAM_CATALOG),
     centers,
     programs: app.get(PROGRAM_REPOSITORY),
     run: (work) => uow.run(work),
