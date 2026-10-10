@@ -26,7 +26,9 @@ Arguments: `$ARGUMENTS`. Needs the compose Postgres running (`docker compose ps`
    `pk_/fk_/ck_/ux_/ix_<schema>_<table>_<cols>` names, no foreign keys across schemas, and a `down`
    that undoes exactly what `up` did.
 3. `pnpm migration:verify check`: lints the pending migrations, then runs, reverts and runs them
-   again, diffing `pg_dump --schema-only` after each step. It must end with `OK`.
+   again, diffing `pg_dump --schema-only` after each step. It must end with `OK`. With nothing
+   pending it stops; `check --last` re-verifies the last applied migration, reverting it on the
+   dev database (data its `down` drops is lost), so ask before running it.
 4. Run `pnpm test:int` for the module's repositories: the test database is built from the same
    migrations.
 

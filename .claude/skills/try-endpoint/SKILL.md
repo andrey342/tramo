@@ -15,7 +15,7 @@ changes, so the api runs the current build).
      `/docs` are used as given. In Git Bash both `/me` and `me` work.
    - `body` is JSON or `@file.json`.
    - Signs in as the demo account of the role (`scripts/demo-users.ts`; default `student`, who is
-     registered on first use; the other roles come from the seed). Tokens are cached and refreshed
+     registered on first use; the other roles need the demo seed, which is not in the repo yet). Tokens are cached and refreshed
      in `.local/`. Use `--anonymous` for public routes or `--api-key <key>` for center keys.
    - POSTs get a fresh `Idempotency-Key`; pass `--idempotency-key <key>` to send the same key
      again and see the replay (`idempotent-replayed: true`).

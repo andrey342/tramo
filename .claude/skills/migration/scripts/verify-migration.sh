@@ -11,21 +11,31 @@
 #   pnpm migration:verify check
 #       Lints pending migrations against .claude/rules/migrations.md, then runs them, reverts them
 #       and runs them again. Fails if `down` does not restore the schema exactly, or if running
-#       again does not reproduce it. With nothing pending, it checks the last applied migration.
+#       again does not reproduce it.
+#   pnpm migration:verify check --last
+#       The same for the last applied migration: reverts it (losing the dev data of whatever its
+#       down drops), runs it, and does both twice to compare the schemas.
 #   pnpm migration:verify lint
 #       Lints every migration in the repo.
 set -euo pipefail
 
 cd "$(dirname "$0")/../../../.."
-DB_USER="${POSTGRES_USER:-tramo}"
-DB_NAME="${POSTGRES_DB:-tramo}"
+# The database TypeORM migrates (DATABASE_URL, from .env when the shell does not set it) is the one
+# the snapshots dump, from inside the compose Postgres container.
+read -r DB_USER DB_NAME < <(node -e "
+  try { process.loadEnvFile('.env'); } catch {}
+  const url = new URL(process.env.DATABASE_URL ?? 'postgres://tramo:tramo@localhost:5432/tramo');
+  console.log(decodeURIComponent(url.username), url.pathname.slice(1));
+")
 DATA_SOURCE=dist/src/shared/infrastructure/database/data-source.js
 # Last migration written before primary keys had to be named explicitly.
 UNNAMED_PK_CUTOFF=202610101944
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-typeorm() { pnpm exec typeorm "$@" -d "$DATA_SOURCE"; }
+# No colours: migration:show underlines its lines when the terminal advertises colour support,
+# which would hide the pending ones from the parsing below.
+typeorm() { FORCE_COLOR=0 NO_COLOR=1 pnpm exec typeorm "$@" -d "$DATA_SOURCE"; }
 
 snapshot() {
   # Schema only, without ownership, the migrations bookkeeping table or the random key pg_dump
@@ -35,8 +45,17 @@ snapshot() {
     | grep -vE '^(--|SET |SELECT pg_catalog|[\]restrict |[\]unrestrict )' | sed '/^$/d' > "$1"
 }
 
+# Fails the script when migration:show fails, instead of reporting nothing pending.
 pending_files() {
-  typeorm migration:show | sed -nE 's/^ *\[ \] +([A-Za-z0-9]+)$/\1/p'
+  local shown
+  shown="$(typeorm migration:show)"
+  printf '%s\n' "$shown" | sed -E 's/\x1b\[[0-9;]*m//g' | sed -nE 's/^ *\[ \] +([A-Za-z0-9]+)$/\1/p'
+}
+
+# Schemas a migration may reference: one per module (init.sql lists them) plus the module dirs.
+known_schemas() {
+  { sed -nE 's/^CREATE SCHEMA IF NOT EXISTS ([a-z_]+);$/\1/p' docker/postgres/init.sql
+    ls src/modules | tr - _; } | sort -u | paste -sd'|'
 }
 
 lint_migration() {
@@ -68,7 +87,7 @@ lint_migration() {
   if grep -iE '\btimestamp\b' "$file" | grep -viE 'with time zone' | grep -q .; then
     echo "  $base: timestamps are timestamptz(3)"; problems=1
   fi
-  if grep -qE 'REFERENCES "?(shared|iam|catalog|origination|lending|billing|notifications|reporting)"?\.' "$file"; then
+  if grep -qE "REFERENCES \"?($(known_schemas))\"?\." "$file"; then
     local own
     own="$(echo "$file" | sed -nE 's#^src/modules/([a-z-]+)/.*#\1#p' | tr - _)"
     if grep -oE 'REFERENCES "?[a-z_]+"?\.' "$file" | grep -vqE "REFERENCES \"?(${own:-shared})\"?\."; then
@@ -102,23 +121,40 @@ case "${1:-}" in
 
   check)
     pnpm -s build
-    mapfile -t pending < <(pending_files)
+    pending_output="$(pending_files)"
+    mapfile -t pending < <(printf '%s' "$pending_output" | sed '/^$/d')
     echo "pending migrations: ${#pending[@]}"
     failed=0
     for name in "${pending[@]}"; do
-      file="$(grep -rl "name = '$name'" src --include='*.ts' | head -1)"
+      file="$(grep -rlE "name = ['\"]$name['\"]" src --include='*.ts' | head -1 || true)"
+      if [ -z "$file" ]; then
+        echo "  cannot find the file of $name (its \`name\` property must equal the class name)"
+        failed=1
+        continue
+      fi
       echo "lint $file"
       lint_migration "$file" || failed=1
     done
     [ "$failed" = 0 ] || { echo "fix the problems above first"; exit 1; }
 
     if [ "${#pending[@]}" -eq 0 ]; then
-      echo "nothing pending: checking the last applied migration"
+      if [ "${2:-}" != "--last" ]; then
+        echo "nothing pending. To check the last applied migration again: check --last"
+        echo "(it reverts that migration on the dev database: data its down drops is lost)"
+        exit 1
+      fi
+      echo "checking the last applied migration"
       snapshot "$WORK/after.sql"
       typeorm migration:revert
       snapshot "$WORK/before.sql"
       typeorm migration:run
       snapshot "$WORK/again.sql"
+      typeorm migration:revert
+      snapshot "$WORK/reverted.sql"
+      typeorm migration:run
+      if ! diff -u "$WORK/before.sql" "$WORK/reverted.sql"; then
+        echo "FAIL: down does not restore the same schema each time (diff above)"; exit 1
+      fi
     else
       snapshot "$WORK/before.sql"
       typeorm migration:run

@@ -154,7 +154,7 @@ async function signIn(as: DemoRole): Promise<Session> {
   const credentials = { email: DEMO_USERS[as], password: DEMO_PASSWORD };
   const session = await post('/api/v1/auth/login', credentials);
   if (session) return session;
-  // Students can register themselves; the other demo accounts come from the seed.
+  // Students can register themselves; the other demo accounts are created by the demo seed.
   if (as === 'student') {
     const registered = await fetch(`${BASE_URL}/api/v1/auth/register`, {
       method: 'POST',
@@ -166,7 +166,10 @@ async function signIn(as: DemoRole): Promise<Session> {
       if (retry) return retry;
     }
   }
-  return fail(`cannot sign in as ${as} (${DEMO_USERS[as]}); is the demo data seeded?`);
+  return fail(
+    `cannot sign in as ${as} (${DEMO_USERS[as]}): only students register themselves; the other ` +
+      'demo accounts exist once the demo seed has run (not in the repo yet).',
+  );
 }
 
 async function post(path: string, payload: unknown): Promise<Session | null> {
@@ -223,7 +226,13 @@ function load<T>(file: string): T | undefined {
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as T) : undefined;
 }
 
+// The folder holds live tokens and API key secrets, so it ignores itself: whatever clone this
+// runs in, `git add -A` cannot pick them up.
 function save(file: string, value: unknown): void {
   mkdirSync(STATE_DIR, { recursive: true });
+  const ignore = join(STATE_DIR, '.gitignore');
+  if (!existsSync(ignore)) {
+    writeFileSync(ignore, '*\n');
+  }
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }

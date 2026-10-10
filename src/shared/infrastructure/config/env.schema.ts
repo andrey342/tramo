@@ -39,7 +39,9 @@ export const envSchema = z.object({
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
   // A batch whose jobs Redis has not accepted by then is rolled back and retried with backoff.
-  OUTBOX_ENQUEUE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
+  // Capped well below Postgres' 60 s idle-in-transaction limit, which would otherwise end the
+  // publisher's session before it can roll back cleanly.
+  OUTBOX_ENQUEUE_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(10_000),
   BULL_BOARD_USERNAME: z.string().min(1).default('ops'),
   // Bull Board is only served when a password is configured.
   BULL_BOARD_PASSWORD: z.preprocess(

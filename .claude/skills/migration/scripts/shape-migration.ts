@@ -12,6 +12,22 @@ import { ChangeSet, exists, fail, migrationStamp, pascal, ROOT, tidy } from '../
 
 const [mode, ...rest] = process.argv.slice(2);
 
+// PostgreSQL reserved key words (SQL Key Words appendix, column 'reserved'); as identifiers they
+// must stay quoted.
+const RESERVED = new Set(
+  (
+    'all analyse analyze and any array as asc asymmetric authorization binary both case cast check ' +
+    'collate collation column concurrently constraint create cross current_catalog current_date ' +
+    'current_role current_schema current_time current_timestamp current_user default deferrable ' +
+    'desc distinct do else end except false fetch for foreign freeze from full grant group having ' +
+    'ilike in initially inner intersect into is isnull join lateral leading left like limit ' +
+    'localtime localtimestamp natural not notnull null offset on only or order outer overlaps ' +
+    'placing primary references returning right select session_user similar some symmetric ' +
+    'system_user table tablesample then to trailing true union unique user using variadic verbose ' +
+    'when where window with'
+  ).split(' '),
+);
+
 // Statements about objects the entities do not describe.
 const NOT_MODELLED = [
   /\bDROP CONSTRAINT\b/i,
@@ -29,8 +45,13 @@ function statements(source: string, method: 'up' | 'down'): string[] {
     [...body.matchAll(/queryRunner\.query\(\s*`([\s\S]*?)`/g)]
       .map((match) => (match[1] ?? '').replace(/\s+/g, ' ').trim())
       .filter((sql) => !NOT_MODELLED.some((pattern) => pattern.test(sql)))
-      // Plain lower-case identifiers do not need quotes; the repo writes them bare.
-      .map((sql) => sql.replace(/"([a-z_][a-z0-9_]*)"/g, '$1'))
+      // Plain lower-case identifiers do not need quotes; the repo writes them bare. Reserved words
+      // (a column called "order" or "user") keep them.
+      .map((sql) =>
+        sql.replace(/"([a-z_][a-z0-9_]*)"/g, (quoted, name: string) =>
+          RESERVED.has(name) ? quoted : name,
+        ),
+      )
   );
 }
 
