@@ -47,6 +47,12 @@ describe('AuthorizationGuard', () => {
     expect(() => guard.canActivate(contextFor(student, { roles: ['ops'] }))).toThrow(/role/);
   });
 
+  it('should keep users out of routes that do not name roles', () => {
+    expect(() => guard.canActivate(contextFor(student, {}))).toThrow(
+      /does not declare which roles/,
+    );
+  });
+
   it('should keep users out of routes opened only to api keys', () => {
     expect(() => guard.canActivate(contextFor(student, { scopes: ['applications:read'] }))).toThrow(
       /only available to API keys/,

@@ -42,13 +42,13 @@ export class TypeOrmRefreshTokenRepository implements RefreshTokenRepository {
   // token before the lock fail its optimistic check instead of resurrecting it.
   async revokeFamily(familyId: string, now: Date): Promise<number> {
     await this.lockFamily(familyId);
-    const rows: unknown[] = await this.txHost.tx.query(
+    // For UPDATE, TypeORM's Postgres driver answers [rows, affected count], not the rows.
+    const [, revoked]: [unknown[], number] = await this.txHost.tx.query(
       `UPDATE iam.refresh_tokens
           SET status = 'revoked', used_at = COALESCE(used_at, $2), version = version + 1
-        WHERE family_id = $1 AND status <> 'revoked'
-        RETURNING id`,
+        WHERE family_id = $1 AND status <> 'revoked'`,
       [familyId, now],
     );
-    return rows.length;
+    return revoked;
   }
 }

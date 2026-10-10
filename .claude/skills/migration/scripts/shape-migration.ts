@@ -6,9 +6,9 @@
 // Entities here map columns only. CHECK constraints, indexes, foreign keys and defaults are
 // written by hand in migrations (.claude/rules/migrations.md), so the generator always proposes
 // to drop them. Those statements are discarded; what remains are table and column changes.
-import { readFileSync, rmSync } from 'node:fs';
+import { globSync, readFileSync, rmSync } from 'node:fs';
 
-import { ChangeSet, exists, fail, migrationStamp, pascal, tidy } from '../../../lib/scaffold';
+import { ChangeSet, exists, fail, migrationStamp, pascal, ROOT, tidy } from '../../../lib/scaffold';
 
 const [mode, ...rest] = process.argv.slice(2);
 
@@ -67,7 +67,18 @@ function target(module: string, description: string): { path: string; className:
     module === 'shared'
       ? 'src/shared/infrastructure/database'
       : `src/modules/${module}/infrastructure/persistence`;
-  const stamp = migrationStamp();
+  // TypeORM orders migrations by the class timestamp, so two migrations never share a minute.
+  const taken = new Set(
+    globSync('src/**/migrations/*.ts', { cwd: ROOT }).map(
+      (file) => /(\d{12})-[^/\\]+\.ts$/.exec(file)?.[1],
+    ),
+  );
+  let at = new Date();
+  let stamp = migrationStamp(at);
+  while (taken.has(stamp.file)) {
+    at = new Date(at.getTime() + 60_000);
+    stamp = migrationStamp(at);
+  }
   return {
     path: `${base}/migrations/${stamp.file}-${description}.ts`,
     className: `${pascal(description)}${String(stamp.ms)}`,

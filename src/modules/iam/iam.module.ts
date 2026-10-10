@@ -78,6 +78,5 @@ const DAY_MS = 24 * 60 * 60 * 1000;
       }),
     },
   ],
-  exports: [USER_REPOSITORY, PASSWORD_HASHER, CREDENTIAL_GENERATOR],
 })
 export class IamModule {}

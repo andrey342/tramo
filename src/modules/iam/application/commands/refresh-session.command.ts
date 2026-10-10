@@ -88,6 +88,9 @@ export class RefreshSessionHandler implements ICommandHandler<RefreshSessionComm
     return this.sessions.issue(user, now, { id: token.familyId, expiresAt: token.familyExpiresAt });
   }
 
+  // The event describes the session family, which is not an aggregate: it is one bulk UPDATE
+  // (ADR 013). So the handler publishes it itself, still inside the unit of work, instead of an
+  // aggregate recording it.
   private async revokeAfterReuse(token: RefreshToken, now: Date): Promise<void> {
     const revokedTokens = await this.refreshTokens.revokeFamily(token.familyId, now);
     this.logger.warn(

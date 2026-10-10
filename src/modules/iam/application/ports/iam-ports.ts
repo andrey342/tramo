@@ -25,6 +25,7 @@ export interface AccessTokenClaims {
 export interface IssuedAccessToken {
   readonly token: string;
   readonly expiresAt: Date;
+  readonly expiresInSeconds: number;
 }
 
 export interface AccessTokenIssuer {

@@ -11,7 +11,7 @@ export const REQUIRED_SCOPES = Symbol('REQUIRED_SCOPES');
 // closed. The iam module installs the global guards that read this metadata.
 export const Public = (): MethodDecorator & ClassDecorator => SetMetadata(IS_PUBLIC, true);
 
-// The user must hold at least one of the roles.
+// The user must hold at least one of the roles. Users are refused on routes without it.
 export const Roles = (...roles: Role[]): MethodDecorator & ClassDecorator =>
   applyDecorators(SetMetadata(REQUIRED_ROLES, roles), ApiBearerAuth());
 

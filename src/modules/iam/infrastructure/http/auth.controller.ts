@@ -1,8 +1,14 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Header, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
-import { AuthRateLimited } from '@shared/infrastructure/http';
+import { ApiProblems, AuthRateLimited } from '@shared/infrastructure/http';
 import { Public } from '@shared/infrastructure/http/access.decorators';
 
 import { LoginCommand } from '../../application/commands/login.command';
@@ -29,20 +35,29 @@ export class AuthController {
   constructor(private readonly commands: CommandBus) {}
 
   @Post('register')
+  @ApiProblems(400, 409, 429)
+  @ApiCreatedResponse({ type: RegisteredResponse })
   @ApiOperation({ summary: 'Create a student account' })
   register(@Body() body: RegisterStudentRequest): Promise<RegisteredResponse> {
     return this.commands.execute(new RegisterStudentCommand(body.email, body.password));
   }
 
+  // Responses carrying tokens must not be stored by any cache (RFC 6749, section 5.1).
   @Post('login')
+  @ApiProblems(400, 401, 429)
+  @ApiOkResponse({ type: SessionTokensResponse })
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Exchange email and password for an access and a refresh token' })
   async login(@Body() body: LoginRequest): Promise<SessionTokensResponse> {
     return toResponse(await this.commands.execute(new LoginCommand(body.email, body.password)));
   }
 
   @Post('refresh')
+  @ApiProblems(400, 401, 429)
+  @ApiOkResponse({ type: SessionTokensResponse })
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Rotate the refresh token',
     description:
@@ -54,6 +69,8 @@ export class AuthController {
   }
 
   @Post('logout')
+  @ApiProblems(400, 429)
+  @ApiNoContentResponse()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'End the session the refresh token belongs to' })
   async logout(@Body() body: RefreshTokenRequest): Promise<void> {
@@ -65,7 +82,7 @@ function toResponse(session: SessionTokensDto): SessionTokensResponse {
   return {
     accessToken: session.accessToken,
     tokenType: 'Bearer',
-    expiresIn: Math.round((session.accessTokenExpiresAt.getTime() - Date.now()) / 1000),
+    expiresIn: session.accessTokenExpiresIn,
     accessTokenExpiresAt: session.accessTokenExpiresAt,
     refreshToken: session.refreshToken,
     refreshTokenExpiresAt: session.refreshTokenExpiresAt,

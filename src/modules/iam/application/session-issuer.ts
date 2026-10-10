@@ -57,6 +57,7 @@ export class SessionIssuer {
     return {
       accessToken: access.token,
       accessTokenExpiresAt: access.expiresAt,
+      accessTokenExpiresIn: access.expiresInSeconds,
       refreshToken: secret.value,
       refreshTokenExpiresAt: refreshToken.expiresAt,
     };

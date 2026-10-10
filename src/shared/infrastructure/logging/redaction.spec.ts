@@ -1,7 +1,7 @@
-import { stdSerializers } from 'pino';
+import { pino, stdSerializers } from 'pino';
 import { QueryFailedError } from 'typeorm';
 
-import { censor, maskEmail, maskTail, scrubError } from './redaction';
+import { censor, maskEmail, maskTail, REDACTED_PATHS, scrubError } from './redaction';
 
 describe('log redaction', () => {
   it('should keep only the first letter and the domain of an email', () => {
@@ -25,6 +25,28 @@ describe('log redaction', () => {
     expect(censor('12345678Z', ['body', 'nationalId'])).toBe('***678Z');
     expect(censor('s3cret', ['body', 'password'])).toBe('[REDACTED]');
     expect(censor({ nested: true }, ['body', 'iban'])).toBe('[REDACTED]');
+  });
+
+  it('should redact sensitive fields at the top level and nested two levels down', () => {
+    const lines: string[] = [];
+    const logger = pino(
+      { redact: { paths: [...REDACTED_PATHS], censor } },
+      { write: (line: string) => lines.push(line) },
+    );
+
+    logger.info(
+      {
+        password: 'top secret 1',
+        issued: { key: 'tramo_abcd1234_secret' },
+        a: { b: { tokenHash: 'h' } },
+      },
+      'probe',
+    );
+
+    const logged = lines.join('');
+    expect(logged).not.toContain('top secret 1');
+    expect(logged).not.toContain('tramo_abcd1234_secret');
+    expect(logged).not.toContain('"tokenHash":"h"');
   });
 
   it('should drop the sql, parameters and row details of a database error', () => {

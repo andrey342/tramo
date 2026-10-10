@@ -16,6 +16,13 @@ export function assertCanManageCenter(principal: Principal, centerId: string): v
   throw new CenterAccessDeniedError(centerId);
 }
 
+// Creating center users is reserved to Tramo admins, including for the center's own admins.
+export function assertIsAdmin(principal: Principal, centerId: string): void {
+  if (principal.kind !== 'user' || !principal.roles.includes('admin')) {
+    throw new CenterAccessDeniedError(centerId);
+  }
+}
+
 export function actorId(principal: Principal): string {
   if (principal.kind !== 'user') {
     throw new Error('Only users act on behalf of a center here.');

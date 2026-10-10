@@ -31,16 +31,23 @@ export class JwtAccessTokenIssuer implements AccessTokenIssuer {
 
   async issue(claims: AccessTokenClaims): Promise<IssuedAccessToken> {
     const ttlSeconds = this.config.auth.accessTokenTtlSeconds;
-    const payload: AccessTokenPayload = {
+    const issuedAt = Math.floor(this.clock.now().getTime() / 1000);
+    // `iat` from the Clock, so `exp` (iat + ttl) and expiresAt below agree.
+    const payload = {
       sub: claims.userId,
       roles: claims.roles,
       cid: claims.centerId,
-    };
+      iat: issuedAt,
+    } satisfies AccessTokenPayload & { iat: number };
     const token = await this.jwt.signAsync(payload, {
       expiresIn: ttlSeconds,
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });
-    return { token, expiresAt: new Date(this.clock.now().getTime() + ttlSeconds * 1000) };
+    return {
+      token,
+      expiresAt: new Date((issuedAt + ttlSeconds) * 1000),
+      expiresInSeconds: ttlSeconds,
+    };
   }
 }

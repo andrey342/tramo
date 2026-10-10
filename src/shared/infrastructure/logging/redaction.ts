@@ -1,20 +1,29 @@
-// Paths are matched by pino's fast-redact. Wildcards cover one level of nesting, which is enough
-// for request bodies and the structured objects we log from handlers and jobs.
-export const REDACTED_PATHS = [
+// Fields never written to logs in clear, at the top of a log object and up to two levels down
+// (pino's fast-redact matches one level per wildcard).
+const SENSITIVE_FIELDS = [
+  'password',
+  'passwordHash',
+  'token',
+  'tokenHash',
+  'refreshToken',
+  'accessToken',
+  'secret',
+  'secretHash',
+  'key',
+  'apiKey',
+  'authorization',
+  'nationalId',
+  'iban',
+  'email',
+] as const;
+
+export const REDACTED_PATHS: readonly string[] = [
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["x-api-key"]',
   'res.headers["set-cookie"]',
-  '*.password',
-  '*.passwordHash',
-  '*.token',
-  '*.refreshToken',
-  '*.accessToken',
-  '*.secret',
-  '*.nationalId',
-  '*.iban',
-  '*.email',
-] as const;
+  ...SENSITIVE_FIELDS.flatMap((field) => [field, `*.${field}`, `*.*.${field}`]),
+];
 
 export function maskEmail(value: string): string {
   const at = value.indexOf('@');

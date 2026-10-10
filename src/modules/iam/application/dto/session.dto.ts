@@ -3,6 +3,7 @@ import { type ApiKeyScope, type Role } from '@shared/domain';
 export interface SessionTokensDto {
   readonly accessToken: string;
   readonly accessTokenExpiresAt: Date;
+  readonly accessTokenExpiresIn: number;
   readonly refreshToken: string;
   readonly refreshTokenExpiresAt: Date;
 }
