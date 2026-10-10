@@ -1,4 +1,4 @@
-// Accounts of the demo data set, one per role. The demo seed (to come) creates them and the
+// Accounts of the demo data set, one per role. `pnpm seed` (scripts/seed.ts) creates them and the
 // try-endpoint skill signs in with them, so both read this one list. Local and demo use only.
 export const DEMO_PASSWORD = 'tramo demo password';
 
