@@ -11,7 +11,7 @@ import {
   type PasswordHasher,
 } from '../../src/modules/iam/application/ports/iam-ports';
 import {
-  type ApiKey,
+  ApiKey,
   type ApiKeyRepository,
   RefreshToken,
   type RefreshTokenRepository,
@@ -75,11 +75,31 @@ export class InMemoryApiKeyRepository
   }
 
   listByCenter(centerId: string): Promise<ApiKey[]> {
-    return Promise.resolve(this.all().filter((key) => key.centerId === centerId));
+    return Promise.resolve(
+      this.all()
+        .filter((key) => key.centerId === centerId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    );
   }
 
-  // The aggregate instance already holds the new lastUsedAt; nothing else to store in memory.
-  recordUse(): Promise<void> {
+  // Mirrors the conditional UPDATE: a use older than the recorded one changes nothing.
+  recordUse(id: string, usedAt: Date): Promise<void> {
+    const key = this.items.get(id);
+    if (key && (key.lastUsedAt === null || key.lastUsedAt < usedAt)) {
+      const stored = ApiKey.reconstitute(key.id, {
+        centerId: key.centerId,
+        name: key.name,
+        prefix: key.prefix,
+        secretHash: key.secretHash,
+        scopes: key.scopes,
+        createdBy: key.createdBy,
+        createdAt: key.createdAt,
+        lastUsedAt: usedAt,
+        revokedAt: key.revokedAt,
+      });
+      stored.markPersisted(key.version);
+      this.items.set(id, stored);
+    }
     return Promise.resolve();
   }
 }

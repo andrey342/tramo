@@ -6,11 +6,13 @@ import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { ConcurrentModificationError } from '@shared/domain';
 import { CoreModule } from '@shared/infrastructure/core.module';
 
+import { iamRepositoriesContract } from '../../../../../test/contracts/iam-repositories.contract';
 import { aCenterAdmin, aStudent } from '../../../../../test/factories/iam';
 import { eventually } from '../../../../../test/helpers/eventually';
 import {
   EmailAlreadyRegisteredError,
   IamEvents,
+  API_KEY_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
   RefreshToken,
   type RefreshTokenRepository,
@@ -170,4 +172,11 @@ describe('iam repositories (integration)', () => {
     expect(revoked).toBe(2);
     expect((await tokens.findByTokenHash(`c2-${student.id}`))?.status).toBe('revoked');
   });
+
+  iamRepositoriesContract('TypeORM repositories', () => ({
+    users,
+    refreshTokens: tokens,
+    apiKeys: app.get(API_KEY_REPOSITORY),
+    run: (work) => uow.run(work),
+  }));
 });
