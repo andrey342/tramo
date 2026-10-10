@@ -23,7 +23,8 @@ export function assertCanOperate(actor: Actor, centerId: string): void {
   }
 }
 
-// Staff see every center; a center sees itself, through its admins or its API keys.
+// Staff see every center; a center sees itself through its admins. API keys are for programs and
+// applications, and no scope lets them read the center's own record (fee, payout account).
 export function assertCanView(actor: Actor, centerId: string): void {
   if (actor === 'system' || isUserWith(actor, 'admin', 'ops')) {
     return;
@@ -33,9 +34,6 @@ export function assertCanView(actor: Actor, centerId: string): void {
     actor.roles.includes('center_admin') &&
     actor.centerId === centerId
   ) {
-    return;
-  }
-  if (actor.kind === 'api_key' && actor.centerId === centerId) {
     return;
   }
   throw new CenterAccessDeniedError(centerId);
