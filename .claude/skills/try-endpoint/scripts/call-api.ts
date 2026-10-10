@@ -223,7 +223,13 @@ function load<T>(file: string): T | undefined {
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as T) : undefined;
 }
 
+// The folder holds live tokens and API key secrets, so it ignores itself: whatever clone this
+// runs in, `git add -A` cannot pick them up.
 function save(file: string, value: unknown): void {
   mkdirSync(STATE_DIR, { recursive: true });
+  const ignore = join(STATE_DIR, '.gitignore');
+  if (!existsSync(ignore)) {
+    writeFileSync(ignore, '*\n');
+  }
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
