@@ -23,8 +23,8 @@ export interface FinancingInput {
     readonly incomeShareBasisPoints: number;
     readonly minMonthlyIncomeCents: number;
     readonly maxPayments: number;
-    // 1.5 is a cap of one and a half times the price.
-    readonly capMultiplier: number;
+    // 150 is a cap of one and a half times the price.
+    readonly capMultiplierHundredths: number;
     readonly graceMonths: number;
   } | null;
 }
@@ -73,7 +73,7 @@ export function toFinancingOptions(input: FinancingInput): FinancingOptions {
           incomeShare: Percentage.fromBasisPoints(input.isa.incomeShareBasisPoints),
           minMonthlyIncome: Money.fromCents(input.isa.minMonthlyIncomeCents),
           maxPayments: input.isa.maxPayments,
-          capMultiplierHundredths: Math.round(input.isa.capMultiplier * 100),
+          capMultiplierHundredths: input.isa.capMultiplierHundredths,
           graceMonths: input.isa.graceMonths,
         }
       : null,

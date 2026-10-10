@@ -64,7 +64,7 @@ const CENTERS = [
             incomeShareBasisPoints: 1_000,
             minMonthlyIncomeCents: 1_500_00,
             maxPayments: 36,
-            capMultiplier: 1.5,
+            capMultiplierHundredths: 150,
             graceMonths: 3,
           },
         },

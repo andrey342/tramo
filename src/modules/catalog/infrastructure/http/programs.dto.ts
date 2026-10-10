@@ -7,7 +7,6 @@ import {
   IsDefined,
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -79,13 +78,14 @@ export class IsaRequest {
   maxPayments!: number;
 
   @ApiProperty({
-    example: 1.5,
-    description: 'Total paid is capped at this multiple of the price (1.0 to 2.0)',
+    example: 150,
+    description:
+      'Total paid is capped at this multiple of the price, in hundredths (150 = 1.5 times, 100 to 200)',
   })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(1)
-  @Max(2)
-  capMultiplier!: number;
+  @IsInt()
+  @Min(FINANCING_LIMITS.minCapMultiplierHundredths)
+  @Max(FINANCING_LIMITS.maxCapMultiplierHundredths)
+  capMultiplierHundredths!: number;
 
   @ApiProperty({ example: 3 })
   @IsInt()
@@ -282,8 +282,8 @@ class IsaResponse {
   @ApiProperty({ example: 36 })
   maxPayments!: number;
 
-  @ApiProperty({ example: 1.5 })
-  capMultiplier!: number;
+  @ApiProperty({ example: 150 })
+  capMultiplierHundredths!: number;
 
   @ApiProperty({ example: 3 })
   graceMonths!: number;

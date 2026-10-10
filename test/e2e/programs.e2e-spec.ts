@@ -23,7 +23,7 @@ const ISA = {
   incomeShareBasisPoints: 1_000,
   minMonthlyIncomeCents: 150_000,
   maxPayments: 36,
-  capMultiplier: 1.5,
+  capMultiplierHundredths: 150,
   graceMonths: 3,
 };
 
@@ -107,7 +107,7 @@ describe('Programs (e2e)', () => {
     expect(single.body).toMatchObject({
       status: 'published',
       centerName: 'Programs School',
-      financing: { isa: { capMultiplier: 1.5 } },
+      financing: { isa: { capMultiplierHundredths: 150 } },
     });
   });
 

@@ -9,7 +9,8 @@ export interface FinancingOptionsDto {
     readonly incomeShareBasisPoints: number;
     readonly minMonthlyIncomeCents: number;
     readonly maxPayments: number;
-    readonly capMultiplier: number;
+    // Whole hundredths, like every other amount here: 150 caps the total at 1.5 times the price.
+    readonly capMultiplierHundredths: number;
     readonly graceMonths: number;
   } | null;
 }

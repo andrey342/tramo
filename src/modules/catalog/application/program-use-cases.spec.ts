@@ -44,7 +44,7 @@ const ISA: FinancingInput = {
     incomeShareBasisPoints: 1_000,
     minMonthlyIncomeCents: 1_500_00,
     maxPayments: 36,
-    capMultiplier: 1.5,
+    capMultiplierHundredths: 150,
     graceMonths: 3,
   },
 };
@@ -105,7 +105,7 @@ describe('program use cases', () => {
         priceCents: 750_000,
         products: ['installments'],
       });
-      expect(byKey.financing.isa?.capMultiplier).toBe(1.5);
+      expect(byKey.financing.isa?.capMultiplierHundredths).toBe(150);
     });
 
     it('should refuse another center, a missing center and an ISA the numbers do not allow', async () => {
