@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { envSchema } from './env.schema';
+import { type Env, envSchema } from './env.schema';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
 
@@ -77,12 +77,39 @@ export function parseDatabaseConfig(source: Record<string, string | undefined>):
   };
 }
 
+// Values published in .env.example and docker-compose.yml. Anyone can read them, so a production
+// process refuses to start with them: a known JWT secret lets anyone forge an admin token.
+const PUBLISHED_SECRETS = {
+  JWT_ACCESS_SECRET: (value: string) => /change-me/i.test(value),
+  BULL_BOARD_PASSWORD: (value: string | undefined) => value === 'tramo-queues',
+} as const;
+
+function assertProductionSecrets(env: Env): void {
+  if (env.NODE_ENV !== 'production') {
+    return;
+  }
+  const published = [
+    PUBLISHED_SECRETS.JWT_ACCESS_SECRET(env.JWT_ACCESS_SECRET) ? 'JWT_ACCESS_SECRET' : undefined,
+    PUBLISHED_SECRETS.BULL_BOARD_PASSWORD(env.BULL_BOARD_PASSWORD)
+      ? 'BULL_BOARD_PASSWORD'
+      : undefined,
+  ].filter((name) => name !== undefined);
+  if (published.length > 0) {
+    throw new InvalidConfigError(
+      published
+        .map((name) => `✖ ${name} still has the development value; set a secret of your own.`)
+        .join('\n'),
+    );
+  }
+}
+
 export function parseConfig(source: Record<string, string | undefined>): AppConfig {
   const result = envSchema.safeParse(source);
   if (!result.success) {
     throw new InvalidConfigError(z.prettifyError(result.error));
   }
   const env = result.data;
+  assertProductionSecrets(env);
   return {
     env: env.NODE_ENV,
     http: { port: env.PORT, corsOrigins: env.CORS_ORIGINS, trustProxyHops: env.TRUST_PROXY_HOPS },
@@ -94,7 +121,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     worker: { healthPort: env.WORKER_HEALTH_PORT },
     // pino-pretty is a dev dependency and is not installed in the production image.
     log: { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY && env.NODE_ENV !== 'production' },
-    docs: { enabled: env.SWAGGER_ENABLED },
+    docs: { enabled: env.SWAGGER_ENABLED ?? env.NODE_ENV !== 'production' },
     database: {
       url: env.DATABASE_URL,
       poolMax: env.DATABASE_POOL_MAX,

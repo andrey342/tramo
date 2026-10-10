@@ -46,6 +46,34 @@ describe('parseConfig', () => {
     );
   });
 
+  it('should refuse the published development secrets in production', () => {
+    const production = { ...validEnv, NODE_ENV: 'production' };
+
+    expect(() =>
+      parseConfig({
+        ...production,
+        JWT_ACCESS_SECRET: 'local-development-secret-change-me-0123456789',
+      }),
+    ).toThrow(/JWT_ACCESS_SECRET/);
+    expect(() => parseConfig({ ...production, BULL_BOARD_PASSWORD: 'tramo-queues' })).toThrow(
+      /BULL_BOARD_PASSWORD/,
+    );
+    expect(
+      parseConfig({
+        ...validEnv,
+        JWT_ACCESS_SECRET: 'local-development-secret-change-me-0123456789',
+      }).env,
+    ).toBe('development');
+  });
+
+  it('should serve the API docs by default everywhere but production', () => {
+    expect(parseConfig(validEnv).docs.enabled).toBe(true);
+    expect(parseConfig({ ...validEnv, NODE_ENV: 'production' }).docs.enabled).toBe(false);
+    expect(
+      parseConfig({ ...validEnv, NODE_ENV: 'production', SWAGGER_ENABLED: 'true' }).docs.enabled,
+    ).toBe(true);
+  });
+
   it('should ignore pretty logging when running in production', () => {
     const config = parseConfig({ ...validEnv, NODE_ENV: 'production', LOG_PRETTY: 'true' });
 
