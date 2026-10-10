@@ -137,7 +137,7 @@ Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 | Module    | Responsibility                                                           | Main endpoints                                                  |
 | --------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
 | `iam`     | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
-| `catalog` | Training centers, VAT verification, programs and their financing options |                                                                 |
+| `catalog` | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`                           |
 
 ## API overview
 
