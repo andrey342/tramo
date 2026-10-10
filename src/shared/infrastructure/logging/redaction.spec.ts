@@ -23,6 +23,7 @@ describe('log redaction', () => {
   it('should pick the mask from the redacted key', () => {
     expect(censor('ana@example.com', ['body', 'email'])).toBe('a***@example.com');
     expect(censor('12345678Z', ['body', 'nationalId'])).toBe('***678Z');
+    expect(censor('ES9121000418450200051332', ['body', 'payoutIban'])).toBe('***1332');
     expect(censor('s3cret', ['body', 'password'])).toBe('[REDACTED]');
     expect(censor({ nested: true }, ['body', 'iban'])).toBe('[REDACTED]');
   });

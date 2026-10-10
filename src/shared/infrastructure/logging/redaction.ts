@@ -14,6 +14,8 @@ const SENSITIVE_FIELDS = [
   'authorization',
   'nationalId',
   'iban',
+  // Request bodies of center registration and updates.
+  'payoutIban',
   'email',
 ] as const;
 
@@ -48,7 +50,7 @@ export function censor(value: unknown, path: string[]): unknown {
   if (key === 'email') {
     return maskEmail(value);
   }
-  if (key === 'iban' || key === 'nationalId') {
+  if (key === 'iban' || key === 'payoutIban' || key === 'nationalId') {
     return maskTail(value);
   }
   return '[REDACTED]';
