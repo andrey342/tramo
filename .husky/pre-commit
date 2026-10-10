@@ -2,6 +2,8 @@ pnpm exec lint-staged
 
 # Reject staged content carrying attribution trailers or tool names. Tooling config that
 # legitimately names the assistant is exempt; the README may mention it in its tooling section.
+# Elsewhere, the tooling folder name (`.claude`) and `CLAUDE.md` are references to files,
+# not mentions, so they are removed before the check.
 git diff --cached --name-only --diff-filter=ACMR | {
   forbidden='co-authored-by|anthropic|generated with|ai-generated'
   status=0
@@ -11,7 +13,7 @@ git diff --cached --name-only --diff-filter=ACMR | {
     esac
     pattern="$forbidden|claude"
     [ "$f" = "README.md" ] && pattern="$forbidden"
-    if git show ":$f" | grep -qiIE "$pattern"; then
+    if git show ":$f" | sed -E 's#\.claude|CLAUDE\.md##g' | grep -qiIE "$pattern"; then
       echo "pre-commit: forbidden attribution text in $f" >&2
       status=1
     fi
