@@ -6,6 +6,9 @@ export const CatalogEvents = {
   CenterActivated: 'CenterActivated',
   CenterSuspended: 'CenterSuspended',
   CenterPayoutAccountChanged: 'CenterPayoutAccountChanged',
+  ProgramPublished: 'ProgramPublished',
+  ProgramFinancingChanged: 'ProgramFinancingChanged',
+  ProgramArchived: 'ProgramArchived',
 } as const;
 
 export type CenterRegisteredPayload = {
@@ -28,4 +31,28 @@ export type CenterSuspendedPayload = {
 export type CenterPayoutAccountChangedPayload = {
   readonly centerId: string;
   readonly ibanLastFour: string;
+};
+
+export type ProgramPublishedPayload = {
+  readonly programId: string;
+  readonly centerId: string;
+  readonly name: string;
+  readonly priceCents: number;
+  readonly products: readonly string[];
+};
+
+// Origination quotes from the options in force when an application is made; consumers keep their
+// own copy of what changed.
+export type ProgramFinancingChangedPayload = {
+  readonly programId: string;
+  readonly centerId: string;
+  readonly products: readonly string[];
+  readonly installmentTerms: readonly number[];
+  readonly installmentAnnualRateBasisPoints: number | null;
+  readonly isaIncomeShareBasisPoints: number | null;
+};
+
+export type ProgramArchivedPayload = {
+  readonly programId: string;
+  readonly centerId: string;
 };

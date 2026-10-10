@@ -26,3 +26,22 @@ export class InvalidPlatformFeeError extends DomainError {
     super(`The platform fee must be between 0 % and ${String(maxPercent)} %.`, { maxPercent });
   }
 }
+
+export class InvalidFinancingOptionError extends DomainError {
+  readonly code = 'invalid_financing_option';
+  readonly category = 'rule_violation';
+
+  constructor(reason: string) {
+    super(`Invalid financing option: ${reason}.`, { reason });
+  }
+}
+
+// Programs are published once they are something a student can actually finance.
+export class ProgramNotPublishableError extends DomainError {
+  readonly code = 'program_not_publishable';
+  readonly category = 'rule_violation';
+
+  constructor(reason: string) {
+    super(`The program cannot be published: ${reason}.`, { reason });
+  }
+}
