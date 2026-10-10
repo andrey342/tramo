@@ -20,8 +20,10 @@ export {
 export { type DomainEvent, type EventPayload, type JsonValue } from './domain-event';
 export { Email } from './email';
 export { Entity } from './entity';
+export { Iban } from './iban';
 export { type Currency, Money, type Rounding } from './money';
 export { NationalId, type NationalIdKind } from './national-id';
 export { Percentage } from './percentage';
 export { err, type Err, ok, type Ok, type Result, unwrap } from './result';
 export { ValueObject } from './value-object';
+export { VAT_COUNTRIES, type VatCountry, VatNumber } from './vat-number';
