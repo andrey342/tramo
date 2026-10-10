@@ -7,6 +7,7 @@ import { ConcurrentModificationError } from '@shared/domain';
 import { CoreModule } from '@shared/infrastructure/core.module';
 
 import { aCenterAdmin, aStudent } from '../../../../../test/factories/iam';
+import { eventually } from '../../../../../test/helpers/eventually';
 import {
   EmailAlreadyRegisteredError,
   IamEvents,
@@ -104,5 +105,49 @@ describe('iam repositories (integration)', () => {
     expect(revoked).toBe(2);
     expect((await tokens.findByTokenHash(`a2-${student.id}`))?.status).toBe('revoked');
     expect((await tokens.findByTokenHash(`b1-${student.id}`))?.status).toBe('active');
+  });
+
+  it('should revoke the token a concurrent rotation commits while the family is being revoked', async () => {
+    const student = aStudent();
+    await uow.run(() => users.save(student));
+    const now = new Date('2026-10-09T10:00:00Z');
+    const family = '0199a000-0000-7000-8000-00000000000c';
+    const issue = (id: string, hash: string): RefreshToken =>
+      RefreshToken.issue({
+        id,
+        familyId: family,
+        userId: student.id,
+        tokenHash: hash,
+        now,
+        ttlMs: 60_000,
+        familyExpiresAt: new Date(now.getTime() + 120_000),
+      });
+    await uow.run(() =>
+      tokens.save(issue('0199a000-0000-7000-8000-0000000000c1', `c1-${student.id}`)),
+    );
+
+    let lockTaken!: () => void;
+    let finishRotation!: () => void;
+    const locked = new Promise<void>((resolve) => (lockTaken = resolve));
+    const proceed = new Promise<void>((resolve) => (finishRotation = resolve));
+    const rotation = uow.run(async () => {
+      await tokens.lockFamily(family);
+      lockTaken();
+      await proceed;
+      await tokens.save(issue('0199a000-0000-7000-8000-0000000000c2', `c2-${student.id}`));
+    });
+    await locked;
+    const revocation = uow.run(() => tokens.revokeFamily(family, now));
+    await eventually(async () => {
+      const waiting: unknown[] = await db.query(
+        "SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted",
+      );
+      expect(waiting.length).toBeGreaterThan(0);
+    });
+    finishRotation();
+    const [, revoked] = await Promise.all([rotation, revocation]);
+
+    expect(revoked).toBe(2);
+    expect((await tokens.findByTokenHash(`c2-${student.id}`))?.status).toBe('revoked');
   });
 });

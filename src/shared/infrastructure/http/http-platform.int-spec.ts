@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { Throttle } from '@nestjs/throttler';
 import { IsInt, Min } from 'class-validator';
 import { type NextFunction, type Response } from 'express';
+import { type Redis } from 'ioredis';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 
@@ -12,6 +13,7 @@ import { InvalidStateTransitionError } from '@shared/domain';
 import { Audited } from '../audit';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { CoreModule } from '../core.module';
+import { REDIS_CLIENT } from '../redis';
 
 import { configureHttpApp } from './configure-http-app';
 import { HttpPlatformModule } from './http-platform.module';
@@ -171,6 +173,36 @@ describe('HTTP platform (integration)', () => {
 
       expect(invalid.status).toBe(400);
       expect(valid.status).toBe(201);
+    });
+
+    it('should answer a committed request even if its response cannot be stored, and hold the key', async () => {
+      const redis = app.get<Redis>(REDIS_CLIENT);
+      const set = redis.set.bind(redis) as (...args: unknown[]) => Promise<unknown>;
+      const spy = jest
+        .spyOn(redis, 'set')
+        .mockImplementation(((...args: unknown[]) =>
+          String(args[1]).includes('"completed"')
+            ? Promise.reject(new Error('redis timeout'))
+            : set(...args)) as never);
+      try {
+        const first = await pay('key-store-fails');
+        const retry = await pay('key-store-fails');
+
+        expect(first.status).toBe(201);
+        expect(retry.status).toBe(409);
+        expect(retry.body.code).toBe('idempotency_request_in_progress');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('should refuse idempotent routes to anonymous callers, who would share one key scope', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/probe/payments')
+        .set('Idempotency-Key', 'key-anonymous')
+        .send({ amountCents: 1000 });
+
+      expect(response.status).toBe(500);
     });
   });
 

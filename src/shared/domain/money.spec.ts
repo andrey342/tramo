@@ -62,6 +62,13 @@ describe('Money', () => {
     expect(small.compare(large)).toBe(-1);
   });
 
+  it('should treat a rounded negative zero as zero', () => {
+    const rounded = Money.fromCents(-5).multiply('0.05');
+
+    expect(Object.is(rounded.cents, -0)).toBe(false);
+    expect(rounded.equals(Money.zero())).toBe(true);
+  });
+
   it('should be equal by value', () => {
     expect(Money.fromCents(100).equals(Money.fromDecimal('1.00'))).toBe(true);
     expect(Money.fromCents(100).equals(Money.fromCents(101))).toBe(false);

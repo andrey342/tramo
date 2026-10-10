@@ -9,6 +9,8 @@ import { type DatabaseConfig } from '../config';
 const SRC_ROOT = join(__dirname, '..', '..', '..');
 const glob = (pattern: string): string => join(SRC_ROOT, pattern).replace(/\\/g, '/');
 
+const IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;
+
 export const MIGRATIONS_GLOB = glob('**/migrations/*.{js,ts}');
 export const ENTITIES_GLOB = glob('**/*.orm-entity.{js,ts}');
 
@@ -24,9 +26,14 @@ export function typeOrmOptions(
     // The schema is owned by migrations; nothing is ever synchronized from entity metadata.
     synchronize: false,
     migrations: [MIGRATIONS_GLOB],
+    // Read by DatabaseModule, which applies migrations itself under an advisory lock; TypeORM's
+    // own run at initialisation has no lock and races between replicas.
     migrationsRun: database.runMigrations,
     migrationsTableName: 'migrations',
     migrationsTransactionMode: 'each',
     logging: database.logQueries ? ['query', 'error'] : ['error'],
+    // A transaction left open by a stuck caller would hold row locks indefinitely; Postgres ends
+    // the session instead.
+    extra: { idle_in_transaction_session_timeout: IDLE_IN_TRANSACTION_TIMEOUT_MS },
   };
 }

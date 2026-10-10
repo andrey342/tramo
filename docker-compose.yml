@@ -14,8 +14,8 @@ x-app: &app
       condition: service_healthy
     redis:
       condition: service_healthy
-  environment: &app-env
-    NODE_ENV: production
+  environment: &app-env # A local stack: production mode refuses the development secrets used below.
+    NODE_ENV: development
     LOG_LEVEL: ${LOG_LEVEL:-info}
     LOG_PRETTY: 'false'
     PORT: 3000
@@ -99,7 +99,7 @@ services:
     <<: *app
     environment:
       <<: *app-env
-      # Only the api migrates, so two processes never race on the same migration.
+      # Only the api migrates; replicas take turns through a Postgres advisory lock.
       DATABASE_RUN_MIGRATIONS: 'true'
     ports:
       - '${API_PORT:-3000}:3000'

@@ -50,10 +50,13 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   stricter limits with `@Throttle`; health checks are exempt. Exceeding the limit returns 429 with
   `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
-  scoped to the caller (user or API key). A short-lived "in progress" record (60 s) makes a
+  scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
   `Idempotent-Replayed: true`. The same key with a different method, path or body returns 422.
   Failed requests are not stored, so a client can fix the request and retry with the same key.
+  The in-progress record is renewed while the handler runs; if the response cannot be stored after
+  a success, the record is left to expire instead of being released: an immediate retry gets 409
+  rather than running the operation a second time.
 - **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
   `shared.audit_log` per call: actor, action, resource, outcome, error code, request id and the
   changes the handler described through the `AuditTrail` port. The row is written after the
@@ -70,8 +73,10 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   treated as stolen: the whole family is revoked and `RefreshTokenReuseDetected` is published.
   Within those 10 seconds it is rejected without revocation, because it is almost always the
   legitimate client retrying a request whose response it lost.
-- **Lockout.** Failed sign-ins are counted per account, not per IP, so distributed guessing
-  cannot avoid them. The cost is that anyone can lock an account by failing on purpose; the lock is
+- **Lockout.** Sign-in attempts are counted per account, not per IP, so distributed guessing
+  cannot avoid them. Each attempt is checked against the lock and counted in one Redis script
+  before its password is verified, so parallel requests cannot all slip past the threshold; a
+  success clears the count. The cost is that anyone can lock an account by failing on purpose; the lock is
   progressive and capped at an hour, the auth routes are rate limited per client, and the attempts
   are visible in the logs. A per-IP and device-cookie scheme would reduce that risk at the price of
   more state.

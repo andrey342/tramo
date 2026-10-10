@@ -42,17 +42,17 @@ export class LoginHandler implements ICommandHandler<LoginCommand> {
 
   async execute(command: LoginCommand): Promise<SessionTokensDto> {
     const account = command.email.trim().toLowerCase();
-    const lockedFor = await this.attempts.lockedFor(account);
+    // The attempt counts as failed until the password checks out.
+    const lockedFor = await this.attempts.begin(account);
     if (lockedFor > 0) {
       throw new AccountTemporarilyLockedError(lockedFor);
     }
 
     const user = await this.authenticate(account, command.password);
     if (!user) {
-      await this.attempts.recordFailure(account);
       throw new InvalidCredentialsError();
     }
-    await this.attempts.reset(account);
+    await this.attempts.succeeded(account);
 
     if (this.hasher.needsRehash(user.passwordHash)) {
       await this.upgradeHash(user, command.password);

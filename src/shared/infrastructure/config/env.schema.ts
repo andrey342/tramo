@@ -20,7 +20,8 @@ export const envSchema = z.object({
   THROTTLE_TTL_MS: z.coerce.number().int().min(1_000).default(60_000),
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),
-  SWAGGER_ENABLED: z.stringbool().default(true),
+  // Defaults to on, except in production.
+  SWAGGER_ENABLED: z.stringbool().optional(),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   DATABASE_LOG_QUERIES: z.stringbool().default(false),
@@ -37,6 +38,8 @@ export const envSchema = z.object({
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
+  // A batch whose jobs Redis has not accepted by then is rolled back and retried with backoff.
+  OUTBOX_ENQUEUE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
   BULL_BOARD_USERNAME: z.string().min(1).default('ops'),
   // Bull Board is only served when a password is configured.
   BULL_BOARD_PASSWORD: z.preprocess(

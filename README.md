@@ -76,21 +76,21 @@ missing variable stops the process with a message naming it. A local `.env` is l
 but real environment variables always win. All variables and their defaults are in
 [`.env.example`](.env.example); the main ones:
 
-| Variable                                                    | Purpose                                                 |
-| ----------------------------------------------------------- | ------------------------------------------------------- |
-| `DATABASE_URL`                                              | Postgres connection string                              |
-| `REDIS_URL`                                                 | Redis connection string                                 |
-| `PORT`, `WORKER_HEALTH_PORT`                                | HTTP ports of the api and of the worker health endpoint |
-| `LOG_LEVEL`, `LOG_PRETTY`                                   | Pino level; pretty output for local runs only           |
-| `CORS_ORIGINS`                                              | Comma-separated allowlist                               |
-| `SWAGGER_ENABLED`                                           | Serve `/docs`                                           |
-| `DATABASE_RUN_MIGRATIONS`                                   | Apply pending migrations when the api starts            |
-| `JWT_ACCESS_SECRET`                                         | HS256 key for access tokens (32+ characters, required)  |
-| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`          | Session lifetimes (15 minutes, 30 days)                 |
-| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                        | Progressive lockout after failed sign-ins               |
-| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS` | Rate limits per client and proxy setting                |
-| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`              | Worker outbox publisher pacing                          |
-| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                | Basic auth for `/admin/queues`; no password disables it |
+| Variable                                                                    | Purpose                                                                                                                       |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                              | Postgres connection string                                                                                                    |
+| `REDIS_URL`                                                                 | Redis connection string                                                                                                       |
+| `PORT`, `WORKER_HEALTH_PORT`                                                | HTTP ports of the api and of the worker health endpoint                                                                       |
+| `LOG_LEVEL`, `LOG_PRETTY`                                                   | Pino level; pretty output for local runs only                                                                                 |
+| `CORS_ORIGINS`                                                              | Comma-separated allowlist                                                                                                     |
+| `SWAGGER_ENABLED`                                                           | Serve `/docs` (default on, off when `NODE_ENV=production`)                                                                    |
+| `DATABASE_RUN_MIGRATIONS`                                                   | Apply pending migrations when the api starts                                                                                  |
+| `JWT_ACCESS_SECRET`                                                         | HS256 key for access tokens (32+ characters, required). With `NODE_ENV=production` the published development value is refused |
+| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                          | Session lifetimes (15 minutes, 30 days)                                                                                       |
+| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                        | Progressive lockout after failed sign-ins                                                                                     |
+| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                 | Rate limits per client and proxy setting                                                                                      |
+| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_ENQUEUE_TIMEOUT_MS` | Worker outbox publisher pacing                                                                                                |
+| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                                | Basic auth for `/admin/queues`; no password disables it                                                                       |
 
 ## Testing
 

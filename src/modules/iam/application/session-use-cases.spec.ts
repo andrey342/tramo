@@ -158,6 +158,25 @@ describe('session use cases', () => {
       );
     });
 
+    it('should verify no more passwords than the threshold when attempts arrive in parallel', async () => {
+      const t = setup();
+      await t.users.save(aStudent({ email: 'ana@example.com' }));
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 20 }, () =>
+          t.login.execute(new LoginCommand('ana@example.com', 'wrong password!')),
+        ),
+      );
+
+      expect(t.hasher.verifications).toBe(5);
+      expect(
+        results.filter(
+          (result) =>
+            result.status === 'rejected' && result.reason instanceof AccountTemporarilyLockedError,
+        ),
+      ).toHaveLength(15);
+    });
+
     it('should rehash a password stored with outdated parameters', async () => {
       const t = setup();
       const student = aStudent({ email: 'ana@example.com', passwordHash: `fake-old:${PASSWORD}` });

@@ -54,6 +54,11 @@ export class InMemoryRefreshTokenRepository
     return Promise.resolve(this.all().find((token) => token.tokenHash === tokenHash) ?? null);
   }
 
+  // Single-threaded: there is nothing to serialise.
+  lockFamily(): Promise<void> {
+    return Promise.resolve();
+  }
+
   // Mirrors the bulk UPDATE of the real repository: every non-revoked token of the family is
   // stored again as revoked.
   revokeFamily(familyId: string, now: Date): Promise<number> {
@@ -165,13 +170,12 @@ export class InMemoryLoginAttemptTracker implements LoginAttemptTracker {
     private readonly policy: LockoutPolicy,
   ) {}
 
-  lockedFor(account: string): Promise<number> {
-    const until = this.lockedUntil.get(account) ?? 0;
-    const remainingMs = until - this.clock.now().getTime();
-    return Promise.resolve(remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0);
-  }
-
-  recordFailure(account: string): Promise<void> {
+  begin(account: string): Promise<number> {
+    const now = this.clock.now().getTime();
+    const remainingMs = (this.lockedUntil.get(account) ?? 0) - now;
+    if (remainingMs > 0) {
+      return Promise.resolve(Math.ceil(remainingMs / 1000));
+    }
     const count = (this.failures.get(account) ?? 0) + 1;
     this.failures.set(account, count);
     if (count >= this.policy.maxFailures) {
@@ -179,12 +183,12 @@ export class InMemoryLoginAttemptTracker implements LoginAttemptTracker {
         this.policy.baseLockSeconds * 2 ** (count - this.policy.maxFailures),
         this.policy.maxLockSeconds,
       );
-      this.lockedUntil.set(account, this.clock.now().getTime() + seconds * 1000);
+      this.lockedUntil.set(account, now + seconds * 1000);
     }
-    return Promise.resolve();
+    return Promise.resolve(0);
   }
 
-  reset(account: string): Promise<void> {
+  succeeded(account: string): Promise<void> {
     this.failures.delete(account);
     this.lockedUntil.delete(account);
     return Promise.resolve();

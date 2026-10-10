@@ -17,7 +17,11 @@ export interface UserRepository {
 export interface RefreshTokenRepository {
   findByTokenHash(tokenHash: string): Promise<RefreshToken | null>;
   save(token: RefreshToken): Promise<void>;
+  // Rotations and revocations of one family run one at a time, until the unit of work ends.
+  // Reads made after taking the lock see what the previous holder committed.
+  lockFamily(familyId: string): Promise<void>;
   // Revokes every token of the family that is not revoked yet; returns how many were affected.
+  // Takes the family lock first.
   revokeFamily(familyId: string, now: Date): Promise<number>;
 }
 

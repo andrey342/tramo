@@ -30,9 +30,18 @@ export class TypeOrmRefreshTokenRepository implements RefreshTokenRepository {
     );
   }
 
-  // One statement for the whole family. Bumping the version makes any concurrent rotation of a
-  // token in the family fail its optimistic check instead of resurrecting it.
+  // A transaction-scoped advisory lock: a revocation that only updated the rows it could see
+  // would miss the token a concurrent rotation is inserting, and that token would outlive logout.
+  async lockFamily(familyId: string): Promise<void> {
+    await this.txHost.tx.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+      `iam.refresh_family:${familyId}`,
+    ]);
+  }
+
+  // One statement for the whole family. Bumping the version makes any rotation that loaded a
+  // token before the lock fail its optimistic check instead of resurrecting it.
   async revokeFamily(familyId: string, now: Date): Promise<number> {
+    await this.lockFamily(familyId);
     const rows: unknown[] = await this.txHost.tx.query(
       `UPDATE iam.refresh_tokens
           SET status = 'revoked', used_at = COALESCE(used_at, $2), version = version + 1
