@@ -7,7 +7,11 @@ import {
 } from '@shared/domain';
 
 import { InvalidFinancingOptionError, ProgramNotPublishableError } from '../errors/catalog-errors';
-import { CatalogEvents } from '../events/catalog-events';
+import {
+  CatalogEvents,
+  type ProgramDetailsChangedPayload,
+  type ProgramFinancingChangedPayload,
+} from '../events/catalog-events';
 
 import { type FinancingOptions } from './financing-options';
 
@@ -17,9 +21,20 @@ export type ProgramStatus = 'draft' | 'published' | 'archived';
 
 // An ISA is only fair to offer when most graduates get a job: Tramo is paid from their income.
 export const MIN_EMPLOYABILITY_FOR_ISA_BPS = 6_000;
-const MAX_PRICE_CENTS = 10_000_000;
-const MAX_START_DATES = 24;
+// Exported so request validation states the same bounds.
+export const PROGRAM_LIMITS = {
+  maxNameLength: 200,
+  maxPriceCents: 10_000_000,
+  maxDurationWeeks: 156,
+  maxStartDates: 24,
+} as const;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// A real calendar day: Date.parse accepts 2027-02-30 and rolls it over to March.
+const isCalendarDate = (date: string): boolean =>
+  ISO_DATE.test(date) &&
+  !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) &&
+  new Date(`${date}T00:00:00Z`).toISOString().startsWith(date);
 
 export interface ProgramDetails {
   readonly name: string;
@@ -44,7 +59,8 @@ export interface ProgramProps extends ProgramDetails {
 
 // A course of a training center that students can apply to finance. Created as a draft, it is
 // published once it has at least one financing option that fits its numbers and its center is
-// active; published programs are what the public catalog lists.
+// active; published programs are what the public catalog lists. Archiving takes it off the
+// catalog; an archived program can still be corrected and published again.
 export class Program extends AggregateRoot {
   private constructor(
     id: string,
@@ -121,10 +137,21 @@ export class Program extends AggregateRoot {
     return this.props.status === 'published';
   }
 
-  updateDetails(changes: Partial<ProgramDetails>): void {
+  updateDetails(changes: Partial<ProgramDetails>, now: Date): void {
     const details = Program.validDetails({ ...this.details, ...changes });
     Program.assertFinancingFits(this.props.financing, details);
+    const before = JSON.stringify(this.detailsPayload());
     this.props = { ...this.props, ...details };
+    const after = this.detailsPayload();
+    if (this.isPublished && JSON.stringify(after) !== before) {
+      this.record({
+        eventType: CatalogEvents.ProgramDetailsChanged,
+        aggregateType: 'Program',
+        aggregateId: this.id,
+        occurredAt: now,
+        payload: after,
+      });
+    }
   }
 
   changeFinancing(financing: FinancingOptions, now: Date): void {
@@ -187,20 +214,56 @@ export class Program extends AggregateRoot {
 
   private recordFinancingChanged(now: Date): void {
     const { installments, isa, products } = this.props.financing;
+    const payload: ProgramFinancingChangedPayload = {
+      programId: this.id,
+      centerId: this.props.centerId,
+      products,
+      installments: installments
+        ? {
+            allowedTerms: installments.allowedTerms,
+            annualRateBasisPoints: installments.annualRate.basisPoints,
+          }
+        : null,
+      isa: isa
+        ? {
+            incomeShareBasisPoints: isa.incomeShare.basisPoints,
+            minMonthlyIncomeCents: isa.minMonthlyIncome.cents,
+            maxPayments: isa.maxPayments,
+            capMultiplierHundredths: isa.capMultiplierHundredths,
+            graceMonths: isa.graceMonths,
+          }
+        : null,
+    };
     this.record({
       eventType: CatalogEvents.ProgramFinancingChanged,
       aggregateType: 'Program',
       aggregateId: this.id,
       occurredAt: now,
-      payload: {
-        programId: this.id,
-        centerId: this.props.centerId,
-        products,
-        installmentTerms: installments?.allowedTerms ?? [],
-        installmentAnnualRateBasisPoints: installments?.annualRate.basisPoints ?? null,
-        isaIncomeShareBasisPoints: isa?.incomeShare.basisPoints ?? null,
-      },
+      payload,
     });
+  }
+
+  private detailsPayload(): ProgramDetailsChangedPayload {
+    const {
+      name,
+      modality,
+      price,
+      durationWeeks,
+      startDates,
+      employabilityRate,
+      avgStartingSalary,
+    } = this.props;
+    return {
+      programId: this.id,
+      centerId: this.props.centerId,
+      name,
+      modality,
+      priceCents: price.cents,
+      durationWeeks,
+      startDates,
+      employabilityRateBasisPoints: employabilityRate.basisPoints,
+      avgStartingSalaryCents: avgStartingSalary.cents,
+    };
   }
 
   private static assertFinancingFits(financing: FinancingOptions, details: ProgramDetails): void {
@@ -211,8 +274,11 @@ export class Program extends AggregateRoot {
 
   private static validDetails(details: ProgramDetails): ProgramDetails {
     const name = details.name.trim();
-    if (name.length === 0 || name.length > 200) {
-      throw new InvalidValueError('name', 'A program name must be 1 to 200 characters.');
+    if (name.length === 0 || name.length > PROGRAM_LIMITS.maxNameLength) {
+      throw new InvalidValueError(
+        'name',
+        `A program name must be 1 to ${String(PROGRAM_LIMITS.maxNameLength)} characters.`,
+      );
     }
     if (!(PROGRAM_MODALITIES as readonly string[]).includes(details.modality)) {
       throw new InvalidValueError(
@@ -220,29 +286,30 @@ export class Program extends AggregateRoot {
         `Modality must be one of ${PROGRAM_MODALITIES.join(', ')}.`,
       );
     }
-    if (details.price.cents <= 0 || details.price.cents > MAX_PRICE_CENTS) {
+    if (details.price.cents <= 0 || details.price.cents > PROGRAM_LIMITS.maxPriceCents) {
       throw new InvalidValueError('price', 'Price must be above 0 and at most 100,000 EUR.');
     }
     if (
       !Number.isInteger(details.durationWeeks) ||
       details.durationWeeks < 1 ||
-      details.durationWeeks > 156
+      details.durationWeeks > PROGRAM_LIMITS.maxDurationWeeks
     ) {
-      throw new InvalidValueError('durationWeeks', 'Duration must be 1 to 156 weeks.');
+      throw new InvalidValueError(
+        'durationWeeks',
+        `Duration must be 1 to ${String(PROGRAM_LIMITS.maxDurationWeeks)} weeks.`,
+      );
     }
     if (details.avgStartingSalary.cents < 0) {
       throw new InvalidValueError('avgStartingSalary', 'Salary cannot be negative.');
     }
     const startDates = [...new Set(details.startDates)].sort();
     if (
-      startDates.length > MAX_START_DATES ||
-      startDates.some(
-        (date) => !ISO_DATE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)),
-      )
+      startDates.length > PROGRAM_LIMITS.maxStartDates ||
+      !startDates.every((date) => isCalendarDate(date))
     ) {
       throw new InvalidValueError(
         'startDates',
-        `Up to ${String(MAX_START_DATES)} dates as YYYY-MM-DD.`,
+        `Up to ${String(PROGRAM_LIMITS.maxStartDates)} calendar dates as YYYY-MM-DD.`,
       );
     }
     return { ...details, name, startDates };

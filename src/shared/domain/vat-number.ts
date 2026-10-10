@@ -31,6 +31,12 @@ export class VatNumber extends ValueObject<{ country: VatCountry; number: string
     return ok(new VatNumber(country as VatCountry, number));
   }
 
+  // For numbers read back from storage, valid when they were written: accepting fewer countries
+  // or shapes later must not make stored records unloadable.
+  static reconstitute(country: string, number: string): VatNumber {
+    return new VatNumber(country as VatCountry, number);
+  }
+
   get country(): VatCountry {
     return this.props.country;
   }

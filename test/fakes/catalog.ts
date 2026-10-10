@@ -95,7 +95,10 @@ export class InMemoryProgramCatalog implements ProgramCatalog {
 
   private toDto(program: Program): CatalogProgramDto {
     const center = this.centers.all().find((candidate) => candidate.id === program.centerId);
-    return { ...toProgramDto(program), centerName: center?.name ?? '' };
+    if (!center) {
+      throw new Error(`Program ${program.id} has no center.`);
+    }
+    return { ...toProgramDto(program), centerName: center.name };
   }
 }
 

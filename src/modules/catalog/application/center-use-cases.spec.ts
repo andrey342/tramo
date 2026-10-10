@@ -205,7 +205,7 @@ describe('training center use cases', () => {
   });
 
   describe('GetTrainingCenter', () => {
-    it('should show a center to staff, to its own admins and API keys, and to nobody else', async () => {
+    it('should show a center to staff and to its own admins, not to its API keys', async () => {
       const t = setup();
       const center = await registered(t);
       const ownKey: Principal = { kind: 'api_key', apiKeyId: 'k', centerId: center.id, scopes: [] };
@@ -216,9 +216,9 @@ describe('training center use cases', () => {
       await expect(
         t.get.execute(new GetTrainingCenterQuery(user(['center_admin'], center.id), center.id)),
       ).resolves.toBeDefined();
-      await expect(
-        t.get.execute(new GetTrainingCenterQuery(ownKey, center.id)),
-      ).resolves.toBeDefined();
+      await expect(t.get.execute(new GetTrainingCenterQuery(ownKey, center.id))).rejects.toThrow(
+        CenterAccessDeniedError,
+      );
       await expect(
         t.get.execute(new GetTrainingCenterQuery(user(['center_admin'], 'other'), center.id)),
       ).rejects.toThrow(CenterAccessDeniedError);

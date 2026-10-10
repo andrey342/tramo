@@ -101,3 +101,59 @@ Known gaps, accepted for now:
   until completed jobs expire after seven days.
 - An admin sets a new center administrator's first password. Production needs an invitation
   link, or a forced change on first sign-in, so the admin does not keep a working password.
+
+## Catalog
+
+Training centers and the programs students finance.
+
+- **Center lifecycle.** An admin registers a center (`pending_verification`). The
+  `CenterRegistered` consumer only queues a VAT check on `catalog.vat-checks`; that job asks VIES
+  outside any transaction and saves the answer in a short one. A valid number activates the
+  center. While VIES cannot answer, the center is marked `unverified` and the job is retried for
+  about a day and a half (exponential from one minute) before it is dead-lettered; ops can also
+  ask again with `POST /centers/:id/verify-vat`. A number that stops being valid leaves an active
+  center active and emits `CenterVatInvalidated` for ops to decide. Only an admin changes a
+  center's fee, payout account or status, and each change is an event (`CenterRenamed`,
+  `CenterPlatformFeeChanged`, `CenterPayoutAccountChanged`, `CenterSuspended`...).
+- **VIES client.** Each attempt has a timeout; transient failures and timeouts are retried twice
+  with backoff, and a circuit breaker stops calling for 30 s after five failures in a row. Every
+  failure becomes an `unavailable` answer: a registry outage never fails a request. `VIES_MODE`
+  selects VIES, its test service or a local fake; production accepts only VIES.
+- **Payout IBAN.** Stored encrypted (AES-256-GCM, ADR 014) and bound to its row, with its last four
+  characters in clear; responses, events, logs and the audit log only show the masked value.
+- **Programs.** Created as drafts and published once they have a financing option (instalment
+  terms of 6 to 48 months, or an income share agreement capped at 1.0 to 2.0 times the price,
+  offered only when at least 60 % of graduates find a job) and their center is active. The same
+  rules are CHECK constraints on `catalog.programs`, and request validation reads its bounds from
+  the domain. Changes to a published program are announced in full (`ProgramDetailsChanged`,
+  `ProgramFinancingChanged`) so other modules keep their own copy. While a center is suspended,
+  only Tramo admins change its programs.
+- **Public catalog.** `GET /programs` reads a SQL read model that maps rows straight to DTOs:
+  published programs of active centers, filtered by center, modality, product and price, newest
+  first with keyset pagination on a partial index.
+- **Optional authentication.** `GET /programs/:id` is open to anonymous callers and also reads
+  the credentials when they are sent (`@OptionalAuthentication()`), so a center sees its own drafts.
+  Invalid credentials are still rejected, but the route is public to the authorization guard, which
+  therefore checks no roles or scopes: the use case does (`canSeeUnpublishedPrograms` requires
+  `programs:read` or `programs:write` from an API key). Any new optional route has to do the same.
+
+```mermaid
+sequenceDiagram
+  participant Admin
+  participant Api as api
+  participant Outbox as outbox (Postgres)
+  participant Worker as worker
+  participant Vies as VIES
+  Admin->>Api: POST /centers
+  Api->>Outbox: center + CenterRegistered (one transaction)
+  Api-->>Admin: 201 pending_verification
+  Worker->>Outbox: publish CenterRegistered
+  Worker->>Worker: consumer queues a VAT check (catalog.vat-checks)
+  Worker->>Vies: check VAT number, outside any transaction (timeout, retry, breaker)
+  alt valid
+    Worker->>Outbox: center active + CenterActivated
+  else unavailable
+    Worker->>Outbox: center marked unverified
+    Worker-->>Worker: job retried for about a day and a half, then dead-lettered
+  end
+```

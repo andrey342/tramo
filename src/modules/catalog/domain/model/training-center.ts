@@ -25,7 +25,7 @@ export interface TrainingCenterProps {
   readonly createdAt: Date;
 }
 
-const MAX_PLATFORM_FEE_BPS = 3_000;
+export const MAX_PLATFORM_FEE_BPS = 3_000;
 
 // A school or bootcamp whose programs students finance through Tramo. It is registered by an
 // admin and becomes active once its VAT number checks out; until then it cannot publish programs
@@ -107,8 +107,9 @@ export class TrainingCenter extends AggregateRoot {
   }
 
   // A valid number activates a center waiting for verification. An invalid one is recorded and
-  // leaves the status alone: ops decide what happens to a center already working with Tramo.
-  // An unavailable registry only marks a center that was never checked as unverified.
+  // leaves the status alone: ops decide what happens to a center already working with Tramo, and
+  // CenterVatInvalidated tells them when a number that was valid stops being so. An unavailable
+  // registry only marks a center that was never checked as unverified.
   recordVatCheck(result: VatCheckResult, now: Date): void {
     const previous = this.props.vatValidation;
     if (result.outcome === 'unavailable') {
@@ -137,6 +138,15 @@ export class TrainingCenter extends AggregateRoot {
     if (result.outcome === 'valid' && this.props.status === 'pending_verification') {
       this.activate(now);
     }
+    if (result.outcome === 'invalid' && previous?.status === 'valid') {
+      this.record({
+        eventType: CatalogEvents.CenterVatInvalidated,
+        aggregateType: 'TrainingCenter',
+        aggregateId: this.id,
+        occurredAt: now,
+        payload: { centerId: this.id, provider: result.provider },
+      });
+    }
   }
 
   suspend(reason: string, now: Date): void {
@@ -157,7 +167,8 @@ export class TrainingCenter extends AggregateRoot {
     });
   }
 
-  // Back to active only with a valid VAT number; otherwise back to waiting for verification.
+  // Back to active only with a valid VAT number; otherwise back to waiting for verification, which
+  // needs no event: the center was already announced as suspended and is still not active.
   reinstate(now: Date): void {
     if (this.props.status !== 'suspended') {
       throw new InvalidStateTransitionError('TrainingCenter', this.props.status, 'active');
@@ -169,12 +180,34 @@ export class TrainingCenter extends AggregateRoot {
     }
   }
 
-  rename(name: string): void {
-    this.props = { ...this.props, name: TrainingCenter.validName(name) };
+  rename(name: string, now: Date): void {
+    const valid = TrainingCenter.validName(name);
+    if (valid === this.props.name) {
+      return;
+    }
+    this.props = { ...this.props, name: valid };
+    this.record({
+      eventType: CatalogEvents.CenterRenamed,
+      aggregateType: 'TrainingCenter',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { centerId: this.id, name: valid },
+    });
   }
 
-  changePlatformFee(fee: Percentage): void {
-    this.props = { ...this.props, platformFee: TrainingCenter.validFee(fee) };
+  changePlatformFee(fee: Percentage, now: Date): void {
+    const valid = TrainingCenter.validFee(fee);
+    if (valid.equals(this.props.platformFee)) {
+      return;
+    }
+    this.props = { ...this.props, platformFee: valid };
+    this.record({
+      eventType: CatalogEvents.CenterPlatformFeeChanged,
+      aggregateType: 'TrainingCenter',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { centerId: this.id, platformFeeBasisPoints: valid.basisPoints },
+    });
   }
 
   changePayoutIban(iban: Iban, now: Date): void {

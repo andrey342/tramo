@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -10,13 +16,13 @@ import {
   TRAINING_CENTER_REPOSITORY,
   type TrainingCenterRepository,
 } from '../../domain';
-import { canManagePrograms } from '../center-access';
+import { assertCenterMayChangePrograms, canManagePrograms } from '../center-access';
 import { type ProgramDto } from '../dto/program.dto';
 import {
   type FinancingInput,
   type ProgramDetailsInput,
   toFinancingOptions,
-  toProgramDetails,
+  toProgramDetailChanges,
 } from '../program-input';
 import { toProgramDto } from '../program.mapping';
 
@@ -36,6 +42,19 @@ export class UpdateProgramCommand extends Command<ProgramDto> {
   }
 }
 
+// Fields of a program the audit log compares before and after a change.
+const AUDITED_FIELDS = [
+  'name',
+  'modality',
+  'priceCents',
+  'durationWeeks',
+  'startDates',
+  'employabilityRateBasisPoints',
+  'avgStartingSalaryCents',
+  'financing',
+  'status',
+] as const satisfies readonly (keyof ProgramDto)[];
+
 // Details and options first, then the status change, so "change the price and publish" in one
 // request publishes the new price.
 @CommandHandler(UpdateProgramCommand)
@@ -44,6 +63,7 @@ export class UpdateProgramHandler implements ICommandHandler<UpdateProgramComman
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(PROGRAM_REPOSITORY) private readonly programs: ProgramRepository,
     @Inject(TRAINING_CENTER_REPOSITORY) private readonly centers: TrainingCenterRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -55,16 +75,30 @@ export class UpdateProgramHandler implements ICommandHandler<UpdateProgramComman
       if (!program || !canManagePrograms(command.actor, program.centerId)) {
         throw new EntityNotFoundError('Program', command.programId);
       }
-      const now = this.clock.now();
-      if (changes.details) program.updateDetails(toProgramDetails(changes.details));
-      if (changes.financing) program.changeFinancing(toFinancingOptions(changes.financing), now);
-      if (changes.status === 'published') {
-        const center = await this.centers.findById(program.centerId);
-        program.publish({ isActive: center?.isActive ?? false }, now);
+      const center = await this.centers.findById(program.centerId);
+      if (!center) {
+        throw new Error(
+          `Program ${program.id} belongs to center ${program.centerId}, which does not exist.`,
+        );
       }
+      assertCenterMayChangePrograms(command.actor, center);
+      const before = toProgramDto(program);
+      const now = this.clock.now();
+      if (changes.details) program.updateDetails(toProgramDetailChanges(changes.details), now);
+      if (changes.financing) program.changeFinancing(toFinancingOptions(changes.financing), now);
+      if (changes.status === 'published') program.publish(center, now);
       if (changes.status === 'archived') program.archive(now);
       await this.programs.save(program);
-      return toProgramDto(program);
+
+      const after = toProgramDto(program);
+      this.audit.describeChanges(
+        Object.fromEntries(
+          AUDITED_FIELDS.filter(
+            (field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]),
+          ).map((field) => [field, { before: before[field], after: after[field] }]),
+        ),
+      );
+      return after;
     });
   }
 }

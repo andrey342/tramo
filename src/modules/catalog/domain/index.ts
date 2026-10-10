@@ -2,6 +2,7 @@ export * from './errors/catalog-errors';
 export * from './events/catalog-events';
 export {
   type CenterStatus,
+  MAX_PLATFORM_FEE_BPS,
   TrainingCenter,
   type TrainingCenterProps,
 } from './model/training-center';
@@ -15,13 +16,13 @@ export {
   FinancingOptions,
   type InstallmentsOption,
   type IsaOption,
-  MAX_TERM_MONTHS,
-  MIN_TERM_MONTHS,
+  FINANCING_LIMITS,
 } from './model/financing-options';
 export {
   MIN_EMPLOYABILITY_FOR_ISA_BPS,
   Program,
   type ProgramDetails,
+  PROGRAM_LIMITS,
   PROGRAM_MODALITIES,
   type ProgramModality,
   type ProgramProps,

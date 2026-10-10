@@ -1,6 +1,7 @@
 import { type Principal } from '@shared/application';
+import { type ApiKeyScope } from '@shared/domain';
 
-import { CenterAccessDeniedError } from '../domain';
+import { CenterAccessDeniedError, type CenterStatus, CenterSuspendedError } from '../domain';
 
 // Background work (event consumers) acts as the system, not as a person.
 export type Actor = Principal | 'system';
@@ -22,7 +23,8 @@ export function assertCanOperate(actor: Actor, centerId: string): void {
   }
 }
 
-// Staff see every center; a center sees itself, through its admins or its API keys.
+// Staff see every center; a center sees itself through its admins. API keys are for programs and
+// applications, and no scope lets them read the center's own record (fee, payout account).
 export function assertCanView(actor: Actor, centerId: string): void {
   if (actor === 'system' || isUserWith(actor, 'admin', 'ops')) {
     return;
@@ -34,36 +36,48 @@ export function assertCanView(actor: Actor, centerId: string): void {
   ) {
     return;
   }
-  if (actor.kind === 'api_key' && actor.centerId === centerId) {
-    return;
-  }
   throw new CenterAccessDeniedError(centerId);
 }
 
-// Programs are run by their center: its admins, its API keys (the guard has checked the
-// programs:write scope) and Tramo admins.
-export function assertCanManagePrograms(actor: Actor, centerId: string): void {
+// Programs are run by their center: its admins, its API keys holding the scope, and Tramo admins.
+// API key scopes are checked here too, not only by the guard: routes open to anonymous callers
+// (GET /programs/:id) skip the guard's scope check.
+function managesPrograms(actor: Actor, centerId: string, scopes: readonly ApiKeyScope[]): boolean {
   if (actor === 'system' || isUserWith(actor, 'admin')) {
-    return;
+    return true;
   }
-  if (
-    actor.kind === 'user' &&
-    actor.roles.includes('center_admin') &&
-    actor.centerId === centerId
-  ) {
-    return;
+  if (actor.kind === 'user') {
+    return actor.roles.includes('center_admin') && actor.centerId === centerId;
   }
-  if (actor.kind === 'api_key' && actor.centerId === centerId) {
-    return;
+  return (
+    actor.kind === 'api_key' &&
+    actor.centerId === centerId &&
+    actor.scopes.some((scope) => scopes.includes(scope))
+  );
+}
+
+export function assertCanManagePrograms(actor: Actor, centerId: string): void {
+  if (!managesPrograms(actor, centerId, ['programs:write'])) {
+    throw new CenterAccessDeniedError(centerId);
   }
-  throw new CenterAccessDeniedError(centerId);
+}
+
+// A suspended center keeps reading its programs but no longer changes them; admins still can
+// (to archive one, for instance).
+export function assertCenterMayChangePrograms(
+  actor: Actor,
+  center: { readonly id: string; readonly status: CenterStatus },
+): void {
+  if (center.status === 'suspended' && actor !== 'system' && !isUserWith(actor, 'admin')) {
+    throw new CenterSuspendedError(center.id);
+  }
 }
 
 export function canManagePrograms(actor: Actor, centerId: string): boolean {
-  try {
-    assertCanManagePrograms(actor, centerId);
-    return true;
-  } catch {
-    return false;
-  }
+  return managesPrograms(actor, centerId, ['programs:write']);
+}
+
+// Drafts and archived programs: whoever manages the center's programs, and its keys that may read them.
+export function canSeeUnpublishedPrograms(actor: Actor, centerId: string): boolean {
+  return managesPrograms(actor, centerId, ['programs:read', 'programs:write']);
 }

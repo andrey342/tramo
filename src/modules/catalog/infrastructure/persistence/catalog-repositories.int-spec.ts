@@ -4,10 +4,15 @@ import { DataSource } from 'typeorm';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CoreModule } from '@shared/infrastructure/core.module';
+import { FieldDecryptionError } from '@shared/infrastructure/crypto';
 
 import { catalogRepositoriesContract } from '../../../../../test/contracts/catalog-repositories.contract';
 import { programCatalogContract } from '../../../../../test/contracts/program-catalog.contract';
-import { aTrainingCenter, VALID_IBAN } from '../../../../../test/factories/catalog';
+import {
+  anActiveTrainingCenter,
+  aTrainingCenter,
+  VALID_IBAN,
+} from '../../../../../test/factories/catalog';
 import { PROGRAM_CATALOG } from '../../application/ports/catalog-ports';
 import { CatalogModule } from '../../catalog.module';
 import {
@@ -47,9 +52,40 @@ describe('catalog repositories (integration)', () => {
       [center.id],
     );
 
-    expect(row?.payout_iban_encrypted.startsWith('v1.')).toBe(true);
+    expect(row?.payout_iban_encrypted.startsWith('v2.')).toBe(true);
     expect(row?.payout_iban_encrypted).not.toContain(VALID_IBAN.slice(4));
     expect(row?.payout_iban_last4).toBe('1332');
+  });
+
+  it('should refuse a payout IBAN copied from another center', async () => {
+    const victim = aTrainingCenter();
+    const attacker = aTrainingCenter();
+    await uow.run(async () => {
+      await centers.save(victim);
+      await centers.save(attacker);
+    });
+
+    await db.query(
+      `UPDATE catalog.training_centers SET payout_iban_encrypted = (
+         SELECT payout_iban_encrypted FROM catalog.training_centers WHERE id = $1
+       ) WHERE id = $2`,
+      [attacker.id, victim.id],
+    );
+
+    await expect(centers.findById(victim.id)).rejects.toThrow(FieldDecryptionError);
+  });
+
+  it('should save an active center whose VAT number the registry no longer knows', async () => {
+    const center = anActiveTrainingCenter();
+    await uow.run(() => centers.save(center));
+    center.recordVatCheck({ outcome: 'invalid', provider: 'vies' }, new Date());
+
+    await uow.run(() => centers.save(center));
+
+    expect(await centers.findById(center.id)).toMatchObject({
+      status: 'active',
+      vatValidation: expect.objectContaining({ status: 'invalid' }) as object,
+    });
   });
 
   it('should write the registration event to the outbox with the center', async () => {

@@ -8,6 +8,7 @@ import {
   isBrokenCircuitError,
   isTaskCancelledError,
   retry,
+  TaskCancelledError,
   timeout,
   TimeoutStrategy,
   wrap,
@@ -51,10 +52,11 @@ interface ViesResponse {
 // the test service, which answers by number (100 valid, 200 invalid, 300 down).
 //
 // Resilience, from the outside in:
-// - retry: two more attempts with exponential backoff, only for transient failures (the check is
-//   a read, so repeating it is safe);
+// - retry: two more attempts with exponential backoff, only for transient failures and timeouts
+//   (the check is a read, so repeating it is safe);
 // - circuit breaker: after five failed calls in a row, stop calling for 30 s and answer
-//   `unavailable` at once, so a VIES outage does not hold requests and queue workers;
+//   `unavailable` at once, so a VIES outage does not hold requests and queue workers (a VIES that
+//   hangs counts as failing: timeouts open the circuit too);
 // - timeout: each attempt is cancelled after VIES_TIMEOUT_MS.
 // Whatever is left becomes `unavailable`: a registry outage never fails the caller.
 @Injectable()
@@ -66,7 +68,9 @@ export class ViesVatValidator implements VatValidator {
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
     const path = config.vies.mode === 'test' ? 'check-vat-test-service' : 'check-vat-number';
     this.endpoint = `${config.vies.baseUrl.replace(/\/$/, '')}/${path}`;
-    const transient = handleType(ViesTransientError);
+    // cockatiel rethrows what a policy does not handle, so the timeout error has to be named here
+    // for retries and the breaker to see it.
+    const transient = handleType(ViesTransientError).orType(TaskCancelledError);
     this.policy = wrap(
       retry(transient, {
         maxAttempts: 2,

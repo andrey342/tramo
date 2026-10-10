@@ -10,7 +10,7 @@ import {
   TRAINING_CENTER_REPOSITORY,
   type TrainingCenterRepository,
 } from '../../domain';
-import { canManagePrograms } from '../center-access';
+import { canSeeUnpublishedPrograms } from '../center-access';
 import { type CatalogProgramDto } from '../dto/program.dto';
 import { PROGRAM_CATALOG, type ProgramCatalog } from '../ports/catalog-ports';
 import { toProgramDto } from '../program.mapping';
@@ -40,10 +40,16 @@ export class GetProgramHandler implements IQueryHandler<GetProgramQuery> {
       return published;
     }
     const program = await this.programs.findById(query.programId);
-    if (!program || !canManagePrograms(query.actor, program.centerId)) {
+    if (!program || !canSeeUnpublishedPrograms(query.actor, program.centerId)) {
       throw new EntityNotFoundError('Program', query.programId);
     }
     const center = await this.centers.findById(program.centerId);
-    return { ...toProgramDto(program), centerName: center?.name ?? '' };
+    // Centers are never deleted; a program without one is corrupt data, not a missing program.
+    if (!center) {
+      throw new Error(
+        `Program ${program.id} belongs to center ${program.centerId}, which does not exist.`,
+      );
+    }
+    return { ...toProgramDto(program), centerName: center.name };
   }
 }

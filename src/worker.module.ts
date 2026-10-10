@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { CatalogModule } from '@modules/catalog/catalog.module';
+import { CatalogWorkerModule } from '@modules/catalog/catalog-worker.module';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
 
@@ -10,7 +10,7 @@ import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
   imports: [
     CoreModule.forRoot({ applicationName: 'tramo-worker' }),
     MessagingWorkerModule,
-    CatalogModule,
+    CatalogWorkerModule,
   ],
 })
 export class WorkerModule {}

@@ -23,7 +23,7 @@ const ISA = {
   incomeShareBasisPoints: 1_000,
   minMonthlyIncomeCents: 150_000,
   maxPayments: 36,
-  capMultiplier: 1.5,
+  capMultiplierHundredths: 150,
   graceMonths: 3,
 };
 
@@ -107,7 +107,7 @@ describe('Programs (e2e)', () => {
     expect(single.body).toMatchObject({
       status: 'published',
       centerName: 'Programs School',
-      financing: { isa: { capMultiplier: 1.5 } },
+      financing: { isa: { capMultiplierHundredths: 150 } },
     });
   });
 
@@ -158,6 +158,21 @@ describe('Programs (e2e)', () => {
     expect(longTerm.status).toBe(422);
     expect(publishBare.status).toBe(422);
     expect(publishBare.body.code).toBe('program_not_publishable');
+  });
+
+  it('should answer malformed input with a client error, not a server error', async () => {
+    const { financing: _financing, ...withoutFinancing } = PROGRAM;
+
+    const noFinancing = await createProgram(withoutFinancing);
+    const impossibleDate = await createProgram({ ...PROGRAM, startDates: ['2027-02-30'] });
+    const hugePrice = await api().get('/api/v1/programs').query({ minPriceCents: 99_999_999_999 });
+
+    expect(noFinancing.status).toBe(400);
+    expect(noFinancing.body.code).toBe('validation_error');
+    expect(impossibleDate.status).toBe(422);
+    expect(impossibleDate.body.code).toBe('invalid_value');
+    expect(hugePrice.status).toBe(400);
+    expect(hugePrice.body.code).toBe('validation_error');
   });
 
   it('should keep other centers and the public out of changes', async () => {

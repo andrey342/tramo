@@ -5,8 +5,12 @@ export const CatalogEvents = {
   CenterRegistered: 'CenterRegistered',
   CenterActivated: 'CenterActivated',
   CenterSuspended: 'CenterSuspended',
+  CenterRenamed: 'CenterRenamed',
+  CenterPlatformFeeChanged: 'CenterPlatformFeeChanged',
   CenterPayoutAccountChanged: 'CenterPayoutAccountChanged',
+  CenterVatInvalidated: 'CenterVatInvalidated',
   ProgramPublished: 'ProgramPublished',
+  ProgramDetailsChanged: 'ProgramDetailsChanged',
   ProgramFinancingChanged: 'ProgramFinancingChanged',
   ProgramArchived: 'ProgramArchived',
 } as const;
@@ -27,6 +31,24 @@ export type CenterSuspendedPayload = {
   readonly reason: string;
 };
 
+export type CenterRenamedPayload = {
+  readonly centerId: string;
+  readonly name: string;
+};
+
+// The commission Tramo keeps on every disbursement to the center from now on.
+export type CenterPlatformFeeChangedPayload = {
+  readonly centerId: string;
+  readonly platformFeeBasisPoints: number;
+};
+
+// The registry no longer knows a VAT number that was valid. The center keeps its status; ops
+// decide whether to suspend it, and this event is how they hear about it.
+export type CenterVatInvalidatedPayload = {
+  readonly centerId: string;
+  readonly provider: string;
+};
+
 // Only the last digits: notifications warn the center, and nobody downstream needs the account.
 export type CenterPayoutAccountChangedPayload = {
   readonly centerId: string;
@@ -41,15 +63,37 @@ export type ProgramPublishedPayload = {
   readonly products: readonly string[];
 };
 
+// Everything a published program shows, so a consumer's copy never needs the aggregate. Sent when
+// a published program's details change (price, dates, employability...).
+export type ProgramDetailsChangedPayload = {
+  readonly programId: string;
+  readonly centerId: string;
+  readonly name: string;
+  readonly modality: string;
+  readonly priceCents: number;
+  readonly durationWeeks: number;
+  readonly startDates: readonly string[];
+  readonly employabilityRateBasisPoints: number;
+  readonly avgStartingSalaryCents: number;
+};
+
 // Origination quotes from the options in force when an application is made; consumers keep their
-// own copy of what changed.
+// own copy, so the payload carries every option in full, not only what changed.
 export type ProgramFinancingChangedPayload = {
   readonly programId: string;
   readonly centerId: string;
   readonly products: readonly string[];
-  readonly installmentTerms: readonly number[];
-  readonly installmentAnnualRateBasisPoints: number | null;
-  readonly isaIncomeShareBasisPoints: number | null;
+  readonly installments: {
+    readonly allowedTerms: readonly number[];
+    readonly annualRateBasisPoints: number;
+  } | null;
+  readonly isa: {
+    readonly incomeShareBasisPoints: number;
+    readonly minMonthlyIncomeCents: number;
+    readonly maxPayments: number;
+    readonly capMultiplierHundredths: number;
+    readonly graceMonths: number;
+  } | null;
 };
 
 export type ProgramArchivedPayload = {

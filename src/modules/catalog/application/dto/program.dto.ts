@@ -1,6 +1,7 @@
 import { type FinancingProduct, type ProgramModality, type ProgramStatus } from '../../domain';
 
-export interface FinancingOptionsDto {
+// A type alias, not an interface, so the audit log accepts it as JSON.
+export type FinancingOptionsDto = {
   readonly installments: {
     readonly allowedTerms: readonly number[];
     readonly annualRateBasisPoints: number;
@@ -9,10 +10,11 @@ export interface FinancingOptionsDto {
     readonly incomeShareBasisPoints: number;
     readonly minMonthlyIncomeCents: number;
     readonly maxPayments: number;
-    readonly capMultiplier: number;
+    // Whole hundredths, like every other amount here: 150 caps the total at 1.5 times the price.
+    readonly capMultiplierHundredths: number;
     readonly graceMonths: number;
   } | null;
-}
+};
 
 // Part of the module's public surface: origination reads programs through it.
 export interface ProgramDto {

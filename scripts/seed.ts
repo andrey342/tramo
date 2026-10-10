@@ -1,6 +1,7 @@
 // Demo data, safe to run any number of times: what exists is left alone.
 //   pnpm seed   (against DATABASE_URL / REDIS_URL from .env, e.g. the compose stack)
-// Accounts and their password are in scripts/demo-users.ts and the README.
+// Accounts and their password are in scripts/demo-users.ts and the README. That password is public,
+// so the script refuses to run with NODE_ENV=production.
 import 'reflect-metadata';
 
 import { Module } from '@nestjs/common';
@@ -30,7 +31,7 @@ import { User, USER_REPOSITORY, type UserRepository } from '../src/modules/iam/d
 import { IamModule } from '../src/modules/iam/iam.module';
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '../src/shared/application';
 import { CLOCK, type Clock, Email, unwrap, VatNumber } from '../src/shared/domain';
-import { APP_CONFIG, type AppConfig } from '../src/shared/infrastructure/config';
+import { APP_CONFIG, type AppConfig, loadDotEnv } from '../src/shared/infrastructure/config';
 import { CoreModule } from '../src/shared/infrastructure/core.module';
 
 import { DEMO_PASSWORD, DEMO_USERS } from './demo-users';
@@ -63,7 +64,7 @@ const CENTERS = [
             incomeShareBasisPoints: 1_000,
             minMonthlyIncomeCents: 1_500_00,
             maxPayments: 36,
-            capMultiplier: 1.5,
+            capMultiplierHundredths: 150,
             graceMonths: 3,
           },
         },
@@ -83,6 +84,11 @@ const CENTERS = [
 ] as const;
 
 async function seed(): Promise<void> {
+  loadDotEnv();
+  // Checked before the application connects (and possibly migrates) anything.
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error('refusing to create demo accounts with a published password in production');
+  }
   const app = await NestFactory.createApplicationContext(SeedModule, { logger: ['error', 'warn'] });
   try {
     const config = app.get<AppConfig>(APP_CONFIG);
@@ -114,9 +120,13 @@ async function seed(): Promise<void> {
             center.platformFeeBasisPoints,
           ),
         );
-        // Checked right away so the demo does not depend on the worker being up.
-        await commands.execute(new VerifyCenterVatCommand('system', centerId));
         existing = await centers.findById(centerId);
+      }
+      // Checked right away so the demo does not depend on the worker being up; a center left
+      // pending by an earlier run (VIES down) is checked again.
+      if (existing?.status === 'pending_verification') {
+        await commands.execute(new VerifyCenterVatCommand('system', existing.id));
+        existing = await centers.findById(existing.id);
         log(`center ${center.name}: ${existing?.status ?? '?'}`);
       }
       if (existing && !(await users.findByEmail(center.admin))) {
@@ -125,10 +135,11 @@ async function seed(): Promise<void> {
         );
         log(`center admin ${center.admin}`);
       }
-      if (
-        existing &&
-        (await catalog.list({ centerId: existing.id }, { limit: 1 })).data.length === 0
-      ) {
+      // Programs are created and published together, only once the center can publish: a run that
+      // stopped between the two would leave drafts the next run does not see, and duplicate them.
+      if (existing?.status !== 'active') {
+        log(`center ${center.name} is not active yet; run the seed again to add its programs`);
+      } else if ((await catalog.list({ centerId: existing.id }, { limit: 1 })).data.length === 0) {
         for (const program of center.programs) {
           const { financing, ...details } = program;
           const draft = await commands.execute(

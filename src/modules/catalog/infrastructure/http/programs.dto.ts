@@ -4,9 +4,9 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsDefined,
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -21,32 +21,34 @@ import {
 import { CursorPageQueryDto } from '@shared/infrastructure/http';
 
 import {
+  FINANCING_LIMITS,
   type FinancingProduct,
-  MAX_TERM_MONTHS,
-  MIN_TERM_MONTHS,
+  PROGRAM_LIMITS,
   PROGRAM_MODALITIES,
   type ProgramModality,
   type ProgramStatus,
 } from '../../domain';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Amounts the domain does not bound (salaries, incomes) still have to fit an integer column.
 const MAX_CENTS = 10_000_000;
+const MAX_PRICE_CENTS = PROGRAM_LIMITS.maxPriceCents;
 
 export class InstallmentsRequest {
   @ApiProperty({
     example: [12, 24, 36],
-    description: `Loan terms in months, ${String(MIN_TERM_MONTHS)} to ${String(MAX_TERM_MONTHS)}`,
+    description: `Loan terms in months, ${String(FINANCING_LIMITS.minTermMonths)} to ${String(FINANCING_LIMITS.maxTermMonths)}`,
   })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(12)
+  @ArrayMaxSize(FINANCING_LIMITS.maxTerms)
   @IsInt({ each: true })
   allowedTerms!: number[];
 
   @ApiProperty({ example: 750, description: 'Annual interest rate in basis points (750 = 7.5 %)' })
   @IsInt()
   @Min(0)
-  @Max(2_500)
+  @Max(FINANCING_LIMITS.maxAnnualRateBps)
   annualRateBasisPoints!: number;
 }
 
@@ -57,7 +59,7 @@ export class IsaRequest {
   })
   @IsInt()
   @Min(1)
-  @Max(2_000)
+  @Max(FINANCING_LIMITS.maxIncomeShareBps)
   incomeShareBasisPoints!: number;
 
   @ApiProperty({
@@ -72,22 +74,23 @@ export class IsaRequest {
   @ApiProperty({ example: 36 })
   @IsInt()
   @Min(1)
-  @Max(120)
+  @Max(FINANCING_LIMITS.maxIsaPayments)
   maxPayments!: number;
 
   @ApiProperty({
-    example: 1.5,
-    description: 'Total paid is capped at this multiple of the price (1.0 to 2.0)',
+    example: 150,
+    description:
+      'Total paid is capped at this multiple of the price, in hundredths (150 = 1.5 times, 100 to 200)',
   })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(1)
-  @Max(2)
-  capMultiplier!: number;
+  @IsInt()
+  @Min(FINANCING_LIMITS.minCapMultiplierHundredths)
+  @Max(FINANCING_LIMITS.maxCapMultiplierHundredths)
+  capMultiplierHundredths!: number;
 
   @ApiProperty({ example: 3 })
   @IsInt()
   @Min(0)
-  @Max(12)
+  @Max(FINANCING_LIMITS.maxGraceMonths)
   graceMonths!: number;
 }
 
@@ -110,7 +113,7 @@ export class UpdateProgramRequest {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  @MaxLength(200)
+  @MaxLength(PROGRAM_LIMITS.maxNameLength)
   name?: string;
 
   @ApiPropertyOptional({ enum: PROGRAM_MODALITIES })
@@ -122,20 +125,20 @@ export class UpdateProgramRequest {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(MAX_CENTS)
+  @Max(MAX_PRICE_CENTS)
   priceCents?: number;
 
   @ApiPropertyOptional({ example: 16 })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(156)
+  @Max(PROGRAM_LIMITS.maxDurationWeeks)
   durationWeeks?: number;
 
   @ApiPropertyOptional({ example: ['2027-01-11', '2027-04-05'] })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(24)
+  @ArrayMaxSize(PROGRAM_LIMITS.maxStartDates)
   @Matches(ISO_DATE, { each: true, message: 'startDates must be YYYY-MM-DD dates' })
   startDates?: string[];
 
@@ -175,7 +178,7 @@ export class CreateProgramRequest {
   @ApiProperty({ example: 'Full Stack Bootcamp' })
   @IsString()
   @MinLength(1)
-  @MaxLength(200)
+  @MaxLength(PROGRAM_LIMITS.maxNameLength)
   name!: string;
 
   @ApiProperty({ enum: PROGRAM_MODALITIES })
@@ -185,18 +188,18 @@ export class CreateProgramRequest {
   @ApiProperty({ example: 750_000, description: 'Price in cents (EUR)' })
   @IsInt()
   @Min(1)
-  @Max(MAX_CENTS)
+  @Max(MAX_PRICE_CENTS)
   priceCents!: number;
 
   @ApiProperty({ example: 16 })
   @IsInt()
   @Min(1)
-  @Max(156)
+  @Max(PROGRAM_LIMITS.maxDurationWeeks)
   durationWeeks!: number;
 
   @ApiProperty({ example: ['2027-01-11', '2027-04-05'] })
   @IsArray()
-  @ArrayMaxSize(24)
+  @ArrayMaxSize(PROGRAM_LIMITS.maxStartDates)
   @Matches(ISO_DATE, { each: true, message: 'startDates must be YYYY-MM-DD dates' })
   startDates!: string[];
 
@@ -219,6 +222,7 @@ export class CreateProgramRequest {
   avgStartingSalaryCents!: number;
 
   @ApiProperty({ type: FinancingRequest })
+  @IsDefined()
   @ValidateNested()
   @Type(() => FinancingRequest)
   financing!: FinancingRequest;
@@ -248,6 +252,7 @@ export class ListProgramsQueryDto extends CursorPageQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MAX_PRICE_CENTS)
   minPriceCents?: number;
 
   @ApiPropertyOptional({ description: 'Maximum price in cents' })
@@ -255,6 +260,7 @@ export class ListProgramsQueryDto extends CursorPageQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(MAX_PRICE_CENTS)
   maxPriceCents?: number;
 }
 
@@ -276,8 +282,8 @@ class IsaResponse {
   @ApiProperty({ example: 36 })
   maxPayments!: number;
 
-  @ApiProperty({ example: 1.5 })
-  capMultiplier!: number;
+  @ApiProperty({ example: 150 })
+  capMultiplierHundredths!: number;
 
   @ApiProperty({ example: 3 })
   graceMonths!: number;

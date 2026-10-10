@@ -1,5 +1,10 @@
-import { ANONYMOUS, type Principal } from '@shared/application';
-import { EntityNotFoundError, FixedClock, InvalidValueError } from '@shared/domain';
+import { ANONYMOUS, type AuditChanges, type Principal } from '@shared/application';
+import {
+  type ApiKeyScope,
+  EntityNotFoundError,
+  FixedClock,
+  InvalidValueError,
+} from '@shared/domain';
 
 import { anActiveTrainingCenter, aTrainingCenter } from '../../../../test/factories/catalog';
 import {
@@ -11,6 +16,7 @@ import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shar
 import {
   CatalogEvents,
   CenterAccessDeniedError,
+  CenterSuspendedError,
   InvalidFinancingOptionError,
   ProgramNotPublishableError,
   type TrainingCenter,
@@ -39,7 +45,7 @@ const ISA: FinancingInput = {
     incomeShareBasisPoints: 1_000,
     minMonthlyIncomeCents: 1_500_00,
     maxPayments: 36,
-    capMultiplier: 1.5,
+    capMultiplierHundredths: 150,
     graceMonths: 3,
   },
 };
@@ -53,6 +59,7 @@ const centerAdmin = (centerId: string): Principal => ({
 const ADMIN: Principal = { kind: 'user', userId: 'a-1', roles: ['admin'], centerId: null };
 
 function setup() {
+  const audited: AuditChanges[] = [];
   const clock = new FixedClock(new Date('2026-10-09T10:00:00Z'));
   const uow = new InlineUnitOfWork();
   const events = new RecordingEventBus();
@@ -63,8 +70,15 @@ function setup() {
     events,
     centers,
     programs,
+    audited,
     create: new CreateProgramHandler(uow, programs, centers, clock),
-    update: new UpdateProgramHandler(uow, programs, centers, clock),
+    update: new UpdateProgramHandler(
+      uow,
+      programs,
+      centers,
+      { describeChanges: (changes) => audited.push(changes) },
+      clock,
+    ),
     get: new GetProgramHandler(catalog, programs, centers),
     list: new ListProgramsHandler(catalog),
   };
@@ -100,7 +114,7 @@ describe('program use cases', () => {
         priceCents: 750_000,
         products: ['installments'],
       });
-      expect(byKey.financing.isa?.capMultiplier).toBe(1.5);
+      expect(byKey.financing.isa?.capMultiplierHundredths).toBe(150);
     });
 
     it('should refuse another center, a missing center and an ISA the numbers do not allow', async () => {
@@ -144,6 +158,12 @@ describe('program use cases', () => {
       );
 
       expect(published).toMatchObject({ status: 'published', priceCents: 690_000 });
+      expect(t.audited).toEqual([
+        {
+          priceCents: { before: 750_000, after: 690_000 },
+          status: { before: 'draft', after: 'published' },
+        },
+      ]);
       expect(t.events.ofType(CatalogEvents.ProgramPublished)).toEqual([
         expect.objectContaining({
           payload: expect.objectContaining({ priceCents: 690_000 }) as object,
@@ -180,6 +200,33 @@ describe('program use cases', () => {
 
       expect(t.events.ofType(CatalogEvents.ProgramFinancingChanged)).toHaveLength(1);
       expect(archived.status).toBe('archived');
+    });
+
+    it('should leave the programs of a suspended center to Tramo admins', async () => {
+      const t = setup();
+      const center = await withCenter(t);
+      const draft = await t.create.execute(
+        new CreateProgramCommand(ADMIN, center.id, DETAILS, INSTALLMENTS),
+      );
+      center.suspend('Unpaid invoices', new Date('2026-10-09T11:00:00Z'));
+      await t.centers.save(center);
+
+      await expect(
+        t.create.execute(
+          new CreateProgramCommand(centerAdmin(center.id), center.id, DETAILS, INSTALLMENTS),
+        ),
+      ).rejects.toThrow(CenterSuspendedError);
+      await expect(
+        t.update.execute(
+          new UpdateProgramCommand(centerAdmin(center.id), draft.id, {
+            details: { priceCents: 1 },
+          }),
+        ),
+      ).rejects.toThrow(CenterSuspendedError);
+      expect(
+        (await t.update.execute(new UpdateProgramCommand(ADMIN, draft.id, { status: 'archived' })))
+          .status,
+      ).toBe('archived');
     });
 
     it("should report another center's program as missing", async () => {
@@ -221,6 +268,32 @@ describe('program use cases', () => {
       await expect(t.get.execute(new GetProgramQuery(ADMIN, 'missing'))).rejects.toThrow(
         EntityNotFoundError,
       );
+    });
+
+    it("should show drafts to the center's API keys only when they may read programs", async () => {
+      const t = setup();
+      const center = await withCenter(t);
+      const draft = await t.create.execute(
+        new CreateProgramCommand(ADMIN, center.id, DETAILS, INSTALLMENTS),
+      );
+      const key = (scopes: ApiKeyScope[]): Principal => ({
+        kind: 'api_key',
+        apiKeyId: 'k',
+        centerId: center.id,
+        scopes,
+      });
+
+      await expect(
+        t.get.execute(new GetProgramQuery(key(['applications:read']), draft.id)),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect((await t.get.execute(new GetProgramQuery(key(['programs:read']), draft.id))).id).toBe(
+        draft.id,
+      );
+      await expect(
+        t.create.execute(
+          new CreateProgramCommand(key(['programs:read']), center.id, DETAILS, INSTALLMENTS),
+        ),
+      ).rejects.toThrow(CenterAccessDeniedError);
     });
 
     it('should list the catalog and reject an inverted price range', async () => {

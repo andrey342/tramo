@@ -42,6 +42,7 @@ export class ProgramsController {
   @Roles('center_admin', 'admin')
   @RequireScopes('programs:write')
   @Idempotent()
+  @Audited({ action: 'program.create', resource: 'program' })
   @ApiOperation({
     summary: 'Create a draft program (center admin, admin, or API key with programs:write)',
   })

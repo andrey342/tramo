@@ -47,4 +47,8 @@ describe('VatNumber', () => {
   it("should accept the VIES test service's numbers", () => {
     expect(unwrap(VatNumber.create('ES', '100')).number).toBe('100');
   });
+
+  it('should load a stored number of a country no longer offered', () => {
+    expect(String(VatNumber.reconstitute('FR', '12345678901'))).toBe('FR12345678901');
+  });
 });

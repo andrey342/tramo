@@ -28,7 +28,7 @@ export function toProgramDto(program: Program): ProgramDto {
             incomeShareBasisPoints: isa.incomeShare.basisPoints,
             minMonthlyIncomeCents: isa.minMonthlyIncome.cents,
             maxPayments: isa.maxPayments,
-            capMultiplier: isa.capMultiplierHundredths / 100,
+            capMultiplierHundredths: isa.capMultiplierHundredths,
             graceMonths: isa.graceMonths,
           }
         : null,

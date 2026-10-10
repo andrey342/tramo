@@ -14,9 +14,7 @@ import {
 
 import { VAT_COUNTRIES, type VatCountry } from '@shared/domain';
 
-import { type CenterStatus, type VatValidationStatus } from '../../domain';
-
-const MAX_FEE_BPS = 3_000;
+import { type CenterStatus, MAX_PLATFORM_FEE_BPS, type VatValidationStatus } from '../../domain';
 
 export class RegisterTrainingCenterRequest {
   @ApiProperty({ example: 'Codeworks Barcelona' })
@@ -52,7 +50,7 @@ export class RegisterTrainingCenterRequest {
   })
   @IsInt()
   @Min(0)
-  @Max(MAX_FEE_BPS)
+  @Max(MAX_PLATFORM_FEE_BPS)
   platformFeeBasisPoints!: number;
 }
 
@@ -69,11 +67,11 @@ export class UpdateTrainingCenterRequest {
   @MaxLength(200)
   name?: string;
 
-  @ApiPropertyOptional({ example: 650, maximum: MAX_FEE_BPS })
+  @ApiPropertyOptional({ example: 650, maximum: MAX_PLATFORM_FEE_BPS })
   @IsOptional()
   @IsInt()
   @Min(0)
-  @Max(MAX_FEE_BPS)
+  @Max(MAX_PLATFORM_FEE_BPS)
   platformFeeBasisPoints?: number;
 
   @ApiPropertyOptional({ example: 'DE89 3704 0044 0532 0130 00' })

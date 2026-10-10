@@ -8,11 +8,12 @@ import { DataSource } from 'typeorm';
 import { type Principal } from '@shared/application';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/messaging';
+import { QueueNames } from '@shared/infrastructure/queues';
 
 import { aTaxId, VALID_IBAN } from '../../../../../test/factories/catalog';
 import { eventually } from '../../../../../test/helpers/eventually';
 import { RegisterTrainingCenterCommand } from '../../application/commands/register-training-center.command';
-import { CatalogModule } from '../../catalog.module';
+import { CatalogWorkerModule } from '../../catalog-worker.module';
 import { TRAINING_CENTER_REPOSITORY, type TrainingCenterRepository } from '../../domain';
 
 const ADMIN: Principal = { kind: 'user', userId: 'admin-1', roles: ['admin'], centerId: null };
@@ -30,7 +31,7 @@ describe('VAT check after registration (integration)', () => {
       imports: [
         CoreModule.forRoot({ applicationName: 'tramo-int-tests' }),
         MessagingWorkerModule,
-        CatalogModule,
+        CatalogWorkerModule,
       ],
     }).compile();
     moduleRef.useLogger(false);
@@ -65,21 +66,26 @@ describe('VAT check after registration (integration)', () => {
     });
   });
 
-  it('should fail the job, to be retried, while the registry cannot answer', async () => {
+  it('should mark the center unverified and retry later while the registry cannot answer', async () => {
     const centerId = await register('300');
     const [event] = await db.query<{ id: string }[]>(
       `SELECT id FROM shared.outbox_messages WHERE aggregate_id = $1`,
       [centerId],
     );
-    const queue = app.get<Queue>(getQueueToken('events.catalog'));
+    const events = app.get<Queue>(getQueueToken('events.catalog'));
+    const vatChecks = app.get<Queue>(getQueueToken(QueueNames.VAT_CHECKS));
 
+    // The event is done as soon as the check is queued; the check waits for its next attempt.
     await eventually(async () => {
-      const job = await queue.getJob(`${event?.id ?? ''}.catalog.verify-center-vat`);
-      expect(job?.attemptsMade).toBeGreaterThanOrEqual(1);
-      expect(job?.failedReason).toContain('VIES could not check');
+      const consumed = await events.getJob(`${event?.id ?? ''}.catalog.verify-center-vat`);
+      expect(await consumed?.isCompleted()).toBe(true);
+      const check = await vatChecks.getJob(centerId);
+      expect(check?.attemptsMade).toBe(1);
+      expect(check?.failedReason).toContain('VIES could not check');
+      expect(await check?.isDelayed()).toBe(true);
     });
     const center = await centers.findById(centerId);
     expect(center?.status).toBe('pending_verification');
-    expect(center?.vatValidation).toBeNull();
+    expect(center?.vatValidation?.status).toBe('unverified');
   });
 });

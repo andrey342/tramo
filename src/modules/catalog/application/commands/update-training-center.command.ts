@@ -58,9 +58,9 @@ export class UpdateTrainingCenterHandler implements ICommandHandler<UpdateTraini
       }
       const before = toTrainingCenterDto(center);
       const now = this.clock.now();
-      if (changes.name !== undefined) center.rename(changes.name);
+      if (changes.name !== undefined) center.rename(changes.name, now);
       if (changes.platformFeeBasisPoints !== undefined) {
-        center.changePlatformFee(Percentage.fromBasisPoints(changes.platformFeeBasisPoints));
+        center.changePlatformFee(Percentage.fromBasisPoints(changes.platformFeeBasisPoints), now);
       }
       if (iban) center.changePayoutIban(iban, now);
       if (changes.status === 'suspended') center.suspend(changes.suspensionReason ?? '', now);

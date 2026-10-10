@@ -69,6 +69,22 @@ describe('TrainingCenter', () => {
       expect(eventTypes(center)).toEqual([]);
     });
 
+    it('should keep an active center active and tell ops when its number stops being valid', () => {
+      const center = anActiveTrainingCenter();
+
+      center.recordVatCheck({ outcome: 'invalid', provider: 'vies' }, LATER);
+      center.recordVatCheck({ outcome: 'invalid', provider: 'vies' }, LATER);
+
+      expect(center.status).toBe('active');
+      expect(center.vatValidation?.status).toBe('invalid');
+      expect(center.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: CatalogEvents.CenterVatInvalidated,
+          payload: { centerId: center.id, provider: 'vies' },
+        }),
+      ]);
+    });
+
     it('should mark an unchecked center unverified when the registry is unavailable', () => {
       const center = aTrainingCenter();
 
@@ -151,16 +167,28 @@ describe('TrainingCenter', () => {
     ]);
   });
 
-  it('should rename and change the fee within the limits', () => {
+  it('should rename and change the fee within the limits, announcing real changes', () => {
     const center = anActiveTrainingCenter();
 
-    center.rename('  Codeworks Madrid ');
-    center.changePlatformFee(Percentage.fromPercent(7.5));
+    center.rename('  Codeworks Madrid ', LATER);
+    center.rename('Codeworks Madrid', LATER);
+    center.changePlatformFee(Percentage.fromPercent(7.5), LATER);
+    center.changePlatformFee(Percentage.fromPercent(7.5), LATER);
 
     expect(center.name).toBe('Codeworks Madrid');
     expect(center.platformFee.basisPoints).toBe(750);
+    expect(center.pullEvents()).toEqual([
+      expect.objectContaining({
+        eventType: CatalogEvents.CenterRenamed,
+        payload: { centerId: center.id, name: 'Codeworks Madrid' },
+      }),
+      expect.objectContaining({
+        eventType: CatalogEvents.CenterPlatformFeeChanged,
+        payload: { centerId: center.id, platformFeeBasisPoints: 750 },
+      }),
+    ]);
     expect(() => {
-      center.changePlatformFee(Percentage.fromPercent(40));
+      center.changePlatformFee(Percentage.fromPercent(40), LATER);
     }).toThrow(InvalidPlatformFeeError);
   });
 });
