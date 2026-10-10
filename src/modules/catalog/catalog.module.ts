@@ -11,6 +11,7 @@ import { GetTrainingCenterHandler } from './application/queries/get-training-cen
 import { TRAINING_CENTER_REPOSITORY } from './domain';
 import { FakeVatValidator } from './infrastructure/adapters/fake-vat-validator';
 import { ViesVatValidator } from './infrastructure/adapters/vies-vat-validator';
+import { VerifyRegisteredCenterVatConsumer } from './infrastructure/consumers/verify-registered-center-vat.consumer';
 import { TrainingCenterMapper } from './infrastructure/persistence/catalog.mappers';
 import { TrainingCenterOrmEntity } from './infrastructure/persistence/training-center.orm-entity';
 import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/typeorm-training-center.repository';
@@ -37,6 +38,7 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
     VerifyCenterVatHandler,
     UpdateTrainingCenterHandler,
     GetTrainingCenterHandler,
+    VerifyRegisteredCenterVatConsumer,
   ],
   exports: [],
 })
