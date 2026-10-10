@@ -10,10 +10,17 @@ import {
   Post,
 } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
+import { ApiProblems } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -40,6 +47,8 @@ export class CenterAccessController {
   ) {}
 
   @Post('users')
+  @ApiProblems(400, 401, 403, 409)
+  @ApiCreatedResponse({ type: CenterUserCreatedResponse })
   @Roles('admin')
   @Audited({ action: 'center_user.create', resource: 'center', resourceIdParam: 'centerId' })
   @ApiOperation({ summary: 'Create an administrator account for a training center (admin)' })
@@ -54,6 +63,8 @@ export class CenterAccessController {
   }
 
   @Post('api-keys')
+  @ApiProblems(400, 401, 403)
+  @ApiCreatedResponse({ type: IssuedApiKeyResponse })
   @Roles('center_admin', 'admin')
   @Audited({ action: 'api_key.issue', resource: 'center', resourceIdParam: 'centerId' })
   @ApiOperation({ summary: 'Issue an API key for the center; the key is shown once' })
@@ -66,6 +77,8 @@ export class CenterAccessController {
   }
 
   @Get('api-keys')
+  @ApiProblems(400, 401, 403)
+  @ApiOkResponse({ type: [ApiKeyResponse] })
   @Roles('center_admin', 'admin')
   @ApiOperation({ summary: "List the center's API keys (without secrets)" })
   listApiKeys(
@@ -76,6 +89,8 @@ export class CenterAccessController {
   }
 
   @Delete('api-keys/:keyId')
+  @ApiProblems(400, 401, 403, 404)
+  @ApiNoContentResponse()
   @HttpCode(HttpStatus.NO_CONTENT)
   @Roles('center_admin', 'admin')
   @Audited({ action: 'api_key.revoke', resource: 'api_key', resourceIdParam: 'keyId' })

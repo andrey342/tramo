@@ -1,9 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
-import { ApiBearerAuth, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { ROLES } from '@shared/domain';
+import { ApiProblems } from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -20,6 +21,8 @@ export class MeController {
 
   // Every user and any API key may ask who they are, so integrations can check their key.
   @Get()
+  @ApiProblems(401, 403)
+  @ApiOkResponse({ type: CurrentPrincipalResponse })
   @Roles(...ROLES)
   @RequireScopes()
   @ApiOperation({ summary: 'Describe the authenticated user or API key' })
