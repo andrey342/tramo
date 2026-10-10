@@ -97,14 +97,30 @@ describe('ViesVatValidator resilience (integration)', () => {
     expect(calls).toBe(1);
   });
 
-  it('should give up on a slow registry after the timeout and answer unavailable', async () => {
+  it('should retry a slow registry, then give up after the timeouts and answer unavailable', async () => {
     respond = () => undefined; // never answers
 
     const started = Date.now();
-    const result = await new ViesVatValidator(config(baseUrl, 500)).check(vat);
+    const result = await new ViesVatValidator(config(baseUrl, 300)).check(vat);
 
     expect(result).toEqual({ outcome: 'unavailable', provider: 'vies', reason: 'TIMEOUT' });
-    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(calls).toBe(3);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it('should open the circuit on a registry that keeps hanging', async () => {
+    respond = () => undefined;
+    const validator = new ViesVatValidator(config(baseUrl, 200));
+
+    await validator.check(vat);
+    await validator.check(vat);
+    const callsBefore = calls;
+    const started = Date.now();
+    const result = await validator.check(vat);
+
+    expect(result).toEqual({ outcome: 'unavailable', provider: 'vies', reason: 'CIRCUIT_OPEN' });
+    expect(calls).toBe(callsBefore);
+    expect(Date.now() - started).toBeLessThan(100);
   });
 
   it('should stop calling a failing registry once the circuit opens', async () => {
