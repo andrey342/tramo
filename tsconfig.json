@@ -31,6 +31,6 @@
       "@modules/*": ["./src/modules/*"]
     }
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", ".claude/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

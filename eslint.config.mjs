@@ -87,5 +87,10 @@ export default tseslint.config(
     files: ['*.config.mjs', '*.config.ts', 'test/setup/global-*.ts'],
     rules: { 'import-x/no-default-export': 'off' },
   },
+  {
+    // Command-line scripts (skills, seed, demo) talk to a terminal.
+    files: ['.claude/**/*.ts', 'scripts/**/*.ts'],
+    rules: { 'no-console': 'off' },
+  },
   prettier,
 );
