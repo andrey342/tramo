@@ -32,6 +32,16 @@ Path-scoped rules in `.claude/rules/` cover domain, migrations, HTTP and tests.
 - Commit messages and staged files are checked by Husky; never bypass the hooks.
 - A new architectural decision gets an ADR (`/adr`).
 
+## Skills (`.claude/skills/`, each script also runs as a `pnpm` script)
+
+| Skill                                 | Use it to                                                    |
+| ------------------------------------- | ------------------------------------------------------------ |
+| `/new-module <name>`                  | scaffold a bounded context shaped like `iam` and register it |
+| `/new-use-case <module> <Name>`       | add a command or query with handler, DTO and spec on fakes   |
+| `/add-adapter <module> <Port> <name>` | implement a port with a shared contract suite and a fake     |
+| `/migration <module> <verb-noun>`     | write a migration and prove its `down` restores the schema   |
+| `/adr <title>`                        | record a decision in `docs/adr` and the architecture index   |
+
 ## Do not
 
 - `synchronize: true`, `schema:sync` or editing an applied migration; write a new one.

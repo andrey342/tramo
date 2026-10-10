@@ -21,7 +21,13 @@ export class OutboxMessageOrmEntity {
   occurredAt: Date;
 
   // Set by the database default; TypeORM 1.x only accepts insert/update flags in object form.
-  @Column({ type: 'timestamptz', name: 'created_at', insert: false, update: false })
+  @Column({
+    type: 'timestamptz',
+    name: 'created_at',
+    insert: false,
+    update: false,
+    default: () => 'now()',
+  })
   createdAt: Date;
 
   @Column('text', { name: 'correlation_id', nullable: true })

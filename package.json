@@ -15,13 +15,13 @@
     "start": "node dist/src/main.api.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "format": "prettier --write \"{src,test,scripts,docs,docker,.github}/**/*.{ts,js,md,yml,yaml,json}\" \"*.{json,mjs,js,yml,yaml}\" README.md",
+    "format": "prettier --write \"{src,test,scripts,docs,docker,.github,.claude}/**/*.{ts,js,md,yml,yaml,json}\" \"*.{json,mjs,js,yml,yaml}\" README.md",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --watch",
     "test:cov": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --coverage",
-    "format:check": "prettier --check \"{src,test,scripts,docs,docker,.github}/**/*.{ts,js,md,yml,yaml,json}\" \"*.{json,mjs,js,yml,yaml}\" README.md",
+    "format:check": "prettier --check \"{src,test,scripts,docs,docker,.github,.claude}/**/*.{ts,js,md,yml,yaml,json}\" \"*.{json,mjs,js,yml,yaml}\" README.md",
     "prepare": "husky",
     "test:e2e": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-e2e.config.js --runInBand",
     "worker:dev": "nest start --watch --entryFile main.worker",
@@ -30,7 +30,15 @@
     "migration:run": "nest build && typeorm migration:run -d dist/src/shared/infrastructure/database/data-source.js",
     "migration:revert": "nest build && typeorm migration:revert -d dist/src/shared/infrastructure/database/data-source.js",
     "migration:show": "nest build && typeorm migration:show -d dist/src/shared/infrastructure/database/data-source.js",
-    "migration:generate": "nest build && typeorm migration:generate -d dist/src/shared/infrastructure/database/data-source.js"
+    "migration:generate": "nest build && typeorm migration:generate -d dist/src/shared/infrastructure/database/data-source.js",
+    "scaffold:module": "tsx .claude/skills/new-module/scripts/scaffold-module.ts",
+    "scaffold:use-case": "tsx .claude/skills/new-use-case/scripts/scaffold-use-case.ts",
+    "scaffold:adapter": "tsx .claude/skills/add-adapter/scripts/scaffold-adapter.ts",
+    "migration:verify": "bash .claude/skills/migration/scripts/verify-migration.sh",
+    "adr:new": "bash .claude/skills/adr/scripts/new-adr.sh",
+    "queue:inspect": "tsx .claude/skills/debug-job/scripts/inspect-queue.ts",
+    "trace": "tsx .claude/skills/trace/scripts/trace-aggregate.ts",
+    "api:call": "tsx .claude/skills/try-endpoint/scripts/call-api.ts"
   },
   "dependencies": {
     "@bull-board/api": "9.10.4",
@@ -99,6 +107,7 @@
     "supertest": "7.3.1",
     "testcontainers": "12.2.0",
     "ts-jest": "29.4.14",
+    "tsx": "4.23.15",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.1"
   }

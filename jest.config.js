@@ -1,3 +1,29 @@
+const { readdirSync } = require('node:fs');
+const { join } = require('node:path');
+
+// Domain code is covered by unit tests alone, to 95 %. The threshold applies to each domain folder
+// as a whole, from the moment the folder has specs, so a freshly scaffolded module does not fail
+// the run before its first aggregate exists. The global 80 % target spans unit, integration and
+// e2e runs, so a unit run alone cannot enforce it.
+const DOMAIN_THRESHOLD = { statements: 95, branches: 90, functions: 85, lines: 95 };
+
+function hasSpecs(dir) {
+  return readdirSync(dir, { withFileTypes: true, recursive: true }).some(
+    (entry) => entry.isFile() && entry.name.endsWith('.spec.ts'),
+  );
+}
+
+const domainFolders = [
+  'src/shared/domain',
+  ...readdirSync('src/modules').map((module) => join('src/modules', module, 'domain')),
+].filter((dir) => {
+  try {
+    return hasSpecs(dir);
+  } catch {
+    return false;
+  }
+});
+
 /** @type {import('jest').Config} */
 module.exports = {
   rootDir: '.',
@@ -18,12 +44,8 @@ module.exports = {
     '!src/**/migrations/*.ts',
   ],
   coverageDirectory: 'coverage',
-  // Domain code is covered by unit tests alone, to 95 %. Each module's domain folder is
-  // listed so the threshold applies to it as a whole. The global 80 % target spans unit,
-  // integration and e2e runs, so a unit run alone cannot enforce it.
-  coverageThreshold: {
-    './src/shared/domain/': { statements: 95, branches: 90, functions: 85, lines: 95 },
-    './src/modules/iam/domain/': { statements: 95, branches: 90, functions: 85, lines: 95 },
-  },
+  coverageThreshold: Object.fromEntries(
+    domainFolders.map((dir) => [`./${dir.replace(/\\/g, '/')}/`, DOMAIN_THRESHOLD]),
+  ),
   passWithNoTests: true,
 };

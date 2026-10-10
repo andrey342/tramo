@@ -4,6 +4,8 @@ allowBuilds:
   unrs-resolver: true
   # Only checks for a matching prebuilt binary; compiles from source when none exists.
   argon2: true
+  # Checks that the platform binary of tsx's bundler is installed.
+  esbuild: true
   # Usage telemetry and optional native speedups we do not need.
   '@scarf/scarf': false
   cpu-features: false

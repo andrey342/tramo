@@ -78,6 +78,26 @@ describe('iam repositories (integration)', () => {
     expect((await users.findById(student.id))?.status).toBe('disabled');
   });
 
+  it('should keep updated_at current when a user changes', async () => {
+    const student = aStudent();
+    await uow.run(() => users.save(student));
+    const updatedAt = async (): Promise<Date> => {
+      const [row] = await db.query<{ updated_at: Date }[]>(
+        'SELECT updated_at FROM iam.users WHERE id = $1',
+        [student.id],
+      );
+      return row?.updated_at ?? new Date(0);
+    };
+    const created = await updatedAt();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const loaded = await users.findById(student.id);
+    loaded?.disable();
+    await uow.run(() => users.save(loaded!));
+
+    expect((await updatedAt()).getTime()).toBeGreaterThan(created.getTime());
+  });
+
   it('should revoke a whole refresh token family in one statement', async () => {
     const student = aStudent();
     await uow.run(() => users.save(student));
