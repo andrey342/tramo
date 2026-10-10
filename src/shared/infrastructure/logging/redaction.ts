@@ -44,3 +44,30 @@ export function censor(value: unknown, path: string[]): unknown {
   }
   return '[REDACTED]';
 }
+
+// Database errors carry the SQL, its bound parameters and the offending row (`detail`, e.g.
+// "Key (email)=(ana@example.com) already exists"), which can hold emails, password hashes or
+// national ids. Logs keep the kind of failure, not the data.
+const ERROR_FIELDS_NOT_LOGGED = new Set([
+  'query',
+  'parameters',
+  'detail',
+  'where',
+  'internalQuery',
+  'driverError',
+]);
+
+// Receives the error as pino's standard serializer left it (a plain object).
+export function scrubError(err: unknown): unknown {
+  if (err === null || typeof err !== 'object') {
+    return err;
+  }
+  const scrubbed: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(err)) {
+    if (ERROR_FIELDS_NOT_LOGGED.has(key)) {
+      continue;
+    }
+    scrubbed[key] = key === 'cause' ? scrubError(value) : value;
+  }
+  return scrubbed;
+}

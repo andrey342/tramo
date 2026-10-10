@@ -5,7 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { resolveRequestId } from '../context';
 
-import { censor, REDACTED_PATHS } from './redaction';
+import { censor, REDACTED_PATHS, scrubError } from './redaction';
 
 const QUIET_PATHS = ['/health', '/metrics'];
 
@@ -36,6 +36,7 @@ function correlationMixin(): Record<string, string> {
               url: req.url,
             }),
             res: (res: { statusCode: number }) => ({ statusCode: res.statusCode }),
+            err: scrubError,
           },
           transport: config.log.pretty
             ? {

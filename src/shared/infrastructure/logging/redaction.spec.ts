@@ -1,4 +1,7 @@
-import { censor, maskEmail, maskTail } from './redaction';
+import { stdSerializers } from 'pino';
+import { QueryFailedError } from 'typeorm';
+
+import { censor, maskEmail, maskTail, scrubError } from './redaction';
 
 describe('log redaction', () => {
   it('should keep only the first letter and the domain of an email', () => {
@@ -22,5 +25,24 @@ describe('log redaction', () => {
     expect(censor('12345678Z', ['body', 'nationalId'])).toBe('***678Z');
     expect(censor('s3cret', ['body', 'password'])).toBe('[REDACTED]');
     expect(censor({ nested: true }, ['body', 'iban'])).toBe('[REDACTED]');
+  });
+
+  it('should drop the sql, parameters and row details of a database error', () => {
+    const driverError = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+      detail: 'Key (email)=(ana@example.com) already exists.',
+    });
+    const error = new QueryFailedError(
+      'INSERT INTO iam.users (email, password_hash) VALUES ($1, $2)',
+      ['ana@example.com', '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA'],
+      driverError,
+    );
+
+    const logged = JSON.stringify(scrubError(stdSerializers.err(error)));
+
+    expect(logged).not.toContain('ana@example.com');
+    expect(logged).not.toContain('argon2id');
+    expect(logged).toContain('duplicate key value');
+    expect(logged).toContain('23505');
   });
 });
