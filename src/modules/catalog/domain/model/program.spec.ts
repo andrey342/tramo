@@ -34,6 +34,15 @@ describe('FinancingOptions', () => {
     expect(() => FinancingOptions.of(input)).toThrow(InvalidFinancingOptionError);
   });
 
+  it('should load stored options that a tightened limit would now reject', () => {
+    const terms = Array.from({ length: 13 }, (_, i) => 6 + i);
+
+    expect(
+      FinancingOptions.reconstitute({ installments: installments(terms), isa: null }).installments
+        ?.allowedTerms,
+    ).toHaveLength(13);
+  });
+
   it('should accept the edges of the allowed ranges', () => {
     expect(() =>
       FinancingOptions.of({

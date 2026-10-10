@@ -71,6 +71,15 @@ export class FinancingOptions extends ValueObject<{
     return new FinancingOptions(installments, isa);
   }
 
+  // For options read back from storage, valid when they were saved: tightening a limit later
+  // must not make stored programs unloadable.
+  static reconstitute(input: {
+    installments: InstallmentsOption | null;
+    isa: IsaOption | null;
+  }): FinancingOptions {
+    return new FinancingOptions(input.installments, input.isa);
+  }
+
   get installments(): InstallmentsOption | null {
     return this.props.installments;
   }

@@ -20,7 +20,7 @@ export class TrainingCenterMapper {
   toDomain(row: TrainingCenterOrmEntity): TrainingCenter {
     const center = TrainingCenter.reconstitute(row.id, {
       name: row.name,
-      vatNumber: unwrap(VatNumber.create(row.country, row.taxNumber)),
+      vatNumber: VatNumber.reconstitute(row.country, row.taxNumber),
       status: row.status,
       vatValidation:
         row.vatStatus && row.vatCheckedAt && row.vatProvider
@@ -77,7 +77,7 @@ export const ProgramMapper = {
       startDates: row.startDates,
       employabilityRate: Percentage.fromBasisPoints(row.employabilityBps),
       avgStartingSalary: Money.fromCents(row.avgStartingSalaryCents),
-      financing: FinancingOptions.of({
+      financing: FinancingOptions.reconstitute({
         installments:
           row.installmentTerms && row.installmentRateBps !== null
             ? {
