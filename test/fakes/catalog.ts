@@ -26,3 +26,6 @@ export class InMemoryTrainingCenterRepository
     await super.save(center);
   }
 }
+
+// Runtime fake (chosen by VIES_MODE=fake), re-exported so tests take every double from here.
+export { FakeVatValidator } from '../../src/modules/catalog/infrastructure/adapters/fake-vat-validator';

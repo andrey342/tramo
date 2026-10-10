@@ -8,7 +8,7 @@ import {
   OTHER_IBAN,
   VALID_IBAN,
 } from '../../../../test/factories/catalog';
-import { InMemoryTrainingCenterRepository } from '../../../../test/fakes/catalog';
+import { FakeVatValidator, InMemoryTrainingCenterRepository } from '../../../../test/fakes/catalog';
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
 import {
   CatalogEvents,
@@ -16,7 +16,6 @@ import {
   CenterAlreadyRegisteredError,
   type TrainingCenter,
 } from '../domain';
-import { FakeVatValidator } from '../infrastructure/adapters/fake-vat-validator';
 
 import {
   RegisterTrainingCenterCommand,

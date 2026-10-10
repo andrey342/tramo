@@ -125,6 +125,19 @@ ${stubMembers(FakeName)}
 }
 `,
   );
+  // Tests take every double from test/fakes, also runtime ones: an application spec importing
+  // from infrastructure would break the layer rules.
+  if (runtimeFake) {
+    const testFakes = `test/fakes/${module}.ts`;
+    const reExport = `export { ${FakeName} } from '${relativeImport(testFakes, fakesFile)}';`;
+    if (!exists(testFakes)) {
+      changes.create(testFakes, `${reExport}\n`);
+    } else {
+      changes.edit(testFakes, (content) =>
+        content.includes(reExport) ? content : `${content.trimEnd()}\n\n${reExport}\n`,
+      );
+    }
+  }
 }
 
 // Test doubles for constructor dependencies the fakes commonly take.
