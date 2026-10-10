@@ -91,7 +91,7 @@ const PUBLISHED_SECRETS = {
   FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
 } as const;
 
-function assertProductionSecrets(env: Env): void {
+function assertProductionSettings(env: Env): void {
   if (env.NODE_ENV !== 'production') {
     return;
   }
@@ -104,12 +104,15 @@ function assertProductionSecrets(env: Env): void {
       ? 'FIELD_ENCRYPTION_KEY'
       : undefined,
   ].filter((name) => name !== undefined);
-  if (published.length > 0) {
-    throw new InvalidConfigError(
-      published
-        .map((name) => `✖ ${name} still has the development value; set a secret of your own.`)
-        .join('\n'),
-    );
+  const problems = published.map(
+    (name) => `✖ ${name} still has the development value; set a secret of your own.`,
+  );
+  // The test service and the fake activate centers whose VAT number nobody checked.
+  if (env.VIES_MODE !== 'live') {
+    problems.push(`✖ VIES_MODE is ${env.VIES_MODE}; production checks VAT numbers on VIES (live).`);
+  }
+  if (problems.length > 0) {
+    throw new InvalidConfigError(problems.join('\n'));
   }
 }
 
@@ -119,7 +122,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     throw new InvalidConfigError(z.prettifyError(result.error));
   }
   const env = result.data;
-  assertProductionSecrets(env);
+  assertProductionSettings(env);
   return {
     env: env.NODE_ENV,
     http: { port: env.PORT, corsOrigins: env.CORS_ORIGINS, trustProxyHops: env.TRUST_PROXY_HOPS },

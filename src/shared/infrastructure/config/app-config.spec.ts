@@ -81,6 +81,15 @@ describe('parseConfig', () => {
     ).toBe(true);
   });
 
+  it('should refuse a VAT check that is not VIES itself in production', () => {
+    const production = { ...validEnv, NODE_ENV: 'production' };
+
+    expect(() => parseConfig({ ...production, VIES_MODE: 'fake' })).toThrow(/VIES_MODE/);
+    expect(() => parseConfig({ ...production, VIES_MODE: 'test' })).toThrow(/VIES_MODE/);
+    expect(parseConfig({ ...production, VIES_MODE: 'live' }).vies.mode).toBe('live');
+    expect(parseConfig({ ...validEnv, VIES_MODE: 'fake' }).vies.mode).toBe('fake');
+  });
+
   it('should require a field encryption key of exactly 32 bytes', () => {
     expect(() => parseConfig({ ...validEnv, FIELD_ENCRYPTION_KEY: 'c2hvcnQ=' })).toThrow(
       /FIELD_ENCRYPTION_KEY/,
