@@ -18,9 +18,12 @@ read-only transactions, 30 s statement timeout. With TypeORM queries, take the S
    `docker compose exec postgres psql -U tramo_ro -d tramo -c "EXPLAIN (ANALYZE, BUFFERS) <sql>"`.
    Only for SELECTs; never for statements with side effects.
 3. Read the plan: sequential scans on tables that will grow, sorts that spill, row estimates far
-   from actual rows, nested loops over large inputs. The dev database is small: also reason about
-   the plan at production volume (the index the planner skips today may be the only option at
-   a million rows).
+   from actual rows, nested loops over large inputs. The dev database is small, so the planner
+   picks sequential scans that say nothing about production. To see the real plan, generate
+   volume inside a transaction that is rolled back, as the owner role, in one psql script:
+   `BEGIN; INSERT ... SELECT ... FROM generate_series(1, 50000); ANALYZE <tables>;
+EXPLAIN (ANALYZE, BUFFERS) <sql>; ROLLBACK;` piped to
+   `docker compose exec -T postgres psql -U tramo -d tramo -f -`. Nothing is kept.
 4. Candidates: `explain_query` with `hypothetical_indexes` (`[{ "table": "audit_log", "columns":
 ["resource_type", "occurred_at"] }]`, table name without schema) compares plans without
    creating anything; `analyze_query_indexes` with up to ten queries asks the advisor.

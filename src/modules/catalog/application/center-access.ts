@@ -39,3 +39,31 @@ export function assertCanView(actor: Actor, centerId: string): void {
   }
   throw new CenterAccessDeniedError(centerId);
 }
+
+// Programs are run by their center: its admins, its API keys (the guard has checked the
+// programs:write scope) and Tramo admins.
+export function assertCanManagePrograms(actor: Actor, centerId: string): void {
+  if (actor === 'system' || isUserWith(actor, 'admin')) {
+    return;
+  }
+  if (
+    actor.kind === 'user' &&
+    actor.roles.includes('center_admin') &&
+    actor.centerId === centerId
+  ) {
+    return;
+  }
+  if (actor.kind === 'api_key' && actor.centerId === centerId) {
+    return;
+  }
+  throw new CenterAccessDeniedError(centerId);
+}
+
+export function canManagePrograms(actor: Actor, centerId: string): boolean {
+  try {
+    assertCanManagePrograms(actor, centerId);
+    return true;
+  } catch {
+    return false;
+  }
+}

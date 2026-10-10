@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
-import { Iban, Percentage, unwrap, VatNumber } from '@shared/domain';
+import { Iban, Money, Percentage, unwrap, VatNumber } from '@shared/domain';
 import { FieldCipher } from '@shared/infrastructure/crypto';
 
-import { TrainingCenter } from '../../domain';
+import { FinancingOptions, Program, TrainingCenter } from '../../domain';
 
+import { type ProgramOrmEntity } from './program.orm-entity';
 import { type TrainingCenterOrmEntity } from './training-center.orm-entity';
 
 // A class rather than a plain object like iam's mappers: it needs the cipher for the IBAN.
@@ -55,3 +56,72 @@ export class TrainingCenterMapper {
     };
   }
 }
+
+export const ProgramMapper = {
+  toDomain(row: ProgramOrmEntity): Program {
+    const program = Program.reconstitute(row.id, {
+      centerId: row.centerId,
+      name: row.name,
+      modality: row.modality,
+      price: Money.fromCents(row.priceCents),
+      durationWeeks: row.durationWeeks,
+      startDates: row.startDates,
+      employabilityRate: Percentage.fromBasisPoints(row.employabilityBps),
+      avgStartingSalary: Money.fromCents(row.avgStartingSalaryCents),
+      financing: FinancingOptions.of({
+        installments:
+          row.installmentTerms && row.installmentRateBps !== null
+            ? {
+                allowedTerms: row.installmentTerms,
+                annualRate: Percentage.fromBasisPoints(row.installmentRateBps),
+              }
+            : null,
+        isa:
+          row.isaIncomeShareBps !== null &&
+          row.isaMinMonthlyIncomeCents !== null &&
+          row.isaMaxPayments !== null &&
+          row.isaCapMultiplierHundredths !== null &&
+          row.isaGraceMonths !== null
+            ? {
+                incomeShare: Percentage.fromBasisPoints(row.isaIncomeShareBps),
+                minMonthlyIncome: Money.fromCents(row.isaMinMonthlyIncomeCents),
+                maxPayments: row.isaMaxPayments,
+                capMultiplierHundredths: row.isaCapMultiplierHundredths,
+                graceMonths: row.isaGraceMonths,
+              }
+            : null,
+      }),
+      status: row.status,
+      publishedAt: row.publishedAt,
+      createdAt: row.createdAt,
+    });
+    program.markPersisted(row.version);
+    return program;
+  },
+
+  toRow(program: Program): Omit<ProgramOrmEntity, 'version'> {
+    const details = program.details;
+    const { installments, isa } = program.financing;
+    return {
+      id: program.id,
+      centerId: program.centerId,
+      name: details.name,
+      modality: details.modality,
+      priceCents: details.price.cents,
+      durationWeeks: details.durationWeeks,
+      startDates: [...details.startDates],
+      employabilityBps: details.employabilityRate.basisPoints,
+      avgStartingSalaryCents: details.avgStartingSalary.cents,
+      installmentTerms: installments ? [...installments.allowedTerms] : null,
+      installmentRateBps: installments?.annualRate.basisPoints ?? null,
+      isaIncomeShareBps: isa?.incomeShare.basisPoints ?? null,
+      isaMinMonthlyIncomeCents: isa?.minMonthlyIncome.cents ?? null,
+      isaMaxPayments: isa?.maxPayments ?? null,
+      isaCapMultiplierHundredths: isa?.capMultiplierHundredths ?? null,
+      isaGraceMonths: isa?.graceMonths ?? null,
+      status: program.status,
+      publishedAt: program.publishedAt,
+      createdAt: program.createdAt,
+    };
+  },
+};
