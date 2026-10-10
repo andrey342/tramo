@@ -7,6 +7,7 @@ export const CatalogEvents = {
   CenterSuspended: 'CenterSuspended',
   CenterPayoutAccountChanged: 'CenterPayoutAccountChanged',
   ProgramPublished: 'ProgramPublished',
+  ProgramDetailsChanged: 'ProgramDetailsChanged',
   ProgramFinancingChanged: 'ProgramFinancingChanged',
   ProgramArchived: 'ProgramArchived',
 } as const;
@@ -41,15 +42,37 @@ export type ProgramPublishedPayload = {
   readonly products: readonly string[];
 };
 
+// Everything a published program shows, so a consumer's copy never needs the aggregate. Sent when
+// a published program's details change (price, dates, employability...).
+export type ProgramDetailsChangedPayload = {
+  readonly programId: string;
+  readonly centerId: string;
+  readonly name: string;
+  readonly modality: string;
+  readonly priceCents: number;
+  readonly durationWeeks: number;
+  readonly startDates: readonly string[];
+  readonly employabilityRateBasisPoints: number;
+  readonly avgStartingSalaryCents: number;
+};
+
 // Origination quotes from the options in force when an application is made; consumers keep their
-// own copy of what changed.
+// own copy, so the payload carries every option in full, not only what changed.
 export type ProgramFinancingChangedPayload = {
   readonly programId: string;
   readonly centerId: string;
   readonly products: readonly string[];
-  readonly installmentTerms: readonly number[];
-  readonly installmentAnnualRateBasisPoints: number | null;
-  readonly isaIncomeShareBasisPoints: number | null;
+  readonly installments: {
+    readonly allowedTerms: readonly number[];
+    readonly annualRateBasisPoints: number;
+  } | null;
+  readonly isa: {
+    readonly incomeShareBasisPoints: number;
+    readonly minMonthlyIncomeCents: number;
+    readonly maxPayments: number;
+    readonly capMultiplierHundredths: number;
+    readonly graceMonths: number;
+  } | null;
 };
 
 export type ProgramArchivedPayload = {

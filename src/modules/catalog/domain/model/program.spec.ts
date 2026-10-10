@@ -72,7 +72,7 @@ describe('Program', () => {
     const program = aProgram({ financing: FinancingOptions.of({ isa: isa() }) });
 
     expect(() => {
-      program.updateDetails({ employabilityRate: Percentage.fromPercent(50) });
+      program.updateDetails({ employabilityRate: Percentage.fromPercent(50) }, LATER);
     }).toThrow(InvalidFinancingOptionError);
   });
 
@@ -165,6 +165,44 @@ describe('Program', () => {
     });
   });
 
+  describe('detail changes', () => {
+    it('should announce new details of a published program, and only when they change', () => {
+      const draft = aProgram();
+      draft.updateDetails({ price: Money.fromCents(6_900_00) }, LATER);
+      const program = aProgram();
+      program.publish(ACTIVE, LATER);
+      program.pullEvents();
+
+      program.updateDetails({ name: program.details.name }, LATER);
+      program.updateDetails({ price: Money.fromCents(9_900_00) }, LATER);
+
+      expect(draft.pullEvents()).toEqual([]);
+      expect(program.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: CatalogEvents.ProgramDetailsChanged,
+          payload: expect.objectContaining({
+            priceCents: 990_000,
+            startDates: ['2027-01-11', '2027-04-05'],
+          }) as object,
+        }),
+      ]);
+    });
+
+    it('should let an archived program be corrected before it is published again', () => {
+      const program = aProgram();
+      program.publish(ACTIVE, LATER);
+      program.archive(LATER);
+      program.pullEvents();
+
+      program.updateDetails({ price: Money.fromCents(6_900_00) }, LATER);
+      program.publish(ACTIVE, LATER);
+
+      expect(program.pullEvents().map((event) => event.eventType)).toEqual([
+        CatalogEvents.ProgramPublished,
+      ]);
+    });
+  });
+
   describe('financing changes', () => {
     it('should announce new options of a published program, and only when they change', () => {
       const program = aProgram();
@@ -181,12 +219,32 @@ describe('Program', () => {
         expect.objectContaining({
           eventType: CatalogEvents.ProgramFinancingChanged,
           payload: expect.objectContaining({
-            installmentTerms: [12, 36],
-            installmentAnnualRateBasisPoints: 600,
-            isaIncomeShareBasisPoints: null,
+            installments: { allowedTerms: [12, 36], annualRateBasisPoints: 600 },
+            isa: null,
           }) as object,
         }),
       ]);
+    });
+
+    it('should send every ISA term, so a change in any of them reaches consumers', () => {
+      const program = aProgram({ financing: FinancingOptions.of({ isa: isa() }) });
+      program.publish(ACTIVE, LATER);
+      program.pullEvents();
+
+      program.changeFinancing(
+        FinancingOptions.of({ isa: isa({ capMultiplierHundredths: 200 }) }),
+        LATER,
+      );
+
+      expect(program.pullEvents()[0]?.payload).toMatchObject({
+        isa: {
+          incomeShareBasisPoints: 1_000,
+          minMonthlyIncomeCents: 150_000,
+          maxPayments: 36,
+          capMultiplierHundredths: 200,
+          graceMonths: 3,
+        },
+      });
     });
 
     it('should change a draft silently and keep a published program financeable', () => {

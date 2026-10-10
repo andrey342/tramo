@@ -56,7 +56,7 @@ export class UpdateProgramHandler implements ICommandHandler<UpdateProgramComman
         throw new EntityNotFoundError('Program', command.programId);
       }
       const now = this.clock.now();
-      if (changes.details) program.updateDetails(toProgramDetailChanges(changes.details));
+      if (changes.details) program.updateDetails(toProgramDetailChanges(changes.details), now);
       if (changes.financing) program.changeFinancing(toFinancingOptions(changes.financing), now);
       if (changes.status === 'published') {
         const center = await this.centers.findById(program.centerId);

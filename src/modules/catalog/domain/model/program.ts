@@ -7,7 +7,11 @@ import {
 } from '@shared/domain';
 
 import { InvalidFinancingOptionError, ProgramNotPublishableError } from '../errors/catalog-errors';
-import { CatalogEvents } from '../events/catalog-events';
+import {
+  CatalogEvents,
+  type ProgramDetailsChangedPayload,
+  type ProgramFinancingChangedPayload,
+} from '../events/catalog-events';
 
 import { type FinancingOptions } from './financing-options';
 
@@ -55,7 +59,8 @@ export interface ProgramProps extends ProgramDetails {
 
 // A course of a training center that students can apply to finance. Created as a draft, it is
 // published once it has at least one financing option that fits its numbers and its center is
-// active; published programs are what the public catalog lists.
+// active; published programs are what the public catalog lists. Archiving takes it off the
+// catalog; an archived program can still be corrected and published again.
 export class Program extends AggregateRoot {
   private constructor(
     id: string,
@@ -132,10 +137,21 @@ export class Program extends AggregateRoot {
     return this.props.status === 'published';
   }
 
-  updateDetails(changes: Partial<ProgramDetails>): void {
+  updateDetails(changes: Partial<ProgramDetails>, now: Date): void {
     const details = Program.validDetails({ ...this.details, ...changes });
     Program.assertFinancingFits(this.props.financing, details);
+    const before = JSON.stringify(this.detailsPayload());
     this.props = { ...this.props, ...details };
+    const after = this.detailsPayload();
+    if (this.isPublished && JSON.stringify(after) !== before) {
+      this.record({
+        eventType: CatalogEvents.ProgramDetailsChanged,
+        aggregateType: 'Program',
+        aggregateId: this.id,
+        occurredAt: now,
+        payload: after,
+      });
+    }
   }
 
   changeFinancing(financing: FinancingOptions, now: Date): void {
@@ -198,20 +214,56 @@ export class Program extends AggregateRoot {
 
   private recordFinancingChanged(now: Date): void {
     const { installments, isa, products } = this.props.financing;
+    const payload: ProgramFinancingChangedPayload = {
+      programId: this.id,
+      centerId: this.props.centerId,
+      products,
+      installments: installments
+        ? {
+            allowedTerms: installments.allowedTerms,
+            annualRateBasisPoints: installments.annualRate.basisPoints,
+          }
+        : null,
+      isa: isa
+        ? {
+            incomeShareBasisPoints: isa.incomeShare.basisPoints,
+            minMonthlyIncomeCents: isa.minMonthlyIncome.cents,
+            maxPayments: isa.maxPayments,
+            capMultiplierHundredths: isa.capMultiplierHundredths,
+            graceMonths: isa.graceMonths,
+          }
+        : null,
+    };
     this.record({
       eventType: CatalogEvents.ProgramFinancingChanged,
       aggregateType: 'Program',
       aggregateId: this.id,
       occurredAt: now,
-      payload: {
-        programId: this.id,
-        centerId: this.props.centerId,
-        products,
-        installmentTerms: installments?.allowedTerms ?? [],
-        installmentAnnualRateBasisPoints: installments?.annualRate.basisPoints ?? null,
-        isaIncomeShareBasisPoints: isa?.incomeShare.basisPoints ?? null,
-      },
+      payload,
     });
+  }
+
+  private detailsPayload(): ProgramDetailsChangedPayload {
+    const {
+      name,
+      modality,
+      price,
+      durationWeeks,
+      startDates,
+      employabilityRate,
+      avgStartingSalary,
+    } = this.props;
+    return {
+      programId: this.id,
+      centerId: this.props.centerId,
+      name,
+      modality,
+      priceCents: price.cents,
+      durationWeeks,
+      startDates,
+      employabilityRateBasisPoints: employabilityRate.basisPoints,
+      avgStartingSalaryCents: avgStartingSalary.cents,
+    };
   }
 
   private static assertFinancingFits(financing: FinancingOptions, details: ProgramDetails): void {
