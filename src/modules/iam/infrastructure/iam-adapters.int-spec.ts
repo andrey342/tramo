@@ -9,6 +9,11 @@ import { CoreModule } from '@shared/infrastructure/core.module';
 import { REDIS_CLIENT } from '@shared/infrastructure/redis';
 
 import {
+  accessTokenIssuerContract,
+  credentialGeneratorContract,
+  passwordHasherContract,
+} from '../../../../test/contracts/iam-credentials.contract';
+import {
   CONTRACT_LOCKOUT_POLICY,
   loginAttemptTrackerContract,
 } from '../../../../test/contracts/login-attempt-tracker.contract';
@@ -122,5 +127,23 @@ describe('iam adapters (integration)', () => {
       expect(Number(payload.exp) * 1000).toBe(issued.expiresAt.getTime());
       expect(issued.expiresInSeconds).toBe(config.auth.accessTokenTtlSeconds);
     });
+  });
+
+  passwordHasherContract('Argon2PasswordHasher', async () => {
+    const hasher = new Argon2PasswordHasher();
+    await hasher.onModuleInit();
+    return hasher;
+  });
+  credentialGeneratorContract('CryptoCredentialGenerator', () => new CryptoCredentialGenerator());
+  accessTokenIssuerContract('JwtAccessTokenIssuer', () => {
+    const clock = new FixedClock(new Date('2030-01-01T00:00:00Z'));
+    return {
+      issuer: new JwtAccessTokenIssuer(
+        new JwtService({ secret: config.auth.jwtSecret }),
+        config,
+        clock,
+      ),
+      clock,
+    };
   });
 });
