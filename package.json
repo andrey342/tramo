@@ -38,7 +38,8 @@
     "adr:new": "bash .claude/skills/adr/scripts/new-adr.sh",
     "queue:inspect": "tsx .claude/skills/debug-job/scripts/inspect-queue.ts",
     "trace": "tsx .claude/skills/trace/scripts/trace-aggregate.ts",
-    "api:call": "tsx .claude/skills/try-endpoint/scripts/call-api.ts"
+    "api:call": "tsx .claude/skills/try-endpoint/scripts/call-api.ts",
+    "seed": "nest build && node dist/scripts/seed.js"
   },
   "dependencies": {
     "@bull-board/api": "9.10.4",
@@ -61,6 +62,7 @@
     "bullmq": "6.3.11",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
+    "cockatiel": "4.0.0",
     "decimal.js": "10.6.0",
     "helmet": "8.3.0",
     "ioredis": "6.0.0",

@@ -62,6 +62,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:int
+        env:
+          # Also run the suites that call real third-party test services (VIES test service).
+          TEST_EXTERNAL_SERVICES: 'true'
 
   e2e:
     name: E2E tests

@@ -154,7 +154,7 @@ async function signIn(as: DemoRole): Promise<Session> {
   const credentials = { email: DEMO_USERS[as], password: DEMO_PASSWORD };
   const session = await post('/api/v1/auth/login', credentials);
   if (session) return session;
-  // Students can register themselves; the other demo accounts are created by the demo seed.
+  // Students can register themselves; the other demo accounts are created by `pnpm seed`.
   if (as === 'student') {
     const registered = await fetch(`${BASE_URL}/api/v1/auth/register`, {
       method: 'POST',
@@ -168,7 +168,7 @@ async function signIn(as: DemoRole): Promise<Session> {
   }
   return fail(
     `cannot sign in as ${as} (${DEMO_USERS[as]}): only students register themselves; the other ` +
-      'demo accounts exist once the demo seed has run (not in the repo yet).',
+      'demo accounts exist once `pnpm seed` has run against this database.',
   );
 }
 

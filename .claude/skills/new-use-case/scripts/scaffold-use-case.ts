@@ -76,7 +76,8 @@ if (repo && Aggregate) {
   }
   // A second import from the same module is merged by eslint --fix in tidy().
   changes.edit(fakesPath, (content) =>
-    content.includes(`class InMemory${repo.type} `)
+    // Prettier may break the declaration after the name, so match a word boundary, not a space.
+    new RegExp(`class InMemory${repo.type}\\b`).test(content)
       ? content
       : `${addImport(
           addImport(content, `import { InMemoryRepository } from './shared';`),

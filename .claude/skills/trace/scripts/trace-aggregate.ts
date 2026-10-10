@@ -112,9 +112,11 @@ async function queueJobs(
             ? `${event.event_type} reached the dead-letter queue: pnpm queue:inspect dead-letter ${job.id ?? ''}`
             : state === 'failed'
               ? `${job.name} failed on ${event.event_type}: pnpm queue:inspect ${queue.name} ${job.id ?? ''}`
-              : state === 'waiting' || state === 'delayed'
-                ? `${job.name} has not run yet: is the worker up?`
-                : undefined,
+              : state === 'delayed' && job.attemptsMade > 0
+                ? `${job.name} failed ${String(job.attemptsMade)} time(s) on ${event.event_type} and waits to retry: pnpm queue:inspect ${queue.name} ${job.id ?? ''}`
+                : state === 'waiting' || state === 'delayed'
+                  ? `${job.name} has not run yet: is the worker up?`
+                  : undefined,
       });
     }
   }

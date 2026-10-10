@@ -57,40 +57,53 @@ pnpm worker:dev                      # worker, health on :3100
 The `dev` profile on the command line takes precedence over `COMPOSE_PROFILES=demo` from `.env`,
 so the api and worker containers are not started and the host processes own ports 3000 and 3100.
 
-| Script                                     | What it does                                                            |
-| ------------------------------------------ | ----------------------------------------------------------------------- |
-| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                          |
-| `pnpm build`                               | Compile to `dist/`                                                      |
-| `pnpm start`                               | Run the compiled api                                                    |
-| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                          |
-| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                          |
-| `pnpm arch:check`                          | Dependency rules between layers and modules                             |
-| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                              |
-| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers) |
-| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                  |
-| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                     |
-| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                    |
+| Script                                     | What it does                                                                     |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                                   |
+| `pnpm build`                               | Compile to `dist/`                                                               |
+| `pnpm start`                               | Run the compiled api                                                             |
+| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                                   |
+| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                                   |
+| `pnpm arch:check`                          | Dependency rules between layers and modules                                      |
+| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                                       |
+| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers)          |
+| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                           |
+| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                              |
+| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                             |
+| `pnpm seed`                                | Build, then create the demo accounts and a verified training center (idempotent) |
+
+Demo accounts, created by `pnpm seed` against the database in `.env` (the student registers on
+first use of `pnpm api:call`). All share the password `tramo demo password`; local use only.
+
+| Role                               | Email                    |
+| ---------------------------------- | ------------------------ |
+| admin                              | `admin@tramo.test`       |
+| ops                                | `ops@tramo.test`         |
+| center admin (Codeworks Barcelona) | `admin@codeworks.test`   |
+| student                            | `ana.garcia@example.com` |
 
 Configuration is read from the environment and validated with zod at startup; an invalid or
 missing variable stops the process with a message naming it. A local `.env` is loaded if present,
 but real environment variables always win. All variables and their defaults are in
 [`.env.example`](.env.example); the main ones:
 
-| Variable                                                                    | Purpose                                                                                                                       |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                                              | Postgres connection string                                                                                                    |
-| `REDIS_URL`                                                                 | Redis connection string                                                                                                       |
-| `PORT`, `WORKER_HEALTH_PORT`                                                | HTTP ports of the api and of the worker health endpoint                                                                       |
-| `LOG_LEVEL`, `LOG_PRETTY`                                                   | Pino level; pretty output for local runs only                                                                                 |
-| `CORS_ORIGINS`                                                              | Comma-separated allowlist                                                                                                     |
-| `SWAGGER_ENABLED`                                                           | Serve `/docs` (default on, off when `NODE_ENV=production`)                                                                    |
-| `DATABASE_RUN_MIGRATIONS`                                                   | Apply pending migrations when the api starts                                                                                  |
-| `JWT_ACCESS_SECRET`                                                         | HS256 key for access tokens (32+ characters, required). With `NODE_ENV=production` the published development value is refused |
-| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                          | Session lifetimes (15 minutes, 30 days)                                                                                       |
-| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                        | Progressive lockout after failed sign-ins                                                                                     |
-| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                 | Rate limits per client and proxy setting                                                                                      |
-| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_ENQUEUE_TIMEOUT_MS` | Worker outbox publisher pacing                                                                                                |
-| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                                | Basic auth for `/admin/queues`; no password disables it                                                                       |
+| Variable                                                                    | Purpose                                                                                                                                                                         |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                              | Postgres connection string                                                                                                                                                      |
+| `REDIS_URL`                                                                 | Redis connection string                                                                                                                                                         |
+| `PORT`, `WORKER_HEALTH_PORT`                                                | HTTP ports of the api and of the worker health endpoint                                                                                                                         |
+| `LOG_LEVEL`, `LOG_PRETTY`                                                   | Pino level; pretty output for local runs only                                                                                                                                   |
+| `CORS_ORIGINS`                                                              | Comma-separated allowlist                                                                                                                                                       |
+| `SWAGGER_ENABLED`                                                           | Serve `/docs` (default on, off when `NODE_ENV=production`)                                                                                                                      |
+| `DATABASE_RUN_MIGRATIONS`                                                   | Apply pending migrations when the api starts                                                                                                                                    |
+| `JWT_ACCESS_SECRET`                                                         | HS256 key for access tokens (32+ characters, required). With `NODE_ENV=production` the published development value is refused                                                   |
+| `FIELD_ENCRYPTION_KEY`                                                      | AES-256 key (32 bytes, base64) for encrypted columns such as payout IBANs (ADR 014). The published development value is refused in production                                   |
+| `VIES_MODE`, `VIES_TIMEOUT_MS`                                              | VAT checks of training centers: `live` (VIES), `test` (its test service: only 100 valid and 200 invalid, any other number answers as an outage) or `fake` (same table, offline) |
+| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                          | Session lifetimes (15 minutes, 30 days)                                                                                                                                         |
+| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                        | Progressive lockout after failed sign-ins                                                                                                                                       |
+| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                 | Rate limits per client and proxy setting                                                                                                                                        |
+| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_ENQUEUE_TIMEOUT_MS` | Worker outbox publisher pacing                                                                                                                                                  |
+| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                                | Basic auth for `/admin/queues`; no password disables it                                                                                                                         |
 
 ## Testing
 
@@ -121,9 +134,10 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module | Responsibility                             | Main endpoints                                                  |
-| ------ | ------------------------------------------ | --------------------------------------------------------------- |
-| `iam`  | Accounts, sessions, roles, center API keys | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
+| Module    | Responsibility                                                           | Main endpoints                                                  |
+| --------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `iam`     | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
+| `catalog` | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`                           |
 
 ## API overview
 

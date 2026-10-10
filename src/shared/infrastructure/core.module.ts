@@ -5,6 +5,7 @@ import { AuditModule } from './audit';
 import { ClockModule } from './clock/system-clock';
 import { ConfigModule } from './config';
 import { RequestContextModule } from './context';
+import { CryptoModule } from './crypto';
 import { DatabaseModule } from './database';
 import { HealthModule } from './health';
 import { LoggingModule } from './logging';
@@ -21,6 +22,7 @@ export class CoreModule {
       imports: [
         ConfigModule,
         ClockModule,
+        CryptoModule,
         // Command, query and event buses for every module; handlers are discovered globally.
         CqrsModule.forRoot(),
         RequestContextModule,

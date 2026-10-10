@@ -83,9 +83,10 @@ export class Create${Name}Schema${String(stamp.ms)} implements MigrationInterfac
     await queryRunner.query(\`CREATE SCHEMA IF NOT EXISTS ${schema}\`);
   }
 
-  // Without CASCADE: reverting fails loudly if a later migration left tables behind.
-  async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(\`DROP SCHEMA IF EXISTS ${schema}\`);
+  // The schema may predate this migration (docker/postgres/init.sql creates it, with the grants
+  // of the read-only role), so reverting leaves it in place, as iam's migrations do.
+  async down(_queryRunner: QueryRunner): Promise<void> {
+    // Nothing to undo.
   }
 }
 `,
