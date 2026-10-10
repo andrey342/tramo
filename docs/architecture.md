@@ -83,3 +83,20 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   more state.
 - **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
   Routes opened to API keys are not implicitly open to users; they must also name roles.
+- **Roles.** Users only reach routes that name their roles with `@Roles`; a route that forgets it
+  refuses every user, since anyone can register as a student.
+- **Rate limits.** Clients are counted per IPv4 address and per IPv6 /64 network. The queue
+  dashboard (`/admin/queues`) sits outside Nest's guards and limits failed sign-ins itself (ten
+  per client per 15 minutes).
+
+Known gaps, accepted for now:
+
+- `POST /auth/register` answers 409 for an email that already has an account, so registration
+  reveals which emails are registered. Answering the same way in both cases needs an email
+  confirmation step, which comes with the notifications module; until then the auth rate limit
+  slows enumeration down.
+- `StudentRegistered` and `CenterUserCreated` carry the email address, because the notifications
+  module sends to it. Their jobs (and Bull Board, behind its own credentials) therefore hold it
+  until completed jobs expire after seven days.
+- An admin sets a new center administrator's first password. Production needs an invitation
+  link, or a forced change on first sign-in, so the admin does not keep a working password.

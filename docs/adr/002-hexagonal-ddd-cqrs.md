@@ -19,7 +19,14 @@ dependencies pointing inward only, checked by `pnpm arch:check`.
   transition. Money is a value object (ADR 005), time comes from a `Clock` (ADR 009).
 - **Application**: one command or query handler per use case (`@nestjs/cqrs`). A handler loads an
   aggregate, calls one method, saves it inside the unit of work and returns. Queries read
-  projections or purpose-built SQL and never load aggregates.
+  projections or purpose-built SQL and never load aggregates, with one exception (added
+  2026-10-10 after reviewing `iam`): a query that needs the current state of aggregates of its own
+  module, looked up by id or by a lookup key, with a result bounded by design, may read them
+  through the module's repository and map them to a DTO. `GetCurrentPrincipal`, `ListApiKeys`
+  (a center holds a handful of keys) and `AuthenticateApiKey` do so; a projection would copy the
+  same rows. Lists that grow, searches and anything read across modules use projections or SQL.
+  `AuthenticateApiKey` also records the key's last use, a single bookkeeping `UPDATE` outside the
+  unit of work, so authenticating a request stays one call.
 - **Infrastructure**: controllers, TypeORM entities and mappers, adapters for external providers
   and BullMQ processors. Persistence entities are separate classes from domain aggregates; a
   mapper converts between them.
