@@ -21,7 +21,9 @@ const DECIMAL_ROUNDING: Record<Rounding, Decimal.Rounding> = {
 // Default rounding is half-up to the cent, the usual commercial rule for consumer credit in Spain.
 export class Money extends ValueObject<{ cents: number; currency: Currency }> {
   private constructor(cents: number, currency: Currency) {
-    super({ cents, currency });
+    // Rounding a small negative amount can yield -0, which Object.is (used by equals) tells apart
+    // from 0.
+    super({ cents: cents === 0 ? 0 : cents, currency });
   }
 
   static fromCents(cents: number, currency: Currency = 'EUR'): Money {
