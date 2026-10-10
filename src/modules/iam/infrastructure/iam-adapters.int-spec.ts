@@ -8,7 +8,10 @@ import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { REDIS_CLIENT } from '@shared/infrastructure/redis';
 
-import { loginAttemptTrackerContract } from '../../../../test/contracts/login-attempt-tracker.contract';
+import {
+  CONTRACT_LOCKOUT_POLICY,
+  loginAttemptTrackerContract,
+} from '../../../../test/contracts/login-attempt-tracker.contract';
 import { API_KEY_FORMAT } from '../domain';
 
 import { ARGON2_OPTIONS, Argon2PasswordHasher } from './adapters/argon2-password.hasher';
@@ -33,15 +36,13 @@ describe('iam adapters (integration)', () => {
     await app.close();
   });
 
-  loginAttemptTrackerContract('RedisLoginAttemptTracker', () => {
-    return new RedisLoginAttemptTracker(app.get<Redis>(REDIS_CLIENT), {
+  loginAttemptTrackerContract('RedisLoginAttemptTracker', () => ({
+    tracker: new RedisLoginAttemptTracker(app.get<Redis>(REDIS_CLIENT), {
       ...config,
-      auth: {
-        ...config.auth,
-        lockout: { maxFailures: 3, baseLockSeconds: 60, maxLockSeconds: 3600 },
-      },
-    });
-  });
+      auth: { ...config.auth, lockout: CONTRACT_LOCKOUT_POLICY },
+    }),
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  }));
 
   describe('Argon2PasswordHasher', () => {
     const hasher = new Argon2PasswordHasher();

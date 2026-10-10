@@ -51,10 +51,12 @@ export interface CredentialGenerator {
 
 // Progressive lockout per account after repeated failed sign-ins.
 export interface LoginAttemptTracker {
-  // Seconds until the account may try again; 0 when it is not locked.
-  lockedFor(account: string): Promise<number>;
-  recordFailure(account: string): Promise<void>;
-  reset(account: string): Promise<void>;
+  // Checks the lock and counts this attempt as failed in one atomic step, so parallel attempts
+  // cannot all get past the threshold. Returns the seconds until the account may try again, or 0
+  // when this attempt may proceed.
+  begin(account: string): Promise<number>;
+  // The attempt succeeded: forgets the failures and any lock.
+  succeeded(account: string): Promise<void>;
 }
 
 export interface SessionSettings {
