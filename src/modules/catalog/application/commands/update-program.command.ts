@@ -16,7 +16,7 @@ import {
   type FinancingInput,
   type ProgramDetailsInput,
   toFinancingOptions,
-  toProgramDetails,
+  toProgramDetailChanges,
 } from '../program-input';
 import { toProgramDto } from '../program.mapping';
 
@@ -56,7 +56,7 @@ export class UpdateProgramHandler implements ICommandHandler<UpdateProgramComman
         throw new EntityNotFoundError('Program', command.programId);
       }
       const now = this.clock.now();
-      if (changes.details) program.updateDetails(toProgramDetails(changes.details));
+      if (changes.details) program.updateDetails(toProgramDetailChanges(changes.details));
       if (changes.financing) program.changeFinancing(toFinancingOptions(changes.financing), now);
       if (changes.status === 'published') {
         const center = await this.centers.findById(program.centerId);

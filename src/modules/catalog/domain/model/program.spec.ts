@@ -22,6 +22,7 @@ describe('FinancingOptions', () => {
     ['a term under 6 months', { installments: installments([3]) }],
     ['a term over 48 months', { installments: installments([60]) }],
     ['no terms', { installments: installments([]) }],
+    ['13 terms', { installments: installments(Array.from({ length: 13 }, (_, i) => 6 + i)) }],
     ['a rate above 25 %', { installments: installments([12], 30) }],
     ['a cap under 1.0', { isa: isa({ capMultiplierHundredths: 90 }) }],
     ['a cap over 2.0', { isa: isa({ capMultiplierHundredths: 210 }) }],
@@ -80,6 +81,11 @@ describe('Program', () => {
     expect(() => aProgram({ details: { price: Money.zero() } })).toThrow(InvalidValueError);
     expect(() => aProgram({ details: { durationWeeks: 0 } })).toThrow(InvalidValueError);
     expect(() => aProgram({ details: { startDates: ['2027-13-40'] } })).toThrow(InvalidValueError);
+    expect(() => aProgram({ details: { startDates: ['2027-02-30'] } })).toThrow(InvalidValueError);
+    expect(() => aProgram({ details: { startDates: ['2027-02-29'] } })).toThrow(InvalidValueError);
+    expect(aProgram({ details: { startDates: ['2028-02-29'] } }).details.startDates).toEqual([
+      '2028-02-29',
+    ]);
     expect(() => aProgram({ details: { avgStartingSalary: Money.fromCents(-1) } })).toThrow(
       InvalidValueError,
     );

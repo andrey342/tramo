@@ -29,7 +29,22 @@ export interface FinancingInput {
   } | null;
 }
 
-export function toProgramDetails(input: Partial<ProgramDetailsInput>): Partial<ProgramDetails> {
+export function toProgramDetails(input: ProgramDetailsInput): ProgramDetails {
+  return {
+    name: input.name,
+    modality: input.modality,
+    price: Money.fromCents(input.priceCents),
+    durationWeeks: input.durationWeeks,
+    startDates: input.startDates,
+    employabilityRate: Percentage.fromBasisPoints(input.employabilityRateBasisPoints),
+    avgStartingSalary: Money.fromCents(input.avgStartingSalaryCents),
+  };
+}
+
+// Only the fields the client sent.
+export function toProgramDetailChanges(
+  input: Partial<ProgramDetailsInput>,
+): Partial<ProgramDetails> {
   return {
     ...(input.name !== undefined && { name: input.name }),
     ...(input.modality !== undefined && { modality: input.modality }),

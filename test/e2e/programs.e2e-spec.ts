@@ -160,6 +160,21 @@ describe('Programs (e2e)', () => {
     expect(publishBare.body.code).toBe('program_not_publishable');
   });
 
+  it('should answer malformed input with a client error, not a server error', async () => {
+    const { financing: _financing, ...withoutFinancing } = PROGRAM;
+
+    const noFinancing = await createProgram(withoutFinancing);
+    const impossibleDate = await createProgram({ ...PROGRAM, startDates: ['2027-02-30'] });
+    const hugePrice = await api().get('/api/v1/programs').query({ minPriceCents: 99_999_999_999 });
+
+    expect(noFinancing.status).toBe(400);
+    expect(noFinancing.body.code).toBe('validation_error');
+    expect(impossibleDate.status).toBe(422);
+    expect(impossibleDate.body.code).toBe('invalid_value');
+    expect(hugePrice.status).toBe(400);
+    expect(hugePrice.body.code).toBe('validation_error');
+  });
+
   it('should keep other centers and the public out of changes', async () => {
     const created = await createProgram();
     const otherCenter = await activeCenter();

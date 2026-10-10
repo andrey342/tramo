@@ -25,7 +25,7 @@ export interface TrainingCenterProps {
   readonly createdAt: Date;
 }
 
-const MAX_PLATFORM_FEE_BPS = 3_000;
+export const MAX_PLATFORM_FEE_BPS = 3_000;
 
 // A school or bootcamp whose programs students finance through Tramo. It is registered by an
 // admin and becomes active once its VAT number checks out; until then it cannot publish programs

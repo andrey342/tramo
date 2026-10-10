@@ -7,7 +7,6 @@ import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
   Program,
-  type ProgramDetails,
   PROGRAM_REPOSITORY,
   type ProgramRepository,
   TRAINING_CENTER_REPOSITORY,
@@ -47,7 +46,7 @@ export class CreateProgramHandler implements ICommandHandler<CreateProgramComman
 
   async execute(command: CreateProgramCommand): Promise<ProgramDto> {
     assertCanManagePrograms(command.actor, command.centerId);
-    const details = toProgramDetails(command.details) as ProgramDetails;
+    const details = toProgramDetails(command.details);
     const financing = toFinancingOptions(command.financing);
 
     return this.uow.run(async () => {

@@ -2,12 +2,29 @@ import { type Money, type Percentage, ValueObject } from '@shared/domain';
 
 import { InvalidFinancingOptionError } from '../errors/catalog-errors';
 
-export const MIN_TERM_MONTHS = 6;
-export const MAX_TERM_MONTHS = 48;
-const MAX_ANNUAL_RATE_BPS = 2_500;
-const MAX_INCOME_SHARE_BPS = 2_000;
-const MAX_ISA_PAYMENTS = 120;
-const MAX_GRACE_MONTHS = 12;
+// Exported so request validation states the same bounds.
+export const FINANCING_LIMITS = {
+  minTermMonths: 6,
+  maxTermMonths: 48,
+  maxTerms: 12,
+  maxAnnualRateBps: 2_500,
+  maxIncomeShareBps: 2_000,
+  maxIsaPayments: 120,
+  maxGraceMonths: 12,
+  minCapMultiplierHundredths: 100,
+  maxCapMultiplierHundredths: 200,
+} as const;
+const {
+  minTermMonths: MIN_TERM_MONTHS,
+  maxTermMonths: MAX_TERM_MONTHS,
+  maxTerms: MAX_TERMS,
+  maxAnnualRateBps: MAX_ANNUAL_RATE_BPS,
+  maxIncomeShareBps: MAX_INCOME_SHARE_BPS,
+  maxIsaPayments: MAX_ISA_PAYMENTS,
+  maxGraceMonths: MAX_GRACE_MONTHS,
+  minCapMultiplierHundredths: MIN_CAP,
+  maxCapMultiplierHundredths: MAX_CAP,
+} = FINANCING_LIMITS;
 
 // A loan repaid in equal monthly instalments over one of the allowed terms.
 export interface InstallmentsOption {
@@ -75,8 +92,10 @@ export class FinancingOptions extends ValueObject<{
 
   private static validInstallments(option: InstallmentsOption): InstallmentsOption {
     const terms = [...new Set(option.allowedTerms)].sort((a, b) => a - b);
-    if (terms.length === 0) {
-      throw new InvalidFinancingOptionError('installments need at least one term');
+    if (terms.length === 0 || terms.length > MAX_TERMS) {
+      throw new InvalidFinancingOptionError(
+        `installments offer 1 to ${String(MAX_TERMS)} different terms`,
+      );
     }
     if (
       terms.some(
@@ -95,8 +114,8 @@ export class FinancingOptions extends ValueObject<{
 
   private static validIsa(option: IsaOption): IsaOption {
     if (
-      option.capMultiplierHundredths < 100 ||
-      option.capMultiplierHundredths > 200 ||
+      option.capMultiplierHundredths < MIN_CAP ||
+      option.capMultiplierHundredths > MAX_CAP ||
       !Number.isInteger(option.capMultiplierHundredths)
     ) {
       throw new InvalidFinancingOptionError(
