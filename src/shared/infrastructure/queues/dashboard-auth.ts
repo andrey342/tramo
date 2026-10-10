@@ -3,6 +3,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { type NextFunction, type Request, type Response } from 'express';
 import { type Redis } from 'ioredis';
 
+import { clientKey } from '../http/throttling/client-key';
+
 // The dashboard is an Express router mounted by Bull Board, outside Nest's guards and throttler,
 // so it limits failed sign-ins itself: after MAX_FAILURES wrong attempts from one client in
 // FAILURE_WINDOW_MS, every attempt from it is refused until the window ends.
@@ -26,7 +28,7 @@ export function dashboardAuth(options: {
       res.status(404).end();
       return;
     }
-    const failuresKey = `tramo:queue-dashboard:failures:${req.ip ?? 'unknown'}`;
+    const failuresKey = `tramo:queue-dashboard:failures:${clientKey(req.ip)}`;
     void (async () => {
       const blockedForMs = await lockedFor(options.redis, failuresKey);
       if (blockedForMs > 0) {

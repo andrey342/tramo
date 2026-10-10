@@ -6,6 +6,7 @@ import { type Redis } from 'ioredis';
 import { APP_CONFIG, type AppConfig } from '../../config';
 import { REDIS_CLIENT } from '../../redis';
 
+import { clientKey } from './client-key';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
 
 export const DEFAULT_THROTTLER = 'default';
@@ -39,6 +40,7 @@ function isAuthRateLimited(context: ExecutionContext): boolean {
           },
         ],
         storage: new RedisThrottlerStorage(redis),
+        getTracker: (req: Record<string, unknown>) => clientKey(req.ip as string | undefined),
         errorMessage: 'Too many requests. Retry after the time given in the Retry-After header.',
       }),
     }),
