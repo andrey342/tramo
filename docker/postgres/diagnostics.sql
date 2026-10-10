@@ -15,17 +15,23 @@ END $$;
 
 ALTER ROLE tramo_ro SET default_transaction_read_only = on;
 ALTER ROLE tramo_ro SET statement_timeout = '30s';
--- Unqualified table names resolve in the module schemas (hypothetical indexes need this).
-ALTER ROLE tramo_ro SET search_path = shared, iam, catalog, origination, lending, billing, notifications, reporting, public;
 -- pg_stat_statements shows other roles' query text only to members of pg_read_all_stats.
 GRANT pg_read_all_stats TO tramo_ro;
 
-GRANT USAGE ON SCHEMA shared, iam, catalog, origination, lending, billing, notifications, reporting
-  TO tramo_ro;
-GRANT SELECT ON ALL TABLES IN SCHEMA
-  shared, iam, catalog, origination, lending, billing, notifications, reporting
-  TO tramo_ro;
--- Tables created later by migrations (run as the owner of this script) are readable too.
-ALTER DEFAULT PRIVILEGES IN SCHEMA
-  shared, iam, catalog, origination, lending, billing, notifications, reporting
-  GRANT SELECT ON TABLES TO tramo_ro;
+-- Every application schema present when this runs (one per module, plus shared). A schema added
+-- later needs this script applied again.
+DO $$
+DECLARE
+  app_schemas text;
+BEGIN
+  SELECT string_agg(quote_ident(nspname), ', ' ORDER BY nspname) INTO app_schemas
+    FROM pg_namespace
+   WHERE nspname NOT LIKE 'pg\_%' AND nspname NOT IN ('information_schema', 'public');
+  EXECUTE format('GRANT USAGE ON SCHEMA %s TO tramo_ro', app_schemas);
+  EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %s TO tramo_ro', app_schemas);
+  -- Tables created later by migrations (run as the owner of this script) are readable too.
+  EXECUTE format(
+    'ALTER DEFAULT PRIVILEGES IN SCHEMA %s GRANT SELECT ON TABLES TO tramo_ro', app_schemas);
+  -- Unqualified table names resolve in the module schemas (hypothetical indexes need this).
+  EXECUTE format('ALTER ROLE tramo_ro SET search_path = %s, public', app_schemas);
+END $$;
