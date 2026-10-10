@@ -20,6 +20,8 @@ cd "$(dirname "$0")/../../../.."
 DB_USER="${POSTGRES_USER:-tramo}"
 DB_NAME="${POSTGRES_DB:-tramo}"
 DATA_SOURCE=dist/src/shared/infrastructure/database/data-source.js
+# Last migration written before primary keys had to be named explicitly.
+UNNAMED_PK_CUTOFF=202610101944
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -52,8 +54,16 @@ lint_migration() {
       | grep -viE ' "?(ix|ux)_[a-z0-9_]+$' | grep -q .; then
     echo "  $base: index names start with ix_ (or ux_ for unique indexes)"; problems=1
   fi
-  if grep -oiE 'CONSTRAINT "?[a-z0-9_]+' "$file" | grep -viE ' "?(pk|fk|ck|ux|uq)_' | grep -q .; then
+  # Constraints being created; dropping or renaming an old name is how such names get fixed.
+  if grep -viE '(DROP|RENAME) CONSTRAINT' "$file" | grep -oiE 'CONSTRAINT "?[a-z0-9_]+' \
+      | grep -viE ' "?(pk|fk|ck|ux|uq)_' | grep -q .; then
     echo "  $base: constraint names start with pk_, fk_, ck_ or ux_"; problems=1
+  fi
+  # Inline PRIMARY KEY gets Postgres' <table>_pkey name. Migrations before the rename are on main
+  # and are never edited.
+  if [[ "${base:0:12}" > "$UNNAMED_PK_CUTOFF" ]] && grep -E '\bPRIMARY KEY\b' "$file" \
+      | grep -vqE 'CONSTRAINT "?pk_'; then
+    echo "  $base: name the primary key (CONSTRAINT pk_<schema>_<table> PRIMARY KEY)"; problems=1
   fi
   if grep -iE '\btimestamp\b' "$file" | grep -viE 'with time zone' | grep -q .; then
     echo "  $base: timestamps are timestamptz(3)"; problems=1
