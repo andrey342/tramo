@@ -41,6 +41,14 @@ Path-scoped rules in `.claude/rules/` cover domain, migrations, HTTP and tests.
 | `/add-adapter <module> <Port> <name>` | implement a port with a shared contract suite and a fake     |
 | `/migration <module> <verb-noun>`     | write a migration and prove its `down` restores the schema   |
 | `/adr <title>`                        | record a decision in `docs/adr` and the architecture index   |
+| `/review-module <module>`             | run both reviewers, dependency rules and module coverage     |
+| `/try-endpoint <METHOD> <path>`       | call the running api as a demo user and read the answer      |
+| `/trace <aggregateId>`                | follow an aggregate through events, jobs, mail and webhooks  |
+| `/debug-job [queue] [jobId]`          | inspect queues, the outbox and dead letters; retry or remove |
+| `/sql-explain <sql>`                  | read a query plan and test hypothetical indexes via MCP      |
+
+Reviewers: `arch-reviewer` and `security-reviewer` agents. MCP: `context7` (library docs) and
+`postgres` (read-only `tramo_ro`).
 
 ## Do not
 

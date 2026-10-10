@@ -15,6 +15,7 @@ import {
   PROBLEM_CONTENT_TYPE,
   type ProblemDetails,
   problemType,
+  statusCode,
   statusTitle,
 } from './problem-details';
 import { ProblemException } from './problem.exception';
@@ -80,13 +81,20 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       const title = statusTitle(status);
       const detail = httpExceptionDetail(exception);
       // RFC 9457: detail explains this occurrence; a copy of the title adds nothing.
-      return { type: 'about:blank', title, status, detail: detail === title ? undefined : detail };
+      return {
+        type: 'about:blank',
+        title,
+        status,
+        detail: detail === title ? undefined : detail,
+        code: statusCode(status),
+      };
     }
     return {
       type: 'about:blank',
       title: statusTitle(HttpStatus.INTERNAL_SERVER_ERROR),
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       detail: 'An unexpected error occurred.',
+      code: statusCode(HttpStatus.INTERNAL_SERVER_ERROR),
     };
   }
 }

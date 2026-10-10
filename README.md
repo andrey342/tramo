@@ -168,16 +168,21 @@ commands, architecture principles and workflow. Under `.claude/`:
   | `pnpm scaffold:adapter <module> <Port> <name>`              | Adapter stub, shared contract suite, fake and the specs that run the contract on both           |
   | `pnpm migration:verify generate\|new\|check\|lint`          | Write a migration; run, revert and run again comparing schema dumps                             |
   | `pnpm adr:new "<title>"`                                    | Next decision record and its row in `docs/architecture.md`                                      |
+  | `pnpm api:call <METHOD> <path> [body] [--as role]`          | Call the running api as a demo user; tokens and the last response are kept in `.local/`         |
+  | `pnpm trace <aggregateId>`                                  | Timeline of an aggregate: events, jobs, consumers, dead letters, audit, mail, webhooks          |
+  | `pnpm queue:inspect [queue] [jobId] [--retry\|--remove]`    | Queue counts, failed jobs with stack traces, outbox backlog and dead letters                    |
 
-- `agents/`: read-only reviewers for architecture and security, each with a fixed checklist.
+- `agents/`: read-only reviewers for architecture and security, each with a fixed checklist;
+  `/review-module <module>` runs both with the dependency rules and the module's coverage.
 - `settings.json`: edited files are formatted and linted after each change; force pushes,
   `schema:sync` and deleting compose volumes are denied.
 
 [`.mcp.json`](.mcp.json) adds two MCP servers: Context7 for current library documentation, and
 Postgres MCP Pro in restricted mode (read-only transactions, time limit) for query plans,
-hypothetical indexes (`hypopg`) and workload analysis (`pg_stat_statements`). It connects as
-`tramo_ro`, a role that can only read the module schemas. The compose Postgres image adds both
-extensions and creates the role on a new volume; an existing volume catches up with:
+hypothetical indexes (`hypopg`) and workload analysis (`pg_stat_statements`), used by
+`/sql-explain`. It connects as `tramo_ro`, a role that can only read the module schemas. The
+compose Postgres image adds both extensions and creates the role on a new volume; an existing
+volume catches up with:
 
 ```bash
 docker compose exec postgres psql -U tramo -d tramo -f /docker-entrypoint-initdb.d/02-diagnostics.sql

@@ -17,6 +17,8 @@ ALTER ROLE tramo_ro SET default_transaction_read_only = on;
 ALTER ROLE tramo_ro SET statement_timeout = '30s';
 -- pg_stat_statements shows other roles' query text only to members of pg_read_all_stats.
 GRANT pg_read_all_stats TO tramo_ro;
+-- The index advisor reads hypopg's views, which live in public.
+GRANT SELECT ON public.hypopg_list_indexes, public.hypopg_hidden_indexes TO tramo_ro;
 
 -- Every application schema present when this runs (one per module, plus shared). A schema added
 -- later needs this script applied again.
