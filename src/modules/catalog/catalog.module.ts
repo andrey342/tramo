@@ -13,6 +13,7 @@ import {
   VAT_VALIDATOR,
   type VatValidator,
 } from './application/ports/catalog-ports';
+import { FindCenterHandler } from './application/queries/find-center.query';
 import { GetProgramHandler } from './application/queries/get-program.query';
 import { GetTrainingCenterHandler } from './application/queries/get-training-center.query';
 import { ListProgramsHandler } from './application/queries/list-programs.query';
@@ -51,6 +52,7 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
     VerifyCenterVatHandler,
     UpdateTrainingCenterHandler,
     GetTrainingCenterHandler,
+    FindCenterHandler,
     CreateProgramHandler,
     UpdateProgramHandler,
     GetProgramHandler,
