@@ -121,9 +121,10 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module | Responsibility                             | Main endpoints                                                  |
-| ------ | ------------------------------------------ | --------------------------------------------------------------- |
-| `iam`  | Accounts, sessions, roles, center API keys | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
+| Module    | Responsibility                                                           | Main endpoints                                                  |
+| --------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `iam`     | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys` |
+| `catalog` | Training centers, VAT verification, programs and their financing options |                                                                 |
 
 ## API overview
 
