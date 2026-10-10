@@ -13,9 +13,10 @@ Arguments: `$ARGUMENTS` (module name in kebab-case, then its responsibility for 
    `pnpm scaffold:module <name> --responsibility "<text>" --dry-run`
 2. Run it for real (same command without `--dry-run`). It writes:
    - `src/modules/<name>/domain/{index.ts,events/<name>-events.ts}`
-   - `src/modules/<name>/<name>.module.ts` and `<name>-http.module.ts` (same split as `iam`)
+   - `src/modules/<name>/<name>.module.ts`, `<name>-http.module.ts` (api only) and
+     `<name>-worker.module.ts` (worker only: processors of the module's own queues)
    - `infrastructure/persistence/migrations/<stamp>-create-<name>-schema.ts`
-   - registrations: `AppModule` (HTTP module), `WorkerModule` (module, for event consumers),
+   - registrations: `AppModule` (HTTP module), `WorkerModule` (worker module, which brings the module and its event consumers),
      `MODULES` in `queue-names.ts` (its `events.<name>` queue), `docker/postgres/init.sql`
      (schema) and the README module map.
      It formats what it wrote and finishes with `pnpm arch:check`. Dependency rules are written

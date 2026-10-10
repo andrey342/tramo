@@ -49,7 +49,8 @@ changes.create(
   `import { Module } from '@nestjs/common';
 
 // Use cases, persistence and adapters of the ${name} context. Shared by both processes; the HTTP
-// surface lives in ${Name}HttpModule, which only the api imports.
+// surface lives in ${Name}HttpModule, which only the api imports, and queue processors in
+// ${Name}WorkerModule, which only the worker imports.
 @Module({
   providers: [],
   exports: [],
@@ -69,6 +70,21 @@ import { ${Name}Module } from './${name}.module';
   controllers: [],
 })
 export class ${Name}HttpModule {}
+`,
+);
+
+changes.create(
+  `${base}/${name}-worker.module.ts`,
+  `import { Module } from '@nestjs/common';
+
+import { ${Name}Module } from './${name}.module';
+
+// What only the worker runs for ${name}: processors of the module's own queues.
+@Module({
+  imports: [${Name}Module],
+  providers: [],
+})
+export class ${Name}WorkerModule {}
 `,
 );
 
@@ -103,9 +119,12 @@ changes.edit('src/app.module.ts', (content) =>
 
 changes.edit('src/worker.module.ts', (content) =>
   appendToArray(
-    addImport(content, `import { ${Name}Module } from '@modules/${name}/${name}.module';`),
+    addImport(
+      content,
+      `import { ${Name}WorkerModule } from '@modules/${name}/${name}-worker.module';`,
+    ),
     /imports: \[/,
-    `${Name}Module`,
+    `${Name}WorkerModule`,
     'src/worker.module.ts',
   ),
 );
