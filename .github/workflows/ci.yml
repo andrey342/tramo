@@ -33,6 +33,7 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm arch:check
+      - run: pnpm migration:verify lint
 
   unit:
     name: Unit tests
