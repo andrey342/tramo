@@ -3,7 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
+import { RegisterTrainingCenterHandler } from './application/commands/register-training-center.command';
+import { UpdateTrainingCenterHandler } from './application/commands/update-training-center.command';
+import { VerifyCenterVatHandler } from './application/commands/verify-center-vat.command';
 import { VAT_VALIDATOR, type VatValidator } from './application/ports/catalog-ports';
+import { GetTrainingCenterHandler } from './application/queries/get-training-center.query';
 import { TRAINING_CENTER_REPOSITORY } from './domain';
 import { FakeVatValidator } from './infrastructure/adapters/fake-vat-validator';
 import { ViesVatValidator } from './infrastructure/adapters/vies-vat-validator';
@@ -29,6 +33,10 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
         fake: FakeVatValidator,
       ): VatValidator => (config.vies.mode === 'fake' ? fake : vies),
     },
+    RegisterTrainingCenterHandler,
+    VerifyCenterVatHandler,
+    UpdateTrainingCenterHandler,
+    GetTrainingCenterHandler,
   ],
   exports: [],
 })
