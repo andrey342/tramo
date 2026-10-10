@@ -5,7 +5,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { type Response } from 'express';
 
 import { type Principal } from '@shared/application';
-import { IS_PUBLIC } from '@shared/infrastructure/http/access.decorators';
+import { AUTHENTICATION_OPTIONAL, IS_PUBLIC } from '@shared/infrastructure/http/access.decorators';
 import { type RequestWithPrincipal } from '@shared/infrastructure/http/principal';
 import { ProblemException } from '@shared/infrastructure/http/problem-details';
 import { API_KEY_HEADER } from '@shared/infrastructure/http/swagger';
@@ -28,11 +28,18 @@ export class AuthenticationGuard extends AuthGuard('jwt') {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) {
-      return true;
-    }
     const request = context.switchToHttp().getRequest<RequestWithPrincipal>();
     const apiKey = request.header(API_KEY_HEADER);
+    if (isPublic) {
+      const optional = this.reflector.getAllAndOverride<boolean | undefined>(
+        AUTHENTICATION_OPTIONAL,
+        [context.getHandler(), context.getClass()],
+      );
+      const hasCredentials = apiKey !== undefined || request.header('authorization') !== undefined;
+      if (!optional || !hasCredentials) {
+        return true;
+      }
+    }
     if (apiKey !== undefined) {
       const principal = await this.queries.execute(new AuthenticateApiKeyQuery(apiKey));
       if (!principal) {
