@@ -17,6 +17,9 @@ export const eventsQueue = (module: ModuleName): string => `events.${module}`;
 export const QueueNames = {
   DEAD_LETTER: 'dead-letter',
   EVENTS: MODULES.map(eventsQueue),
+  // Work queues of a module, for jobs with their own retry schedule or that must not run inside
+  // an event's transaction.
+  VAT_CHECKS: 'catalog.vat-checks',
 } as const;
 
 export function eventsQueueForConsumer(consumer: string): string {
@@ -27,4 +30,8 @@ export function eventsQueueForConsumer(consumer: string): string {
   return `events.${module}`;
 }
 
-export const ALL_QUEUES: readonly string[] = [QueueNames.DEAD_LETTER, ...QueueNames.EVENTS];
+export const ALL_QUEUES: readonly string[] = [
+  QueueNames.DEAD_LETTER,
+  ...QueueNames.EVENTS,
+  QueueNames.VAT_CHECKS,
+];
