@@ -1,5 +1,10 @@
 import { ANONYMOUS, type Principal } from '@shared/application';
-import { EntityNotFoundError, FixedClock, InvalidValueError } from '@shared/domain';
+import {
+  type ApiKeyScope,
+  EntityNotFoundError,
+  FixedClock,
+  InvalidValueError,
+} from '@shared/domain';
 
 import { anActiveTrainingCenter, aTrainingCenter } from '../../../../test/factories/catalog';
 import {
@@ -221,6 +226,32 @@ describe('program use cases', () => {
       await expect(t.get.execute(new GetProgramQuery(ADMIN, 'missing'))).rejects.toThrow(
         EntityNotFoundError,
       );
+    });
+
+    it("should show drafts to the center's API keys only when they may read programs", async () => {
+      const t = setup();
+      const center = await withCenter(t);
+      const draft = await t.create.execute(
+        new CreateProgramCommand(ADMIN, center.id, DETAILS, INSTALLMENTS),
+      );
+      const key = (scopes: ApiKeyScope[]): Principal => ({
+        kind: 'api_key',
+        apiKeyId: 'k',
+        centerId: center.id,
+        scopes,
+      });
+
+      await expect(
+        t.get.execute(new GetProgramQuery(key(['applications:read']), draft.id)),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect((await t.get.execute(new GetProgramQuery(key(['programs:read']), draft.id))).id).toBe(
+        draft.id,
+      );
+      await expect(
+        t.create.execute(
+          new CreateProgramCommand(key(['programs:read']), center.id, DETAILS, INSTALLMENTS),
+        ),
+      ).rejects.toThrow(CenterAccessDeniedError);
     });
 
     it('should list the catalog and reject an inverted price range', async () => {
