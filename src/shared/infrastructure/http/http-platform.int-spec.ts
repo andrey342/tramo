@@ -180,11 +180,10 @@ describe('HTTP platform (integration)', () => {
       const set = redis.set.bind(redis) as (...args: unknown[]) => Promise<unknown>;
       const spy = jest
         .spyOn(redis, 'set')
-        .mockImplementation((...args: unknown[]) =>
+        .mockImplementation(((...args: unknown[]) =>
           String(args[1]).includes('"completed"')
             ? Promise.reject(new Error('redis timeout'))
-            : set(...args),
-        );
+            : set(...args)) as never);
       try {
         const first = await pay('key-store-fails');
         const retry = await pay('key-store-fails');

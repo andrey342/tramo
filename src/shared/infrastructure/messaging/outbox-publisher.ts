@@ -33,6 +33,15 @@ interface PendingJob {
 }
 
 const MAX_BACKOFF_MS = 30_000;
+// A batch is bounded by the enqueue timeout, so this only matters if Postgres itself hangs.
+const SHUTDOWN_WAIT_MS = 15_000;
+
+export class OutboxEnqueueTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Redis did not accept the batch within ${String(timeoutMs)} ms`);
+    this.name = 'OutboxEnqueueTimeoutError';
+  }
+}
 
 // Moves committed events from shared.outbox_messages to the subscribers' queues (ADR 004).
 // Rows are claimed with FOR UPDATE SKIP LOCKED, so several workers can publish in parallel without
@@ -64,7 +73,14 @@ export class OutboxPublisher implements OnApplicationBootstrap, BeforeApplicatio
   async beforeApplicationShutdown(): Promise<void> {
     this.stopped = true;
     clearTimeout(this.timer);
-    await this.inFlight;
+    let giveUp: NodeJS.Timeout | undefined;
+    await Promise.race([
+      this.inFlight,
+      new Promise<void>((resolve) => {
+        giveUp = setTimeout(resolve, SHUTDOWN_WAIT_MS);
+      }),
+    ]);
+    clearTimeout(giveUp);
   }
 
   // Publishes one batch and returns how many outbox rows it handled.
@@ -148,7 +164,25 @@ export class OutboxPublisher implements OnApplicationBootstrap, BeforeApplicatio
         byQueue.set(subscriber.queue, jobs);
       }
     }
-    await Promise.all([...byQueue].map(([queue, jobs]) => this.queue(queue).addBulk(jobs)));
+    // While Redis is unreachable, BullMQ queues commands until it comes back instead of failing.
+    // The batch must not wait that long holding row locks in an open transaction: it gives up, the
+    // transaction rolls back and the rows are retried. Jobs Redis accepts later are deduplicated
+    // by their ids on the next pass.
+    const { enqueueTimeoutMs } = this.config.outbox;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new OutboxEnqueueTimeoutError(enqueueTimeoutMs));
+      }, enqueueTimeoutMs);
+    });
+    try {
+      await Promise.race([
+        Promise.all([...byQueue].map(([queue, jobs]) => this.queue(queue).addBulk(jobs))),
+        timeout,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private queue(name: string): Queue {

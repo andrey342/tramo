@@ -41,6 +41,7 @@ export interface AppConfig {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
     readonly batchSize: number;
+    readonly enqueueTimeoutMs: number;
   };
   readonly queueDashboard: { readonly username: string; readonly password: string | undefined };
 }
@@ -116,6 +117,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
       batchSize: env.OUTBOX_BATCH_SIZE,
+      enqueueTimeoutMs: env.OUTBOX_ENQUEUE_TIMEOUT_MS,
     },
     queueDashboard: { username: env.BULL_BOARD_USERNAME, password: env.BULL_BOARD_PASSWORD },
   };

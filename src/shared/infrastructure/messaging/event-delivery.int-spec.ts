@@ -24,7 +24,7 @@ import { QueueNames, QueuesModule } from '../queues';
 
 import { MessagingWorkerModule } from './messaging-worker.module';
 import { MessagingModule } from './messaging.module';
-import { OutboxPublisher } from './outbox-publisher';
+import { OutboxEnqueueTimeoutError, OutboxPublisher } from './outbox-publisher';
 
 const received: IntegrationEvent[] = [];
 let failuresSeen = 0;
@@ -71,6 +71,7 @@ describe('Event delivery through the outbox (integration)', () => {
   beforeAll(async () => {
     process.env.OUTBOX_PUBLISHER_ENABLED = 'false';
     process.env.OUTBOX_BATCH_SIZE = '10';
+    process.env.OUTBOX_ENQUEUE_TIMEOUT_MS = '300';
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule,
@@ -140,6 +141,24 @@ describe('Event delivery through the outbox (integration)', () => {
     });
 
     expect(received.filter((item) => item.aggregateId === 'probe-2')).toHaveLength(1);
+  });
+
+  it('should roll a batch back instead of waiting while Redis does not answer', async () => {
+    const queue = app.get<Queue>(getQueueToken('events.reporting'));
+    const stalled = jest
+      .spyOn(queue, 'addBulk')
+      .mockImplementation(() => new Promise<never>(() => undefined));
+    await publish('DeliveryProbed', 'probe-stalled');
+
+    await expect(publisher.publishBatch()).rejects.toThrow(OutboxEnqueueTimeoutError);
+    const [pending] = await db.query<{ published_at: Date | null; last_error: string | null }[]>(
+      `SELECT published_at, last_error FROM shared.outbox_messages WHERE aggregate_id = 'probe-stalled'`,
+    );
+    expect(pending?.published_at).toBeNull();
+    expect(pending?.last_error).toContain('did not accept');
+
+    stalled.mockRestore();
+    expect(await publisher.publishBatch()).toBe(1);
   });
 
   it('should mark events without subscribers as published', async () => {
