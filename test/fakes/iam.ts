@@ -1,5 +1,4 @@
-import { type EventBus } from '@shared/application';
-import { type AggregateRoot, type Clock } from '@shared/domain';
+import { type Clock } from '@shared/domain';
 
 import {
   type AccessTokenClaims,
@@ -20,25 +19,7 @@ import {
   type UserRepository,
 } from '../../src/modules/iam/domain';
 
-abstract class InMemoryRepository<T extends AggregateRoot> {
-  protected readonly items = new Map<string, T>();
-
-  constructor(private readonly events: EventBus) {}
-
-  async save(aggregate: T): Promise<void> {
-    this.items.set(aggregate.id, aggregate);
-    aggregate.markPersisted(aggregate.version + 1);
-    await this.events.publish(aggregate.pullEvents());
-  }
-
-  all(): T[] {
-    return [...this.items.values()];
-  }
-
-  findById(id: string): Promise<T | null> {
-    return Promise.resolve(this.items.get(id) ?? null);
-  }
-}
+import { InMemoryRepository } from './shared';
 
 export class InMemoryUserRepository extends InMemoryRepository<User> implements UserRepository {
   findByEmail(email: string): Promise<User | null> {
