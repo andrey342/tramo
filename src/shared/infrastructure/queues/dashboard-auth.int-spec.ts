@@ -72,4 +72,15 @@ describe('dashboardAuth (integration)', () => {
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
     expect((await call('10.2.0.1', 'ops:right-password')).passed).toBe(true);
   });
+
+  it('should let no more guesses through than the limit when they arrive in parallel', async () => {
+    const ip = `10.3.${String(Math.floor(Math.random() * 200))}.1`;
+
+    const answers = await Promise.all(Array.from({ length: 50 }, () => call(ip, 'ops:guess')));
+
+    expect(answers.filter((answer) => answer.status === 401)).toHaveLength(DASHBOARD_MAX_FAILURES);
+    expect(answers.filter((answer) => answer.status === 429)).toHaveLength(
+      50 - DASHBOARD_MAX_FAILURES,
+    );
+  });
 });

@@ -29,46 +29,73 @@ export function dashboardAuth(options: {
       return;
     }
     const failuresKey = `tramo:queue-dashboard:failures:${clientKey(req.ip)}`;
+    const header = req.headers.authorization ?? '';
     void (async () => {
-      const blockedForMs = await lockedFor(options.redis, failuresKey);
+      // A browser's first request carries no credentials: it only gets the challenge.
+      if (header.length === 0) {
+        challenge(res);
+        return;
+      }
+      // The attempt is counted before the credentials are compared, in one step, so parallel
+      // guesses cannot all pass the check before any of them is counted.
+      const blockedForMs = await beginAttempt(options.redis, failuresKey);
       if (blockedForMs > 0) {
         res.setHeader('Retry-After', String(Math.ceil(blockedForMs / 1000)));
         res.status(429).end();
         return;
       }
-      const header = req.headers.authorization ?? '';
       const supplied = header.startsWith('Basic ')
         ? Buffer.from(header.slice('Basic '.length), 'base64').toString('utf8')
         : '';
       if (timingSafeEqual(digest(supplied), expected)) {
+        await forgetAttempts(options.redis, failuresKey);
         next();
         return;
       }
-      // A browser's first request carries no credentials; only wrong ones count as failures.
-      if (header.length > 0) {
-        await recordFailure(options.redis, failuresKey);
-      }
-      res.setHeader('WWW-Authenticate', 'Basic realm="tramo-queues", charset="UTF-8"');
-      res.status(401).end();
+      challenge(res);
     })().catch(next);
   };
 }
 
+function challenge(res: Response): void {
+  res.setHeader('WWW-Authenticate', 'Basic realm="tramo-queues", charset="UTF-8"');
+  res.status(401).end();
+}
+
+//   KEYS: attempts   ARGV: maxAttempts, windowMs
+//   Returns the remaining block in ms, or 0 when the attempt may proceed (and was counted).
+const BEGIN_ATTEMPT_SCRIPT = `
+local attempts = tonumber(redis.call('GET', KEYS[1]) or '0')
+if attempts >= tonumber(ARGV[1]) then
+  local ttl = redis.call('PTTL', KEYS[1])
+  if ttl < 1 then return 1 end
+  return ttl
+end
+redis.call('INCR', KEYS[1])
+redis.call('PEXPIRE', KEYS[1], ARGV[2], 'NX')
+return 0
+`;
+
 // Redis being unavailable must not lock operations out of the dashboard: the limiter fails open
 // and the credentials are still checked.
-async function lockedFor(redis: Redis, key: string): Promise<number> {
+async function beginAttempt(redis: Redis, key: string): Promise<number> {
   try {
-    const [failures, ttl] = await Promise.all([redis.get(key), redis.pttl(key)]);
-    return Number(failures ?? 0) >= DASHBOARD_MAX_FAILURES ? Math.max(ttl, 1) : 0;
+    return (await redis.eval(
+      BEGIN_ATTEMPT_SCRIPT,
+      1,
+      key,
+      DASHBOARD_MAX_FAILURES,
+      FAILURE_WINDOW_MS,
+    )) as number;
   } catch {
     return 0;
   }
 }
 
-async function recordFailure(redis: Redis, key: string): Promise<void> {
+async function forgetAttempts(redis: Redis, key: string): Promise<void> {
   try {
-    await redis.multi().incr(key).pexpire(key, FAILURE_WINDOW_MS, 'NX').exec();
+    await redis.del(key);
   } catch {
-    // Counting is best effort, see lockedFor.
+    // Best effort, see beginAttempt.
   }
 }
