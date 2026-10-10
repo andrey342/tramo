@@ -32,9 +32,13 @@ x-app: &app
 
 services:
   postgres:
-    image: postgres:16.15-alpine
+    build:
+      context: docker/postgres
+    image: tramo-postgres:local
     profiles: [dev, demo]
     restart: unless-stopped
+    # pg_stat_statements must be preloaded; it feeds the query diagnostics (see .mcp.json).
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_stat_statements']
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tramo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tramo}
@@ -44,6 +48,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./docker/postgres/diagnostics.sql:/docker-entrypoint-initdb.d/02-diagnostics.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 5s
