@@ -1,12 +1,24 @@
 import {
   CenterAlreadyRegisteredError,
+  FinancingOptions,
+  type ProgramRepository,
   type TrainingCenterRepository,
 } from '../../src/modules/catalog/domain';
 import { Iban, unwrap } from '../../src/shared/domain';
-import { aTaxId, aTrainingCenter, NOW, OTHER_IBAN } from '../factories/catalog';
+import {
+  anActiveTrainingCenter,
+  aProgram,
+  aTaxId,
+  aTrainingCenter,
+  installments,
+  isa,
+  NOW,
+  OTHER_IBAN,
+} from '../factories/catalog';
 
 export interface CatalogRepositoriesHarness {
   readonly centers: TrainingCenterRepository;
+  readonly programs: ProgramRepository;
   readonly run: <T>(work: () => Promise<T>) => Promise<T>;
 }
 
@@ -66,6 +78,36 @@ export function catalogRepositoriesContract(
 
     it('should answer null for unknown ids', async () => {
       expect(await t.centers.findById('0199a000-0000-7000-8000-0000000000ff')).toBeNull();
+      expect(await t.programs.findById('0199a000-0000-7000-8000-0000000000ff')).toBeNull();
+    });
+
+    it('should store a program with both financing options and read it back equal', async () => {
+      const center = anActiveTrainingCenter();
+      await t.run(() => t.centers.save(center));
+      const program = aProgram({
+        centerId: center.id,
+        financing: FinancingOptions.of({ installments: installments([24, 12]), isa: isa() }),
+      });
+      program.publish(center, NOW);
+      await t.run(() => t.programs.save(program));
+
+      const loaded = await t.programs.findById(program.id);
+
+      expect(loaded?.status).toBe('published');
+      expect(loaded?.publishedAt).toEqual(NOW);
+      expect(loaded?.financing.equals(program.financing)).toBe(true);
+      expect(loaded?.details.startDates).toEqual(['2027-01-11', '2027-04-05']);
+      expect(loaded?.details.price.cents).toBe(750_000);
+      expect(loaded?.version).toBe(1);
+    });
+
+    it('should store a program without financing options', async () => {
+      const center = anActiveTrainingCenter();
+      await t.run(() => t.centers.save(center));
+      const program = aProgram({ centerId: center.id, financing: FinancingOptions.none() });
+      await t.run(() => t.programs.save(program));
+
+      expect((await t.programs.findById(program.id))?.financing.isEmpty).toBe(true);
     });
   });
 }

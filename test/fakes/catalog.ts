@@ -1,5 +1,7 @@
 import {
   CenterAlreadyRegisteredError,
+  type Program,
+  type ProgramRepository,
   type TrainingCenter,
   type TrainingCenterRepository,
 } from '../../src/modules/catalog/domain';
@@ -26,6 +28,10 @@ export class InMemoryTrainingCenterRepository
     await super.save(center);
   }
 }
+
+export class InMemoryProgramRepository
+  extends InMemoryRepository<Program>
+  implements ProgramRepository {}
 
 // Runtime fake (chosen by VIES_MODE=fake), re-exported so tests take every double from here.
 export { FakeVatValidator } from '../../src/modules/catalog/infrastructure/adapters/fake-vat-validator';

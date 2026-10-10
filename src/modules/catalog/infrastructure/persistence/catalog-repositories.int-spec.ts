@@ -10,6 +10,7 @@ import { aTrainingCenter, VALID_IBAN } from '../../../../../test/factories/catal
 import { CatalogModule } from '../../catalog.module';
 import {
   CatalogEvents,
+  PROGRAM_REPOSITORY,
   TRAINING_CENTER_REPOSITORY,
   type TrainingCenterRepository,
 } from '../../domain';
@@ -62,6 +63,7 @@ describe('catalog repositories (integration)', () => {
 
   catalogRepositoriesContract('TypeORM repositories', () => ({
     centers,
+    programs: app.get(PROGRAM_REPOSITORY),
     run: (work) => uow.run(work),
   }));
 });
