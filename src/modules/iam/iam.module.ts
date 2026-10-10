@@ -21,6 +21,7 @@ import {
   type SessionSettings,
 } from './application/ports/iam-ports';
 import { AuthenticateApiKeyHandler } from './application/queries/authenticate-api-key.query';
+import { FindStudentHandler } from './application/queries/find-student.query';
 import { GetCurrentPrincipalHandler } from './application/queries/get-current-principal.query';
 import { ListApiKeysHandler } from './application/queries/list-api-keys.query';
 import { SessionIssuer } from './application/session-issuer';
@@ -63,6 +64,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     RevokeApiKeyHandler,
     ListApiKeysHandler,
     AuthenticateApiKeyHandler,
+    FindStudentHandler,
     SessionIssuer,
     { provide: USER_REPOSITORY, useClass: TypeOrmUserRepository },
     { provide: REFRESH_TOKEN_REPOSITORY, useClass: TypeOrmRefreshTokenRepository },
