@@ -8,9 +8,8 @@ import { paginateByCursor } from '@shared/infrastructure/database';
 
 import { type CatalogProgramDto, type ProgramFilter } from '../../application/dto/program.dto';
 import { type ProgramCatalog } from '../../application/ports/catalog-ports';
-import { toProgramDto } from '../../application/program.mapping';
+import { type FinancingProduct } from '../../domain';
 
-import { ProgramMapper } from './catalog.mappers';
 import { ProgramOrmEntity } from './program.orm-entity';
 import { TrainingCenterOrmEntity } from './training-center.orm-entity';
 
@@ -64,9 +63,60 @@ export class TypeOrmProgramCatalog implements ProgramCatalog {
       where: { id: In([...new Set(rows.map((row) => row.centerId))]) },
     });
     const names = new Map(centers.map((center) => [center.id, center.name]));
-    return rows.map((row) => ({
-      ...toProgramDto(ProgramMapper.toDomain(row)),
-      centerName: names.get(row.centerId) ?? '',
-    }));
+    return rows.map((row) => {
+      const centerName = names.get(row.centerId);
+      // published() only returns programs of existing centers, and centers are never deleted.
+      if (centerName === undefined) {
+        throw new Error(
+          `Program ${row.id} belongs to center ${row.centerId}, which does not exist.`,
+        );
+      }
+      return toCatalogProgram(row, centerName);
+    });
   }
+}
+
+// Rows map straight to the DTO: the read side does not rebuild aggregates, nor re-run their
+// validation, for every program of every page.
+function toCatalogProgram(row: ProgramOrmEntity, centerName: string): CatalogProgramDto {
+  const installments =
+    row.installmentTerms && row.installmentRateBps !== null
+      ? { allowedTerms: row.installmentTerms, annualRateBasisPoints: row.installmentRateBps }
+      : null;
+  const isa =
+    row.isaIncomeShareBps !== null &&
+    row.isaMinMonthlyIncomeCents !== null &&
+    row.isaMaxPayments !== null &&
+    row.isaCapMultiplierHundredths !== null &&
+    row.isaGraceMonths !== null
+      ? {
+          incomeShareBasisPoints: row.isaIncomeShareBps,
+          minMonthlyIncomeCents: row.isaMinMonthlyIncomeCents,
+          maxPayments: row.isaMaxPayments,
+          capMultiplierHundredths: row.isaCapMultiplierHundredths,
+          graceMonths: row.isaGraceMonths,
+        }
+      : null;
+  const products: FinancingProduct[] = [
+    ...(installments ? (['installments'] as const) : []),
+    ...(isa ? (['isa'] as const) : []),
+  ];
+  return {
+    id: row.id,
+    centerId: row.centerId,
+    name: row.name,
+    modality: row.modality,
+    priceCents: row.priceCents,
+    currency: 'EUR',
+    durationWeeks: row.durationWeeks,
+    startDates: row.startDates,
+    employabilityRateBasisPoints: row.employabilityBps,
+    avgStartingSalaryCents: row.avgStartingSalaryCents,
+    financing: { installments, isa },
+    products,
+    status: row.status,
+    publishedAt: row.publishedAt,
+    createdAt: row.createdAt,
+    centerName,
+  };
 }

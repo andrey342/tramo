@@ -44,6 +44,12 @@ export class GetProgramHandler implements IQueryHandler<GetProgramQuery> {
       throw new EntityNotFoundError('Program', query.programId);
     }
     const center = await this.centers.findById(program.centerId);
-    return { ...toProgramDto(program), centerName: center?.name ?? '' };
+    // Centers are never deleted; a program without one is corrupt data, not a missing program.
+    if (!center) {
+      throw new Error(
+        `Program ${program.id} belongs to center ${program.centerId}, which does not exist.`,
+      );
+    }
+    return { ...toProgramDto(program), centerName: center.name };
   }
 }

@@ -1,4 +1,5 @@
 import { type ProgramCatalog } from '../../src/modules/catalog/application/ports/catalog-ports';
+import { toProgramDto } from '../../src/modules/catalog/application/program.mapping';
 import {
   FinancingOptions,
   type Program,
@@ -98,6 +99,13 @@ export function programCatalogContract(
       expect(ids(first)).toEqual([dataCourse.id]);
       expect(ids(second)).toEqual([bootcamp.id]);
       expect(second.nextCursor).toBeNull();
+    });
+
+    it('should answer with what the program itself shows, plus its center name', async () => {
+      expect(await t.catalog.findPublished(dataCourse.id)).toEqual({
+        ...toProgramDto(dataCourse),
+        centerName: 'Open School',
+      });
     });
 
     it('should find a published program by id and nothing else', async () => {
