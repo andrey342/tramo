@@ -37,6 +37,7 @@ flowchart LR
 | [008](adr/008-schema-per-module.md)                    | One Postgres schema per module, no foreign keys across schemas | accepted |
 | [009](adr/009-clock-port.md)                           | Time comes from an injectable Clock                            | accepted |
 | [010](adr/010-uri-versioning-cursor-pagination.md)     | URI versioning and cursor pagination                           | accepted |
+| [011](adr/011-versioned-agent-tooling.md)              | Versioned coding-agent tooling                                 | accepted |
 | [012](adr/012-toolchain-nest12-commonjs-jest.md)       | NestJS 12 on CommonJS, TypeScript 6 and Jest                   | accepted |
 
 ## HTTP pipeline
