@@ -5,5 +5,7 @@ export {
   decodeCursor,
   encodeCursor,
   paginateByCursor,
+  type CursorIdType,
   type CursorOptions,
+  type CursorSortType,
 } from './cursor-pagination';

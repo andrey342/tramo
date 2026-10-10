@@ -36,6 +36,7 @@ describe('paginateByCursor (integration)', () => {
       {
         sortColumn: 'probe.created_at',
         idColumn: 'probe.id',
+        idType: 'text',
         sortValueOf: (row) => row.createdAt.toISOString(),
         idOf: (row) => row.id,
       },
