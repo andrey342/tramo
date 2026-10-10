@@ -9,6 +9,7 @@ import * as ts from 'typescript';
 
 import {
   addImport,
+  appendToArray,
   assertKebab,
   assertPascal,
   camel,
@@ -219,17 +220,16 @@ if (integration) {
   );
 }
 
-changes.edit(moduleFile, (content) =>
-  insertAfterLast(
-    addImport(
-      content,
-      `import { ${Adapter} } from './infrastructure/adapters/${name}-${portKebab}';`,
-    ),
-    /^ {4}\w+Handler,$/gm,
-    `    ${Adapter},\n`,
-    moduleFile,
-  ),
-);
+// After the handlers, as in iam; a module without handlers yet gets it appended to providers.
+changes.edit(moduleFile, (content) => {
+  const withImport = addImport(
+    content,
+    `import { ${Adapter} } from './infrastructure/adapters/${name}-${portKebab}';`,
+  );
+  return /^ {4}\w+Handler,$/m.test(withImport)
+    ? insertAfterLast(withImport, /^ {4}\w+Handler,$/gm, `    ${Adapter},\n`, moduleFile)
+    : appendToArray(withImport, /providers: \[/, Adapter, moduleFile);
+});
 
 const touched = changes.apply(dryRun);
 if (!dryRun) {
