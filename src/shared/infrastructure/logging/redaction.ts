@@ -13,6 +13,9 @@ const SENSITIVE_FIELDS = [
   'apiKey',
   'authorization',
   'nationalId',
+  // Applicant profile (origination).
+  'dateOfBirth',
+  'declaredMonthlyIncomeCents',
   'iban',
   // Request bodies of center registration and updates.
   'payoutIban',
