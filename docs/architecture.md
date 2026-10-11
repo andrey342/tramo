@@ -41,6 +41,7 @@ flowchart LR
 | [012](adr/012-toolchain-nest12-commonjs-jest.md)                              | NestJS 12 on CommonJS, TypeScript 6 and Jest                   | accepted |
 | [013](adr/013-advisory-locks-for-session-families-and-startup-migrations.md)  | Advisory locks for session families and startup migrations     | accepted |
 | [014](adr/014-field-level-encryption-for-payout-ibans-and-webhook-secrets.md) | Field-level encryption for payout IBANs and webhook secrets    | accepted |
+| [015](adr/015-explainable-scoring-with-versioned-risk-policies.md)            | Explainable scoring with versioned risk policies               | accepted |
 
 ## HTTP pipeline
 
@@ -156,4 +157,61 @@ sequenceDiagram
     Worker->>Outbox: center marked unverified
     Worker-->>Worker: job retried for about a day and a half, then dead-lettered
   end
+```
+
+## Origination
+
+Financing applications, from the student's draft to an accepted offer.
+
+- **Lifecycle.** `draft → submitted → verifying → scoring → approved | needs_review | rejected`;
+  ops settle `needs_review` with a reason; the student accepts an approval (`offer_accepted`,
+  which lending picks up) or cancels anything not final. An application that has not changed
+  status for 14 days expires (an hourly sweep in the worker). Each transition is a method of
+  `FinancingApplication` and most emit an event.
+- **Who does what.** A student applies for themselves; a training center's integration (API key
+  with `applications:write`) starts a draft for a student of its own programs, who must already
+  have an account (`FindStudentQuery`, iam's public query). Only the student submits (it consents
+  to the checks), cancels and accepts. The center sees status and program, not the student's
+  personal data or the decision explanation; staff see everything.
+- **Program snapshot.** The program is copied from the catalog (`FindPublishedProgramQuery`) when
+  the draft starts and again on submit: price and options changed later in the catalog do not
+  change an application in flight, and the accepted terms travel in `OfferAccepted`.
+- **Verification saga.** `ApplicationSubmitted` → a consumer marks the application `verifying`
+  and queues three jobs on `origination.verifications` (`kyc.verify`, `employment.fetch`,
+  `bureau.check`, job id `<applicationId>.<provider>`). Each job asks its provider outside any
+  transaction, then records the answer (`VerificationCompleted`); the jobs run in parallel and a
+  lost optimistic lock is retried on the fresh version without asking the provider again. The
+  third answer moves the application to `scoring`, and the `VerificationCompleted` consumer
+  scores it. A provider outage is retried for about two hours, then dead-lettered.
+- **Providers.** KYC, employment history ("vida laboral") and credit bureau are ports with
+  simulated adapters: deterministic by national id (ending in 9 fails KYC, ending in 7 is in a
+  default registry, the rest derived from a hash) with a configurable latency. Real providers
+  replace the adapters, not the ports.
+- **Scoring (ADR 015).** `ScoringEngine` is a pure function of the application, its
+  verifications and the `RiskPolicy` in force: five hard rules (age, residence, identity, default
+  registry, amount above the limit) reject outright; otherwise the score is
+  `40·employability + 25·history + 20·affordability + 15·bureau` (weights and thresholds from the
+  policy, version 1: approve from 70, review from 50, up to 12,000 EUR). The `DecisionRecord`
+  keeps every factor with its weight and value, readable reasons and the policy version.
+- **Personal data.** The national id is encrypted and bound to its row (ADR 014); responses show
+  it masked, logs redact it, and events carry ids and outcomes, never the profile.
+
+```mermaid
+sequenceDiagram
+  participant Student
+  participant Api as api
+  participant Outbox as outbox (Postgres)
+  participant Worker as worker
+  participant Providers as KYC / employment / bureau
+  Student->>Api: POST /applications/:id/submit
+  Api->>Outbox: application submitted + ApplicationSubmitted
+  Worker->>Outbox: publish; consumer marks it verifying
+  Worker->>Worker: queue kyc.verify, employment.fetch, bureau.check
+  par each job, outside any transaction
+    Worker->>Providers: ask
+    Worker->>Outbox: answer recorded + VerificationCompleted
+  end
+  Worker->>Outbox: third answer: scoring; consumer scores with the policy in force
+  Worker->>Outbox: approved | needs_review | rejected + event
+  Student->>Api: GET /applications/:id/decision
 ```
