@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
@@ -14,15 +15,21 @@ import { StartVerificationHandler } from './application/commands/start-verificat
 import { SubmitApplicationHandler } from './application/commands/submit-application.command';
 import { UpdateApplicationDraftHandler } from './application/commands/update-application-draft.command';
 import {
+  APPLICATION_QUERIES,
   CREDIT_BUREAU,
   EMPLOYMENT_HISTORY_PROVIDER,
   KYC_PROVIDER,
+  PROGRAM_DIRECTORY,
+  STUDENT_DIRECTORY,
 } from './application/ports/origination-ports';
 import { GetApplicationDecisionHandler } from './application/queries/get-application-decision.query';
 import { GetApplicationHandler } from './application/queries/get-application.query';
 import { GetCurrentRiskPolicyHandler } from './application/queries/get-current-risk-policy.query';
 import { GetReviewQueueHandler } from './application/queries/get-review-queue.query';
 import { ListApplicationsHandler } from './application/queries/list-applications.query';
+import { FINANCING_APPLICATION_REPOSITORY, RISK_POLICY_REPOSITORY } from './domain';
+import { CatalogProgramDirectory } from './infrastructure/adapters/catalog-program-directory';
+import { IamStudentDirectory } from './infrastructure/adapters/iam-student-directory';
 import { SimulatedCreditBureau } from './infrastructure/adapters/simulated-credit-bureau';
 import { SimulatedEmploymentHistoryProvider } from './infrastructure/adapters/simulated-employment-history-provider';
 import { SimulatedKycProvider } from './infrastructure/adapters/simulated-kyc-provider';
@@ -30,12 +37,23 @@ import {
   SIMULATED_LATENCY,
   type SimulatedLatency,
 } from './infrastructure/adapters/simulated-providers';
+import { FinancingApplicationOrmEntity } from './infrastructure/persistence/financing-application.orm-entity';
+import { FinancingApplicationMapper } from './infrastructure/persistence/origination.mappers';
+import { RiskPolicyOrmEntity } from './infrastructure/persistence/risk-policy.orm-entity';
+import { TypeOrmApplicationQueries } from './infrastructure/persistence/typeorm-application.queries';
+import { TypeOrmFinancingApplicationRepository } from './infrastructure/persistence/typeorm-financing-application.repository';
+import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeorm-risk-policy.repository';
 
 // Use cases, persistence and adapters of the origination context. Shared by both processes; the HTTP
 // surface lives in OriginationHttpModule, which only the api imports, and queue processors in
 // OriginationWorkerModule, which only the worker imports.
 @Module({
+  imports: [TypeOrmModule.forFeature([FinancingApplicationOrmEntity, RiskPolicyOrmEntity])],
   providers: [
+    FinancingApplicationMapper,
+    { provide: FINANCING_APPLICATION_REPOSITORY, useClass: TypeOrmFinancingApplicationRepository },
+    { provide: RISK_POLICY_REPOSITORY, useClass: TypeOrmRiskPolicyRepository },
+    { provide: APPLICATION_QUERIES, useClass: TypeOrmApplicationQueries },
     StartApplicationHandler,
     ReviseRiskPolicyHandler,
     UpdateApplicationDraftHandler,
@@ -52,6 +70,10 @@ import {
     GetApplicationDecisionHandler,
     GetReviewQueueHandler,
     GetCurrentRiskPolicyHandler,
+    IamStudentDirectory,
+    CatalogProgramDirectory,
+    { provide: STUDENT_DIRECTORY, useExisting: IamStudentDirectory },
+    { provide: PROGRAM_DIRECTORY, useExisting: CatalogProgramDirectory },
     {
       provide: SIMULATED_LATENCY,
       inject: [APP_CONFIG],
