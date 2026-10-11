@@ -10,9 +10,16 @@ programDirectoryContract('FakeProgramDirectory', () => {
     installments: { allowedTerms: [12, 24], annualRate: Percentage.fromPercent(7.5) },
   });
   const closed = aProgramSnapshot();
-  const directory = new FakeProgramDirectory([open, closed]);
+  const suspended = aProgramSnapshot();
+  const directory = new FakeProgramDirectory([open, closed, suspended]);
   directory.close(closed.programId);
-  return { directory, openProgramId: open.programId, closedProgramId: closed.programId };
+  directory.close(suspended.programId);
+  return {
+    directory,
+    openProgramId: open.programId,
+    closedProgramId: closed.programId,
+    suspendedCenterProgramId: suspended.programId,
+  };
 });
 
 studentDirectoryContract('FakeStudentDirectory', () => ({

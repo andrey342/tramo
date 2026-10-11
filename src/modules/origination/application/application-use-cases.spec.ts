@@ -19,6 +19,7 @@ import {
   ApplicationAccessDeniedError,
   ApplicationIncompleteError,
   OriginationEvents,
+  ProfileFromStudentOnlyError,
   ProgramNotAvailableError,
   RiskPolicy,
   ScoringEngine,
@@ -113,7 +114,7 @@ function setup() {
     update: new UpdateApplicationDraftHandler(uow, applications, programs, clock),
     submit: new SubmitApplicationHandler(uow, applications, programs, clock),
     cancel: new CancelApplicationHandler(uow, applications, clock),
-    accept: new AcceptOfferHandler(uow, applications, clock),
+    accept: new AcceptOfferHandler(uow, applications, programs, clock),
     decide: new DecideApplicationHandler(uow, applications, audit, clock),
     get: new GetApplicationHandler(applications),
     decision: new GetApplicationDecisionHandler(applications),
@@ -154,6 +155,7 @@ describe('application use cases', () => {
       const draft = await t.start.execute(
         new StartApplicationCommand(centerKey(['applications:write']), {
           ...COMPLETE,
+          profile: {},
           studentEmail: STUDENT_EMAIL,
         }),
       );
@@ -245,7 +247,7 @@ describe('application use cases', () => {
       );
     });
 
-    it('should let the center complete what it started, but leave submitting to the student', async () => {
+    it('should let the center change what it started, but leave data and submitting to the student', async () => {
       const t = setup();
       const key = centerKey(['applications:write']);
       const draft = await t.start.execute(
@@ -253,10 +255,15 @@ describe('application use cases', () => {
       );
 
       const updated = await t.update.execute(
-        new UpdateApplicationDraftCommand(key, draft.id, { profile: COMPLETE.profile }),
+        new UpdateApplicationDraftCommand(key, draft.id, {
+          product: { kind: 'installments', termMonths: 12 },
+        }),
+      );
+      await t.update.execute(
+        new UpdateApplicationDraftCommand(ANA, draft.id, { profile: COMPLETE.profile }),
       );
 
-      expect(updated.profile).toBeNull();
+      expect(updated).toMatchObject({ profile: null, product: { termMonths: 12 } });
       await expect(t.submit.execute(new SubmitApplicationCommand(key, draft.id))).rejects.toThrow(
         ApplicationAccessDeniedError,
       );
@@ -292,7 +299,69 @@ describe('application use cases', () => {
     });
   });
 
+  describe('what the center may not do', () => {
+    it("should leave the student's personal data to the student", async () => {
+      const t = setup();
+      const key = centerKey(['applications:write']);
+      const draft = await t.start.execute(
+        new StartApplicationCommand(key, { ...COMPLETE, profile: {}, studentEmail: STUDENT_EMAIL }),
+      );
+
+      await expect(
+        t.start.execute(
+          new StartApplicationCommand(key, { ...COMPLETE, studentEmail: STUDENT_EMAIL }),
+        ),
+      ).rejects.toThrow(ProfileFromStudentOnlyError);
+      await expect(
+        t.update.execute(
+          new UpdateApplicationDraftCommand(key, draft.id, { profile: { residenceCountry: 'ES' } }),
+        ),
+      ).rejects.toThrow(ProfileFromStudentOnlyError);
+    });
+
+    it("should not see a student's score, in one application or in the list", async () => {
+      const t = setup();
+      const id = await approvedApplication(t);
+
+      expect((await t.get.execute(new GetApplicationQuery(CENTER_ADMIN, id))).score).toBeNull();
+      expect((await t.get.execute(new GetApplicationQuery(ANA, id))).score).not.toBeNull();
+      const listed = await t.list.execute(
+        new ListApplicationsQuery(CENTER_ADMIN, undefined, { limit: 10 }),
+      );
+      expect(listed.data.map((row) => row.score)).toEqual([null]);
+      const forStaff = await t.list.execute(
+        new ListApplicationsQuery(OPS, undefined, { limit: 10 }),
+      );
+      expect(forStaff.data[0]?.score).not.toBeNull();
+    });
+  });
+
   describe('cancel and accept', () => {
+    it('should refuse an offer whose program closed since the approval', async () => {
+      const t = setup();
+      const id = await approvedApplication(t);
+      t.programs.close(PROGRAM.programId);
+
+      await expect(t.accept.execute(new AcceptOfferCommand(ANA, id))).rejects.toThrow(
+        ProgramNotAvailableError,
+      );
+    });
+
+    it('should not let an analyst decide their own application', async () => {
+      const t = setup();
+      const both: Principal = {
+        kind: 'user',
+        userId: 'student-ana',
+        roles: ['student', 'ops'],
+        centerId: null,
+      };
+      const id = await inReview(t, LATER);
+
+      await expect(
+        t.decide.execute(new DecideApplicationCommand(both, id, 'approved', 'Fine by me')),
+      ).rejects.toThrow(ApplicationAccessDeniedError);
+    });
+
     it('should let the student cancel, and nobody else', async () => {
       const t = setup();
       const id = await submitted(t);

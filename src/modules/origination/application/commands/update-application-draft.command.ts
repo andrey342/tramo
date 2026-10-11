@@ -8,6 +8,7 @@ import {
   ApplicationAccessDeniedError,
   FINANCING_APPLICATION_REPOSITORY,
   type FinancingApplicationRepository,
+  ProfileFromStudentOnlyError,
   type ProgramSnapshot,
   ProgramNotAvailableError,
 } from '../../domain';
@@ -53,6 +54,9 @@ export class UpdateApplicationDraftHandler implements ICommandHandler<UpdateAppl
       );
       if (!canEditDraft(actor, application)) {
         throw new ApplicationAccessDeniedError();
+      }
+      if (actor.kind === 'api_key' && changes.profile && Object.keys(changes.profile).length > 0) {
+        throw new ProfileFromStudentOnlyError();
       }
       let program: ProgramSnapshot | undefined;
       if (changes.programId !== undefined && changes.programId !== application.program.programId) {

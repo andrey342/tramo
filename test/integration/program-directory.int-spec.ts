@@ -43,17 +43,24 @@ describe('CatalogProgramDirectory (integration)', () => {
     const open = aProgram({ centerId: center.id, financing });
     open.publish(center, NOW);
     const closed = aProgram({ centerId: center.id, financing });
+    const suspendedCenter = anActiveTrainingCenter();
+    const ofSuspended = aProgram({ centerId: suspendedCenter.id, financing });
+    ofSuspended.publish(suspendedCenter, NOW);
+    suspendedCenter.suspend('Audit', NOW);
     const centers = app.get<TrainingCenterRepository>(TRAINING_CENTER_REPOSITORY);
     const programs = app.get<ProgramRepository>(PROGRAM_REPOSITORY);
     await app.get<UnitOfWork>(UNIT_OF_WORK).run(async () => {
       await centers.save(center);
+      await centers.save(suspendedCenter);
       await programs.save(open);
       await programs.save(closed);
+      await programs.save(ofSuspended);
     });
     return {
       directory: app.get(CatalogProgramDirectory),
       openProgramId: open.id,
       closedProgramId: closed.id,
+      suspendedCenterProgramId: ofSuspended.id,
     };
   });
 });

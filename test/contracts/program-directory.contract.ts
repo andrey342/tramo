@@ -5,8 +5,10 @@ export interface ProgramDirectoryHarness {
   // A published program of an active center, offering instalments over 12 and 24 months and
   // an ISA, priced at 7,500 EUR.
   readonly openProgramId: string;
-  // A program that exists but is not open for applications (a draft).
+  // Programs that exist but are not open for applications: a draft, and a published program of
+  // a suspended center.
   readonly closedProgramId: string;
+  readonly suspendedCenterProgramId: string;
 }
 
 // The fake of unit tests and the adapter that asks catalog agree on what a snapshot holds.
@@ -27,9 +29,10 @@ export function programDirectoryContract(
     });
 
     it('should find nothing for a closed or unknown program', async () => {
-      const { directory, closedProgramId } = await create();
+      const { directory, closedProgramId, suspendedCenterProgramId } = await create();
 
       expect(await directory.findOpenProgram(closedProgramId)).toBeNull();
+      expect(await directory.findOpenProgram(suspendedCenterProgramId)).toBeNull();
       expect(await directory.findOpenProgram('0199a000-0000-7000-8000-0000000000ff')).toBeNull();
     });
   });

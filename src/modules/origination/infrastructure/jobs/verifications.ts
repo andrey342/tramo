@@ -20,10 +20,11 @@ const JOB_NAMES: Readonly<Record<VerificationType, string>> = {
   bureau: 'bureau.check',
 };
 
-// A provider outage is retried for about two hours (exponential from 30 s, eight attempts) before
-// the job is dead-lettered; the application then waits, and expires if nobody intervenes.
+// A provider outage is retried for about two hours (exponential from 30 s: 30 s × (2⁸ − 1) over
+// nine attempts) before the job is dead-lettered; the application then waits, and expires if
+// nobody intervenes.
 export const VERIFICATION_JOB_OPTIONS: JobsOptions = {
-  attempts: 8,
+  attempts: 9,
   backoff: { type: 'exponential', delay: 30_000 },
 };
 

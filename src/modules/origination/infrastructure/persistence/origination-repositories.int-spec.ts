@@ -8,9 +8,17 @@ import { CoreModule } from '@shared/infrastructure/core.module';
 import { FieldDecryptionError } from '@shared/infrastructure/crypto';
 
 import { originationRepositoriesContract } from '../../../../../test/contracts/origination-repositories.contract';
-import { aDraftApplication, LATER, VALID_DNI } from '../../../../../test/factories/origination';
+import {
+  aDraftApplication,
+  LATER,
+  NOW,
+  VALID_DNI,
+} from '../../../../../test/factories/origination';
 import { APPLICATION_QUERIES } from '../../application/ports/origination-ports';
 import {
+  ApplicationAlreadyOpenError,
+  EMPTY_PROFILE,
+  EXPIRY_DAYS,
   FINANCING_APPLICATION_REPOSITORY,
   type FinancingApplicationRepository,
   RISK_POLICY_REPOSITORY,
@@ -74,6 +82,39 @@ describe('origination repositories (integration)', () => {
     await expect(uow.run(() => applications.save(second))).rejects.toThrow(
       ConcurrentModificationError,
     );
+  });
+
+  it('should cancel and expire a draft left half filled in', async () => {
+    const cancelled = aDraftApplication({ profile: EMPTY_PROFILE });
+    const expired = aDraftApplication({ profile: EMPTY_PROFILE });
+    await uow.run(async () => {
+      await applications.save(cancelled);
+      await applications.save(expired);
+    });
+
+    cancelled.cancel(LATER);
+    expired.expire(new Date(NOW.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000));
+    await uow.run(async () => {
+      await applications.save(cancelled);
+      await applications.save(expired);
+    });
+
+    expect((await applications.findById(cancelled.id))?.status).toBe('cancelled');
+    expect((await applications.findById(expired.id))?.status).toBe('expired');
+  });
+
+  it('should refuse a second open application for the same program, and allow one after', async () => {
+    const first = aDraftApplication();
+    const second = aDraftApplication({ applicantId: first.applicantId, program: first.program });
+    await uow.run(() => applications.save(first));
+
+    await expect(uow.run(() => applications.save(second))).rejects.toThrow(
+      ApplicationAlreadyOpenError,
+    );
+    first.cancel(LATER);
+    await uow.run(() => applications.save(first));
+    const again = aDraftApplication({ applicantId: first.applicantId, program: first.program });
+    await expect(uow.run(() => applications.save(again))).resolves.toBeUndefined();
   });
 
   it('should seed version 1 of the risk policy', async () => {

@@ -13,7 +13,8 @@ import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type CursorPage, type Principal } from '@shared/application';
-import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import { Audited } from '@shared/infrastructure/audit';
+import { ApiProblems, AuthRateLimited, Idempotent } from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -49,11 +50,14 @@ export class ApplicationsController {
   ) {}
 
   @Post()
-  @ApiProblems(400, 401, 403, 409, 422)
+  @ApiProblems(400, 401, 403, 409, 422, 429)
   @ApiCreatedResponse({ type: ApplicationResponse })
   @Roles('student')
   @RequireScopes('applications:write')
   @Idempotent()
+  // A center key looks students up by email: the credential-endpoint limit keeps that from
+  // being used to sweep for which emails have an account.
+  @AuthRateLimited()
   @ApiOperation({
     summary: 'Start an application as a draft (a student, or a center API key for its student)',
   })
@@ -96,6 +100,12 @@ export class ApplicationsController {
   @ApiProblems(400, 401, 403, 404, 409, 422)
   @ApiOkResponse({ type: ApplicationResponse })
   @Roles('student')
+  @Idempotent()
+  @Audited({
+    action: 'application.submit',
+    resource: 'application',
+    resourceIdParam: 'applicationId',
+  })
   @ApiOperation({
     summary: 'Submit a complete draft: starts identity, employment and credit checks',
   })
@@ -112,6 +122,11 @@ export class ApplicationsController {
   @ApiOkResponse({ type: ApplicationResponse })
   @Roles('student')
   @Idempotent()
+  @Audited({
+    action: 'application.accept_offer',
+    resource: 'application',
+    resourceIdParam: 'applicationId',
+  })
   @ApiOperation({ summary: 'Accept an approved offer; lending then draws up the contract' })
   acceptOffer(
     @CurrentPrincipal() actor: Principal,
@@ -125,6 +140,11 @@ export class ApplicationsController {
   @ApiProblems(400, 401, 403, 404, 409)
   @ApiOkResponse({ type: ApplicationResponse })
   @Roles('student')
+  @Audited({
+    action: 'application.cancel',
+    resource: 'application',
+    resourceIdParam: 'applicationId',
+  })
   @ApiOperation({ summary: 'Withdraw an application that is not final yet' })
   cancel(
     @CurrentPrincipal() actor: Principal,

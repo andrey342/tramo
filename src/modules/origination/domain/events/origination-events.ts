@@ -1,3 +1,5 @@
+import { type ApplicationStatus } from '../model/application-status';
+
 // Published contract of the origination module: other modules subscribe to these by event type and
 // read the payload, never the aggregates. Payloads are type aliases (not interfaces) so they
 // satisfy the JSON payload constraint of DomainEvent.
@@ -27,6 +29,8 @@ export type ApplicationSubmittedPayload = {
 export type VerificationCompletedPayload = {
   readonly applicationId: string;
   readonly verification: 'kyc' | 'employment' | 'bureau';
+  // Answers still missing; 0 means the application is ready to be scored.
+  readonly remaining: number;
 };
 
 export type ApplicationApprovedPayload = {
@@ -34,7 +38,6 @@ export type ApplicationApprovedPayload = {
   readonly applicantId: string;
   readonly centerId: string;
   readonly programId: string;
-  readonly score: number;
   readonly policyVersion: number;
   readonly decidedBy: 'engine' | 'ops';
 };
@@ -42,7 +45,6 @@ export type ApplicationApprovedPayload = {
 export type ApplicationNeedsReviewPayload = {
   readonly applicationId: string;
   readonly centerId: string;
-  readonly score: number;
   readonly policyVersion: number;
 };
 
@@ -50,7 +52,9 @@ export type ApplicationRejectedPayload = {
   readonly applicationId: string;
   readonly applicantId: string;
   readonly centerId: string;
-  readonly reasons: readonly string[];
+  // Hard rules broken, 'score_below_threshold' or 'analyst_decision'. The readable reasons and the
+  // score are personal financial data: they stay in the decision record.
+  readonly reasonCodes: readonly string[];
   readonly decidedBy: 'engine' | 'ops';
 };
 
@@ -88,5 +92,5 @@ export type ApplicationExpiredPayload = {
   readonly applicationId: string;
   readonly centerId: string;
   // The state it was left in: an approved offer nobody accepted, or a draft never submitted.
-  readonly expiredFrom: string;
+  readonly expiredFrom: ApplicationStatus;
 };

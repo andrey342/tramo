@@ -33,7 +33,7 @@ export class RunVerificationCommand extends Command<void> {
 // The three jobs of an application run in parallel and save the same aggregate, so one may lose
 // the optimistic lock to another: the answer is then recorded again on the fresh version, without
 // asking the provider twice.
-const SAVE_ATTEMPTS = 3;
+const SAVE_ATTEMPTS = 5;
 
 @CommandHandler(RunVerificationCommand)
 export class RunVerificationHandler implements ICommandHandler<RunVerificationCommand> {

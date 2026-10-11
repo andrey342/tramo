@@ -35,7 +35,8 @@ export const canView = (actor: Principal, application: FinancingApplication): bo
 export const canSeePersonalData = (actor: Principal, application: FinancingApplication): boolean =>
   isStaff(actor) || isApplicant(actor, application);
 
-// A draft is completed by the student, or by the center's integration when it started it.
+// A draft is completed by the student, or by the center's integration when it started it (its
+// program and product only: the personal data comes from the student).
 export const canEditDraft = (actor: Principal, application: FinancingApplication): boolean =>
   isApplicant(actor, application) ||
   (application.origin === 'center' &&

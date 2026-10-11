@@ -78,6 +78,7 @@ export class FinancingApplicationMapper {
       },
       status: row.status,
       statusChangedAt: row.statusChangedAt,
+      lastActivityAt: row.lastActivityAt,
       createdAt: row.createdAt,
     });
     application.markPersisted(row.version);
@@ -132,6 +133,7 @@ export class FinancingApplicationMapper {
       score: decision?.score ?? null,
       status: application.status,
       statusChangedAt: application.statusChangedAt,
+      lastActivityAt: application.lastActivityAt,
       createdAt: application.createdAt,
     };
   }

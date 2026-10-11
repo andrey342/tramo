@@ -114,16 +114,41 @@ describe('ScoringEngine', () => {
       expect(unaffordable.factors[2]?.value).toBe(0);
       expect(noIncome.factors[2]?.value).toBe(0);
       expect(unaffordable.reasons).toContain(
-        'The estimated payment (337.50 EUR a month) is a large share of the declared income (300.00 EUR).',
+        'The estimated payment (337.50 EUR a month) is a large share of the income (300.00 EUR).',
       );
     });
 
-    it('should judge an ISA by its payment at the average salary', () => {
-      const decision = decide(scenario({ product: { kind: 'isa' } }));
+    it('should judge an ISA by the share of income it takes, whatever the income today', () => {
+      const decision = decide(
+        scenario({
+          product: { kind: 'isa' },
+          profile: { declaredMonthlyIncome: Money.zero(), employmentStatus: 'unemployed' },
+          employment: { currentlyEmployed: false, currentMonthlyIncome: null },
+        }),
+      );
 
-      // 1 − 233.33 / 1,800.00 = 0.87037…
-      expect(decision.factors[2]?.value).toBe(0.8704);
+      // 1 − 10 %.
+      expect(decision.factors[2]?.value).toBe(0.9);
       expect(decision.estimatedMonthlyPayment.cents).toBe(23_333);
+    });
+
+    it('should not count declared income the employment record does not show', () => {
+      const inflated = decide(
+        scenario({ profile: { declaredMonthlyIncome: Money.fromCents(100_000_00) } }),
+      );
+      const unemployed = decide(
+        scenario({
+          profile: { declaredMonthlyIncome: Money.fromCents(3_000_00) },
+          employment: { currentlyEmployed: false, currentMonthlyIncome: null },
+        }),
+      );
+
+      // Capped at the 1,800.00 EUR of the record: the same as declaring it.
+      expect(inflated.factors[2]?.value).toBe(0.8125);
+      expect(inflated.reasons).toContain(
+        'The declared income (100000.00 EUR) is above what the employment record shows; 1800.00 EUR was used.',
+      );
+      expect(unemployed.factors[2]?.value).toBe(0);
     });
 
     it('should keep the bureau factor between 0 and 1', () => {
@@ -165,7 +190,7 @@ describe('ScoringEngine', () => {
         'Score 9.50 is below the review threshold of 50.',
         'Low program employability (20 %).',
         'Low employment history (0 %).',
-        'The estimated payment (337.50 EUR a month) is a large share of the declared income (0.00 EUR).',
+        'The estimated payment (337.50 EUR a month) is a large share of the income (0.00 EUR).',
         'Low credit bureau score (10 %).',
       ]);
     });

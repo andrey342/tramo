@@ -50,8 +50,14 @@ export class ApplicationExpiryProcessor extends QueueProcessor {
       const ids = await this.applications.findStaleIds(before, BATCH);
       let expiredNow = 0;
       for (const id of ids) {
-        if (await this.commands.execute(new ExpireApplicationCommand(id))) {
-          expiredNow += 1;
+        // One application that fails (moved meanwhile, unreadable) is logged and left for the
+        // next run; the others still expire.
+        try {
+          if (await this.commands.execute(new ExpireApplicationCommand(id))) {
+            expiredNow += 1;
+          }
+        } catch (error) {
+          this.logger.warn({ applicationId: id, err: error }, 'Could not expire application');
         }
       }
       expired += expiredNow;

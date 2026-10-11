@@ -5,14 +5,14 @@ import { uuidv7 } from 'uuidv7';
 
 import { RunVerificationCommand } from '../../src/modules/origination/application/commands/run-verification.command';
 import { ScoreApplicationCommand } from '../../src/modules/origination/application/commands/score-application.command';
-import { StartVerificationCommand } from '../../src/modules/origination/application/commands/start-verification.command';
 import { registerCenter } from '../helpers/centers';
 import { createApiApp } from '../helpers/create-api-app';
 import { accessTokenFor, createStaffUser, TEST_PASSWORD } from '../helpers/users';
 
+// 56781234F: the simulated employment record shows 19 months worked and 1,725 EUR a month now.
 const PROFILE = {
   dateOfBirth: '1998-05-20',
-  nationalId: '12345678Z',
+  nationalId: '56781234F',
   residenceCountry: 'ES',
   declaredMonthlyIncomeCents: 180_000,
   employmentStatus: 'employed',
@@ -88,7 +88,6 @@ describe('Applications (e2e)', () => {
   // What the worker does after ApplicationSubmitted: the api process runs the same commands.
   async function runSaga(id: string): Promise<void> {
     const commands = app.get(CommandBus);
-    await commands.execute(new StartVerificationCommand(id));
     for (const type of ['kyc', 'employment', 'bureau'] as const) {
       await commands.execute(new RunVerificationCommand(id, type));
     }
@@ -108,6 +107,7 @@ describe('Applications (e2e)', () => {
       .send({ profile: PROFILE });
     const submitted = await api()
       .post(`/api/v1/applications/${draft.body.id as string}/submit`)
+      .set('Idempotency-Key', uuidv7())
       .set(...bearer(student.token));
     await runSaga(draft.body.id as string);
     const decision = await api()
@@ -120,7 +120,7 @@ describe('Applications (e2e)', () => {
 
     expect(draft.status).toBe(201);
     expect(draft.body).toMatchObject({ status: 'draft', amountCents: 750_000 });
-    expect(completed.body.profile).toMatchObject({ nationalIdMasked: '*****678Z' });
+    expect(completed.body.profile).toMatchObject({ nationalIdMasked: '*****234F' });
     expect(submitted.status).toBe(200);
     expect(submitted.body.status).toBe('submitted');
     expect(decision.status).toBe(200);
@@ -133,12 +133,26 @@ describe('Applications (e2e)', () => {
   it("should let a center start one for its student, and keep the student's data from it", async () => {
     const student = await newStudent();
 
-    const created = await start(['X-API-Key', apiKey], {
+    const withData = await start(['X-API-Key', apiKey], {
       programId,
       product: { kind: 'installments', termMonths: 12 },
       profile: PROFILE,
       studentEmail: student.email,
     });
+    const created = await start(['X-API-Key', apiKey], {
+      programId,
+      product: { kind: 'installments', termMonths: 12 },
+      studentEmail: student.email,
+    });
+    await api()
+      .patch(`/api/v1/applications/${created.body.id as string}`)
+      .set(...bearer(student.token))
+      .send({ profile: PROFILE });
+    await api()
+      .post(`/api/v1/applications/${created.body.id as string}/submit`)
+      .set('Idempotency-Key', uuidv7())
+      .set(...bearer(student.token));
+    await runSaga(created.body.id as string);
     const seenByCenter = await api()
       .get(`/api/v1/applications/${created.body.id as string}`)
       .set(...bearer(centerToken));
@@ -150,12 +164,16 @@ describe('Applications (e2e)', () => {
       .set(...bearer(centerToken));
     const submitByKey = await api()
       .post(`/api/v1/applications/${created.body.id as string}/submit`)
+      .set('Idempotency-Key', uuidv7())
       .set('X-API-Key', apiKey);
 
+    expect(withData.status).toBe(403);
+    expect(withData.body.code).toBe('profile_from_student_only');
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ origin: 'center', profile: null });
-    expect(seenByCenter.body.profile).toBeNull();
+    expect(seenByCenter.body).toMatchObject({ status: 'approved', profile: null, score: null });
     expect(seenByStudent.body.profile).not.toBeNull();
+    expect(seenByStudent.body.score).toEqual(expect.any(Number));
     expect(decisionByCenter.status).toBe(403);
     expect(submitByKey.status).toBe(403);
   });
@@ -167,11 +185,17 @@ describe('Applications (e2e)', () => {
       product: { kind: 'installments', termMonths: 12 },
       // With no income affordability adds nothing; the simulated history and bureau score of
       // 12345678Z (22 months, 711) then give 34 + 22.92 + 10.67 = 67.59: review.
-      profile: { ...PROFILE, declaredMonthlyIncomeCents: 0, employmentStatus: 'unemployed' },
+      profile: {
+        ...PROFILE,
+        nationalId: '12345678Z',
+        declaredMonthlyIncomeCents: 0,
+        employmentStatus: 'unemployed',
+      },
     });
     const id = draft.body.id as string;
     await api()
       .post(`/api/v1/applications/${id}/submit`)
+      .set('Idempotency-Key', uuidv7())
       .set(...bearer(student.token));
     await runSaga(id);
 
@@ -214,7 +238,16 @@ describe('Applications (e2e)', () => {
       .set(...bearer(luis.token));
     const incomplete = await api()
       .post(`/api/v1/applications/${anas.body.id as string}/submit`)
+      .set('Idempotency-Key', uuidv7())
       .set(...bearer(ana.token));
+    const second = await start(bearer(ana.token), {
+      programId,
+      product: { kind: 'installments', termMonths: 12 },
+    });
+    const nullField = await api()
+      .patch(`/api/v1/applications/${anas.body.id as string}`)
+      .set(...bearer(ana.token))
+      .send({ profile: { nationalId: null } });
     const badTerm = await start(bearer(ana.token), {
       programId,
       product: { kind: 'installments', termMonths: 36 },
@@ -229,6 +262,9 @@ describe('Applications (e2e)', () => {
     expect(luisReadsAna.status).toBe(404);
     expect(incomplete.status).toBe(422);
     expect(incomplete.body.code).toBe('application_incomplete');
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe('application_already_open');
+    expect(nullField.status).toBe(400);
     expect(badTerm.status).toBe(422);
     expect(badTerm.body.code).toBe('product_not_offered');
     expect(noProduct.status).toBe(400);

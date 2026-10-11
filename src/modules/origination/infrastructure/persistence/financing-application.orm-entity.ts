@@ -149,6 +149,9 @@ export class FinancingApplicationOrmEntity {
   @Column({ type: 'timestamptz', name: 'status_changed_at', precision: 3 })
   statusChangedAt: Date;
 
+  @Column({ type: 'timestamptz', name: 'last_activity_at', precision: 3 })
+  lastActivityAt: Date;
+
   @Column({ type: 'timestamptz', name: 'created_at', precision: 3 })
   createdAt: Date;
 

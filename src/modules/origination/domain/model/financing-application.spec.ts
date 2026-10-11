@@ -7,6 +7,7 @@ import {
   aProgramSnapshot,
   aSubmittedApplication,
   cleanBureau,
+  INSTALLMENTS_24,
   LATER,
   NOW,
   passedKyc,
@@ -19,7 +20,7 @@ import { ScoringEngine } from '../services/scoring-engine';
 
 import { EMPTY_PROFILE } from './applicant-profile';
 import { type DecisionRecord } from './decision-record';
-import { EXPIRY_DAYS, type FinancingApplication } from './financing-application';
+import { EXPIRY_DAYS, FinancingApplication } from './financing-application';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const eventTypes = (application: FinancingApplication): string[] =>
@@ -130,7 +131,6 @@ describe('FinancingApplication', () => {
     it('should move to scoring once all three providers have answered, in any order', () => {
       const application = aSubmittedApplication();
 
-      application.startVerification(LATER);
       application.recordVerification({ type: 'bureau', result: cleanBureau() }, LATER);
       application.recordVerification({ type: 'kyc', result: passedKyc() }, LATER);
       expect(application.status).toBe('verifying');
@@ -145,7 +145,7 @@ describe('FinancingApplication', () => {
       ]);
     });
 
-    it('should keep the first answer of a provider and accept answers before the saga marks it', () => {
+    it('should keep the first answer of a provider', () => {
       const application = aSubmittedApplication();
 
       application.recordVerification(
@@ -160,9 +160,6 @@ describe('FinancingApplication', () => {
       expect(application.status).toBe('verifying');
       expect(application.verifications.bureau?.score).toBe(500);
       expect(eventTypes(application)).toEqual([OriginationEvents.VerificationCompleted]);
-      expect(() => {
-        application.startVerification(LATER);
-      }).toThrow(InvalidStateTransitionError);
     });
 
     it('should refuse answers once verification is over', () => {
@@ -224,7 +221,7 @@ describe('FinancingApplication', () => {
       });
       expect(approved.pullEvents()[0]?.payload).toMatchObject({ decidedBy: 'ops' });
       expect(rejected.pullEvents()[0]?.payload).toMatchObject({
-        reasons: ['Income unclear'],
+        reasonCodes: ['analyst_decision'],
         decidedBy: 'ops',
       });
     });
@@ -311,6 +308,82 @@ describe('FinancingApplication', () => {
       expect(application.isStale(new Date(submittedAt.getTime() + EXPIRY_DAYS * DAY_MS))).toBe(
         true,
       );
+    });
+  });
+  describe('activity, decisions and events', () => {
+    it('should count expiry from the last edit of a draft', () => {
+      const application = aDraftApplication();
+      const edited = new Date(NOW.getTime() + 10 * DAY_MS);
+      application.updateDraft({ profile: { residenceCountry: 'ES' } }, edited);
+
+      expect(application.isStale(new Date(NOW.getTime() + EXPIRY_DAYS * DAY_MS))).toBe(false);
+      expect(application.isStale(new Date(edited.getTime() + EXPIRY_DAYS * DAY_MS))).toBe(true);
+    });
+
+    it('should never expire an application waiting for an analyst', () => {
+      const application = anApplicationInScoring();
+      application.decide(decisionOf(application, 'needs_review'), LATER);
+
+      expect(application.isStale(new Date(LATER.getTime() + 365 * DAY_MS))).toBe(false);
+    });
+
+    it('should refuse an offer accepted after it expired, before the sweep marks it', () => {
+      const application = anApplicationInScoring();
+      application.decide(decisionOf(application, 'approved'), LATER);
+
+      expect(() => {
+        application.acceptOffer(new Date(LATER.getTime() + EXPIRY_DAYS * DAY_MS));
+      }).toThrow(InvalidStateTransitionError);
+    });
+
+    it('should refuse a decision that contradicts itself or a score out of range', () => {
+      const application = anApplicationInScoring();
+      const base = decisionOf(application, 'approved');
+
+      expect(() => {
+        application.decide({ ...base, hardRulesBroken: ['underage'] }, LATER);
+      }).toThrow(InvalidValueError);
+      expect(() => {
+        application.decide({ ...base, score: 101 }, LATER);
+      }).toThrow(InvalidValueError);
+    });
+
+    it('should hand a draft to the student alone when it moves to another center', () => {
+      const application = FinancingApplication.start({
+        id: 'a-1',
+        applicantId: 's-1',
+        origin: 'center',
+        program: aProgramSnapshot(),
+        product: INSTALLMENTS_24,
+        profile: EMPTY_PROFILE,
+        now: NOW,
+      });
+
+      application.updateDraft({ program: aProgramSnapshot() }, LATER);
+
+      expect(application.origin).toBe('student');
+    });
+
+    it('should say how many answers remain, and reject with codes only', () => {
+      const application = aSubmittedApplication();
+      application.recordVerification({ type: 'kyc', result: passedKyc() }, LATER);
+      application.recordVerification({ type: 'bureau', result: cleanBureau() }, LATER);
+      application.recordVerification({ type: 'employment', result: steadyEmployment() }, LATER);
+
+      expect(application.pullEvents().map((event) => event.payload['remaining'])).toEqual([
+        2, 1, 0,
+      ]);
+      application.decide(
+        { ...decisionOf(application, 'rejected'), hardRulesBroken: ['underage'] },
+        LATER,
+      );
+      expect(application.pullEvents()[0]?.payload).toEqual({
+        applicationId: application.id,
+        applicantId: application.applicantId,
+        centerId: application.centerId,
+        reasonCodes: ['underage'],
+        decidedBy: 'engine',
+      });
     });
   });
 });

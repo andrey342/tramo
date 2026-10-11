@@ -83,8 +83,9 @@ describe('verification saga (integration)', () => {
     );
   };
 
-  it('should verify, score and approve a good applicant, asking each provider once', async () => {
-    const id = await submit('12345678Z');
+  it('should verify, score and approve a good applicant, one job per provider', async () => {
+    // 56781234F: employed, 19 months worked, 1,725 EUR a month on record, bureau 592.
+    const id = await submit('56781234F');
 
     await settle(id, 'approved');
 
@@ -118,6 +119,25 @@ describe('verification saga (integration)', () => {
       now: new Date(Date.now() - 15 * DAY_MS),
     });
     await uow.run(() => applications.save(old));
+
+    // An application that cannot be loaded (its national id copied from another row) comes
+    // first in the sweep; it must not stop the others from expiring.
+    const unreadable = FinancingApplication.start({
+      id: uuidv7(),
+      applicantId: uuidv7(),
+      origin: 'student',
+      program: aProgramSnapshot(),
+      product: INSTALLMENTS_24,
+      profile: aCompleteProfile(),
+      now: new Date(Date.now() - 16 * DAY_MS),
+    });
+    await uow.run(() => applications.save(unreadable));
+    await app.get(DataSource).query(
+      `UPDATE origination.financing_applications SET national_id_encrypted =
+           (SELECT national_id_encrypted FROM origination.financing_applications WHERE id = $1)
+         WHERE id = $2`,
+      [old.id, unreadable.id],
+    );
 
     await app.get<Queue>(getQueueToken(QueueNames.APPLICATION_EXPIRY)).add('sweep', {});
 

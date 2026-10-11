@@ -9,7 +9,8 @@ import {
   missingFields,
   validProfile,
 } from './applicant-profile';
-import { type DecisionRecord, type ManualDecision } from './decision-record';
+import { type ApplicationStatus } from './application-status';
+import { type DecisionRecord, type HardRule, type ManualDecision } from './decision-record';
 import {
   assertProductOffered,
   type ProgramSnapshot,
@@ -17,19 +18,8 @@ import {
 } from './program-snapshot';
 import { NO_VERIFICATIONS, type VerificationResult, type Verifications } from './verification';
 
-export const APPLICATION_STATUSES = [
-  'draft',
-  'submitted',
-  'verifying',
-  'scoring',
-  'approved',
-  'needs_review',
-  'rejected',
-  'offer_accepted',
-  'cancelled',
-  'expired',
-] as const;
-export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+// Why an application was rejected, as codes: readable reasons stay in the decision record.
+type RejectionCode = HardRule | 'score_below_threshold' | 'analyst_decision';
 
 const TERMINAL: readonly ApplicationStatus[] = [
   'rejected',
@@ -38,9 +28,11 @@ const TERMINAL: readonly ApplicationStatus[] = [
   'expired',
 ];
 
-// An application that has not moved for this long expires (a draft never submitted, an offer
-// never accepted, a verification stuck behind a provider outage).
+// An application nobody has touched for this long expires: a draft abandoned, an offer never
+// accepted, a verification stuck behind a provider outage. One waiting for an analyst does not:
+// the review queue is ops' backlog, not the student's.
 export const EXPIRY_DAYS = 14;
+const NEVER_EXPIRE: readonly ApplicationStatus[] = ['needs_review'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_REASON_LENGTH = 500;
 
@@ -58,6 +50,8 @@ export interface FinancingApplicationProps {
   readonly manualDecision: ManualDecision | null;
   readonly status: ApplicationStatus;
   readonly statusChangedAt: Date;
+  // Last change of status or edit of the draft; expiry counts from here.
+  readonly lastActivityAt: Date;
   readonly createdAt: Date;
 }
 
@@ -68,7 +62,7 @@ export interface FinancingApplicationProps {
 //   approved → offer_accepted                     (lending takes over)
 //   any state not final → cancelled (student) | expired (EXPIRY_DAYS without moving)
 //
-// Verification results arrive in any order; the third one moves it to scoring.
+// Verification results arrive in any order: the first moves it to verifying, the third to scoring.
 export class FinancingApplication extends AggregateRoot {
   private constructor(
     id: string,
@@ -98,6 +92,7 @@ export class FinancingApplication extends AggregateRoot {
       manualDecision: null,
       status: 'draft',
       statusChangedAt: input.now,
+      lastActivityAt: input.now,
       createdAt: input.now,
     });
   }
@@ -150,6 +145,10 @@ export class FinancingApplication extends AggregateRoot {
     return this.props.statusChangedAt;
   }
 
+  get lastActivityAt(): Date {
+    return this.props.lastActivityAt;
+  }
+
   get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -186,11 +185,16 @@ export class FinancingApplication extends AggregateRoot {
     const program = changes.program ?? this.props.program;
     const product = changes.product ?? this.props.product;
     assertProductOffered(program, product);
+    // Moved to another center's program, the draft is the student's alone: the center that
+    // started it has no say over an application for another center.
+    const origin = program.centerId === this.centerId ? this.props.origin : 'student';
     this.props = {
       ...this.props,
       program,
       product,
+      origin,
       profile: validProfile({ ...this.props.profile, ...changes.profile }, now),
+      lastActivityAt: now,
     };
   }
 
@@ -220,11 +224,6 @@ export class FinancingApplication extends AggregateRoot {
     });
   }
 
-  startVerification(now: Date): void {
-    this.assertStatus('submitted', 'verifying');
-    this.moveTo('verifying', now);
-  }
-
   // Idempotent per provider: an answer already recorded is kept. The third answer moves the
   // application to scoring.
   recordVerification(verification: VerificationResult, now: Date): void {
@@ -242,15 +241,16 @@ export class FinancingApplication extends AggregateRoot {
     if (this.props.status === 'submitted') {
       this.moveTo('verifying', now);
     }
+    const { kyc, employment, bureau } = this.props.verifications;
+    const remaining = [kyc, employment, bureau].filter((answer) => answer === null).length;
     this.record({
       eventType: OriginationEvents.VerificationCompleted,
       aggregateType: 'FinancingApplication',
       aggregateId: this.id,
       occurredAt: now,
-      payload: { applicationId: this.id, verification: verification.type },
+      payload: { applicationId: this.id, verification: verification.type, remaining },
     });
-    const { kyc, employment, bureau } = this.props.verifications;
-    if (kyc && employment && bureau) {
+    if (remaining === 0) {
       this.moveTo('scoring', now);
     }
   }
@@ -258,6 +258,15 @@ export class FinancingApplication extends AggregateRoot {
   // The engine's verdict.
   decide(decision: DecisionRecord, now: Date): void {
     this.assertStatus('scoring', decision.outcome);
+    if (decision.score < 0 || decision.score > 100) {
+      throw new InvalidValueError('score', 'A score is between 0 and 100.');
+    }
+    if (decision.outcome !== 'rejected' && decision.hardRulesBroken.length > 0) {
+      throw new InvalidValueError(
+        'decision',
+        'An application that breaks a hard rule can only be rejected.',
+      );
+    }
     this.props = { ...this.props, decision };
     this.moveTo(decision.outcome, now);
     switch (decision.outcome) {
@@ -265,7 +274,13 @@ export class FinancingApplication extends AggregateRoot {
         this.recordApproved('engine', now);
         break;
       case 'rejected':
-        this.recordRejected(decision.reasons, 'engine', now);
+        this.recordRejected(
+          decision.hardRulesBroken.length > 0
+            ? decision.hardRulesBroken
+            : ['score_below_threshold'],
+          'engine',
+          now,
+        );
         break;
       case 'needs_review':
         this.record({
@@ -276,7 +291,6 @@ export class FinancingApplication extends AggregateRoot {
           payload: {
             applicationId: this.id,
             centerId: this.centerId,
-            score: decision.score,
             policyVersion: decision.policyVersion,
           },
         });
@@ -310,12 +324,16 @@ export class FinancingApplication extends AggregateRoot {
     if (input.outcome === 'approved') {
       this.recordApproved('ops', now);
     } else {
-      this.recordRejected([reason], 'ops', now);
+      this.recordRejected(['analyst_decision'], 'ops', now);
     }
   }
 
   acceptOffer(now: Date): void {
     this.assertStatus('approved', 'offer_accepted');
+    // Past its expiry the offer is gone, even if the sweep has not marked it yet.
+    if (this.isStale(now)) {
+      throw new InvalidStateTransitionError('FinancingApplication', 'expired', 'offer_accepted');
+    }
     this.moveTo('offer_accepted', now);
     const { program, product } = this.props;
     let terms: OfferAcceptedPayload['product'];
@@ -371,7 +389,9 @@ export class FinancingApplication extends AggregateRoot {
 
   isStale(now: Date): boolean {
     return (
-      !this.isFinal && now.getTime() - this.props.statusChangedAt.getTime() >= EXPIRY_DAYS * DAY_MS
+      !this.isFinal &&
+      !NEVER_EXPIRE.includes(this.props.status) &&
+      now.getTime() - this.props.lastActivityAt.getTime() >= EXPIRY_DAYS * DAY_MS
     );
   }
 
@@ -391,6 +411,11 @@ export class FinancingApplication extends AggregateRoot {
   }
 
   private recordApproved(decidedBy: 'engine' | 'ops', now: Date): void {
+    const { decision } = this.props;
+    if (!decision) {
+      // Approvals come from scoring or from a review of a scored application.
+      throw new Error(`Application ${this.id} is approved without a decision record.`);
+    }
     this.record({
       eventType: OriginationEvents.ApplicationApproved,
       aggregateType: 'FinancingApplication',
@@ -401,14 +426,17 @@ export class FinancingApplication extends AggregateRoot {
         applicantId: this.props.applicantId,
         centerId: this.centerId,
         programId: this.props.program.programId,
-        score: this.props.decision?.score ?? 0,
-        policyVersion: this.props.decision?.policyVersion ?? 0,
+        policyVersion: decision.policyVersion,
         decidedBy,
       },
     });
   }
 
-  private recordRejected(reasons: readonly string[], decidedBy: 'engine' | 'ops', now: Date): void {
+  private recordRejected(
+    reasonCodes: readonly RejectionCode[],
+    decidedBy: 'engine' | 'ops',
+    now: Date,
+  ): void {
     this.record({
       eventType: OriginationEvents.ApplicationRejected,
       aggregateType: 'FinancingApplication',
@@ -418,7 +446,7 @@ export class FinancingApplication extends AggregateRoot {
         applicationId: this.id,
         applicantId: this.props.applicantId,
         centerId: this.centerId,
-        reasons,
+        reasonCodes,
         decidedBy,
       },
     });
@@ -431,6 +459,6 @@ export class FinancingApplication extends AggregateRoot {
   }
 
   private moveTo(status: ApplicationStatus, now: Date): void {
-    this.props = { ...this.props, status, statusChangedAt: now };
+    this.props = { ...this.props, status, statusChangedAt: now, lastActivityAt: now };
   }
 }

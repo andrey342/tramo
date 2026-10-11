@@ -32,7 +32,10 @@ const HISTORY_MONTHS = 24;
 // 1. Hard rules: any broken rule rejects, whatever the score.
 // 2. Score 0-100: the weighted sum of four factors, each 0 to 1 —
 //    employability of the program, employment history (months worked of the last 24),
-//    affordability (1 − estimated payment / declared income, floored at 0) and the bureau score.
+//    affordability and the bureau score. Affordability is 1 − estimated payment / income, floored
+//    at 0, where the income is the declared one but never more than the employment record shows
+//    (an unemployed record counts as no income); an ISA is paid as a share of whatever the
+//    graduate earns, so its affordability is 1 − that share.
 // 3. Thresholds of the policy: approve, send to review, or reject.
 export const ScoringEngine = {
   decide(input: ScoringInput, policy: RiskPolicy, now: Date): DecisionRecord {
@@ -45,7 +48,10 @@ export const ScoringEngine = {
         new Decimal(input.employment.monthsWorkedLast24).dividedBy(HISTORY_MONTHS),
         1,
       ),
-      affordability: affordability(payment, input.profile.declaredMonthlyIncome),
+      affordability:
+        input.product.kind === 'isa'
+          ? new Decimal(1).minus(input.program.isa?.incomeShare.asDecimal() ?? 1)
+          : affordability(payment, assessedIncome(input)),
       bureau: Decimal.min(Decimal.max(new Decimal(input.bureau.score).dividedBy(BUREAU_MAX), 0), 1),
     };
     const factors: ScoreFactor[] = (Object.keys(values) as ScoreFactorName[]).map((name) => {
@@ -111,6 +117,13 @@ export function estimatedMonthlyPayment(
     ? principal.dividedBy(term)
     : principal.times(monthlyRate).dividedBy(new Decimal(1).minus(monthlyRate.plus(1).pow(-term)));
   return Money.fromCents(cents.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber());
+}
+
+// The declared income, capped by the income the employment record shows.
+export function assessedIncome(input: Pick<ScoringInput, 'profile' | 'employment'>): Money {
+  const { currentlyEmployed, currentMonthlyIncome } = input.employment;
+  const verified = currentlyEmployed ? (currentMonthlyIncome ?? Money.zero()) : Money.zero();
+  return Money.min(input.profile.declaredMonthlyIncome, verified);
 }
 
 function affordability(payment: Money, income: Money): Decimal {
@@ -188,8 +201,14 @@ function reasons(
     .filter((factor) => factor.value < 0.5)
     .map((factor) =>
       factor.name === 'affordability'
-        ? `The estimated payment (${payment.toString()} a month) is a large share of the declared income (${input.profile.declaredMonthlyIncome.toString()}).`
+        ? `The estimated payment (${payment.toString()} a month) is a large share of the income (${assessedIncome(input).toString()}).`
         : `Low ${FACTOR_LABELS[factor.name]} (${String(Math.round(factor.value * 100))} %).`,
     );
-  return [verdict, ...weak];
+  const income = assessedIncome(input);
+  const unsupported = input.profile.declaredMonthlyIncome.gt(income)
+    ? [
+        `The declared income (${input.profile.declaredMonthlyIncome.toString()}) is above what the employment record shows; ${income.toString()} was used.`,
+      ]
+    : [];
+  return [verdict, ...weak, ...unsupported];
 }

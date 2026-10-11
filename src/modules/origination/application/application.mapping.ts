@@ -34,7 +34,8 @@ export function toApplicationDto(
       (type) => application.verifications[type] !== null,
     ),
     status: application.status,
-    score: application.decision?.score ?? null,
+    // The score is built from the student's finances: same rule as the profile.
+    score: withProfile ? (application.decision?.score ?? null) : null,
     statusChangedAt: application.statusChangedAt,
     createdAt: application.createdAt,
   };

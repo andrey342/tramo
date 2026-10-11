@@ -18,12 +18,34 @@ export class ProgramNotAvailableError extends DomainError {
   }
 }
 
+// One open application per student and program: two approved ones could both be accepted, and
+// lending would draw up two contracts for one course.
+export class ApplicationAlreadyOpenError extends DomainError {
+  readonly code = 'application_already_open';
+  readonly category = 'conflict';
+
+  constructor(programId: string) {
+    super('There is already an open application for this program.', { programId });
+  }
+}
+
 export class ApplicationIncompleteError extends DomainError {
   readonly code = 'application_incomplete';
   readonly category = 'rule_violation';
 
   constructor(missing: readonly string[]) {
     super(`The application is missing: ${missing.join(', ')}.`, { missing: [...missing] });
+  }
+}
+
+// The student states their own personal data and consents to it being checked; a center may only
+// pick the program and the financing for them.
+export class ProfileFromStudentOnlyError extends DomainError {
+  readonly code = 'profile_from_student_only';
+  readonly category = 'forbidden';
+
+  constructor() {
+    super('Only the student fills in their personal data.');
   }
 }
 

@@ -25,7 +25,12 @@ export class ListApplicationsHandler implements IQueryHandler<ListApplicationsQu
   constructor(@Inject(APPLICATION_QUERIES) private readonly queries: ApplicationQueries) {}
 
   async execute(query: ListApplicationsQuery): Promise<CursorPage<ApplicationSummaryDto>> {
-    return await this.queries.list(scopeOf(query.actor, query.status), query.page);
+    const scope = scopeOf(query.actor, query.status);
+    const page = await this.queries.list(scope, query.page);
+    // A training center sees how its students' applications stand, not their scores.
+    return scope.centerId
+      ? { ...page, data: page.data.map((row) => ({ ...row, score: null })) }
+      : page;
   }
 }
 

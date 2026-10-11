@@ -52,7 +52,7 @@ function decided(outcome: 'approved' | 'needs_review', centerId: string, at: Dat
       bureau,
     },
     RiskPolicy.initial(NOW),
-    at,
+    NOW,
   );
   application.decide({ ...decision, outcome }, at);
   return application;
@@ -170,11 +170,18 @@ export function originationRepositoriesContract(
     });
 
     it('should keep every policy version and answer with the highest', async () => {
-      const current = await t.policies.findCurrent();
-      if (!current) throw new Error('No policy seeded.');
-      const next = current.revise({}, 'admin-1', NOW);
-
-      await t.run(() => t.policies.add(next));
+      // Other suites revise the shared policy table too: retry once on top of theirs.
+      const addNext = async () => {
+        const current = await t.policies.findCurrent();
+        if (!current) throw new Error('No policy seeded.');
+        const next = current.revise({}, 'admin-1', NOW);
+        await t.run(() => t.policies.add(next));
+        return { current, next };
+      };
+      const { current, next } = await addNext().catch((error: unknown) => {
+        if (error instanceof ConcurrentModificationError) return addNext();
+        throw error;
+      });
 
       expect((await t.policies.findCurrent())?.version).toBe(next.version);
       expect(await t.policies.findByVersion(current.version)).toEqual(current);

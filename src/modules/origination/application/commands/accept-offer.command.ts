@@ -8,10 +8,12 @@ import {
   ApplicationAccessDeniedError,
   FINANCING_APPLICATION_REPOSITORY,
   type FinancingApplicationRepository,
+  ProgramNotAvailableError,
 } from '../../domain';
 import { actsForApplicant, findVisibleApplication } from '../application-access';
 import { toApplicationDto } from '../application.mapping';
 import { type ApplicationDto } from '../dto/application.dto';
+import { PROGRAM_DIRECTORY, type ProgramDirectory } from '../ports/origination-ports';
 
 export class AcceptOfferCommand extends Command<ApplicationDto> {
   constructor(
@@ -29,6 +31,7 @@ export class AcceptOfferHandler implements ICommandHandler<AcceptOfferCommand> {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(FINANCING_APPLICATION_REPOSITORY)
     private readonly applications: FinancingApplicationRepository,
+    @Inject(PROGRAM_DIRECTORY) private readonly programs: ProgramDirectory,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -41,6 +44,10 @@ export class AcceptOfferHandler implements ICommandHandler<AcceptOfferCommand> {
       );
       if (!actsForApplicant(command.actor, application)) {
         throw new ApplicationAccessDeniedError();
+      }
+      // The center may have been suspended, or the program withdrawn, since the approval.
+      if (!(await this.programs.findOpenProgram(application.program.programId))) {
+        throw new ProgramNotAvailableError(application.program.programId);
       }
       application.acceptOffer(this.clock.now());
       await this.applications.save(application);

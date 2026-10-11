@@ -34,7 +34,6 @@ import { type ProfileInput } from '../src/modules/origination/application/applic
 import { RunVerificationCommand } from '../src/modules/origination/application/commands/run-verification.command';
 import { ScoreApplicationCommand } from '../src/modules/origination/application/commands/score-application.command';
 import { StartApplicationCommand } from '../src/modules/origination/application/commands/start-application.command';
-import { StartVerificationCommand } from '../src/modules/origination/application/commands/start-verification.command';
 import { SubmitApplicationCommand } from '../src/modules/origination/application/commands/submit-application.command';
 import {
   APPLICATION_QUERIES,
@@ -199,14 +198,14 @@ async function seed(): Promise<void> {
       };
       const profile = {
         dateOfBirth: '1998-05-20',
-        nationalId: '12345678Z',
+        nationalId: '56781234F',
         residenceCountry: 'ES',
         declaredMonthlyIncomeCents: 1_800_00,
         employmentStatus: 'employed' as const,
       };
-      // Approved: 85 % employability, a long work record and an affordable payment.
+      // Approved: 87 % employability, 19 months of work on record and an affordable payment.
       await applyAndVerify(ana, bootcamp.id, { kind: 'installments', termMonths: 24 }, profile);
-      // Review: 58 % employability and no income to pay from.
+      // Review: 58 % employability and no income to pay from (51.87).
       await applyAndVerify(
         ana,
         master.id,
@@ -229,7 +228,6 @@ async function seed(): Promise<void> {
         new StartApplicationCommand(actor, { programId, product, profile }),
       );
       await commands.execute(new SubmitApplicationCommand(actor, draft.id));
-      await commands.execute(new StartVerificationCommand(draft.id));
       for (const type of ['kyc', 'employment', 'bureau'] as const) {
         await commands.execute(new RunVerificationCommand(draft.id, type));
       }

@@ -18,10 +18,9 @@ export {
   type ScoreFactor,
   type ScoreFactorName,
 } from './model/decision-record';
+export { APPLICATION_STATUSES, type ApplicationStatus } from './model/application-status';
 export {
-  APPLICATION_STATUSES,
   type ApplicationOrigin,
-  type ApplicationStatus,
   EXPIRY_DAYS,
   FinancingApplication,
   type FinancingApplicationProps,
@@ -45,6 +44,7 @@ export {
 } from './model/verification';
 export * from './ports/origination-repositories';
 export {
+  assessedIncome,
   estimatedMonthlyPayment,
   ScoringEngine,
   type ScoringInput,

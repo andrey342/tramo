@@ -41,10 +41,6 @@ import {
   ScoreApplicationHandler,
 } from './commands/score-application.command';
 import {
-  StartVerificationCommand,
-  StartVerificationHandler,
-} from './commands/start-verification.command';
-import {
   GetCurrentRiskPolicyHandler,
   GetCurrentRiskPolicyQuery,
 } from './queries/get-current-risk-policy.query';
@@ -83,7 +79,6 @@ function setup() {
     policies,
     employment,
     audited,
-    startVerification: new StartVerificationHandler(uow, applications, clock),
     run: new RunVerificationHandler(uow, applications, kyc, employment, bureau, clock),
     score: new ScoreApplicationHandler(uow, applications, policies, clock),
     expire: new ExpireApplicationHandler(uow, applications, clock),
@@ -115,7 +110,6 @@ describe('verification and scoring', () => {
     const t = setup();
     const id = await saved(t, aSubmittedApplication());
 
-    await t.startVerification.execute(new StartVerificationCommand(id));
     await verifyAll(t, id);
     expect((await t.applications.findById(id))?.status).toBe('scoring');
     await t.score.execute(new ScoreApplicationCommand(id));
@@ -160,13 +154,12 @@ describe('verification and scoring', () => {
     expect(application?.status).toBe('rejected');
   });
 
-  it('should ignore repeated work: a second check, a second start, a second score', async () => {
+  it('should ignore repeated work: a second check, a score before the answers are in', async () => {
     const t = setup();
     const id = await saved(t, aSubmittedApplication());
 
     await t.run.execute(new RunVerificationCommand(id, 'employment'));
     await t.run.execute(new RunVerificationCommand(id, 'employment'));
-    await t.startVerification.execute(new StartVerificationCommand(id));
     await t.score.execute(new ScoreApplicationCommand(id));
 
     expect(t.employment.asked).toHaveLength(1);
@@ -189,7 +182,7 @@ describe('verification and scoring', () => {
   it('should record the answer again when another check saved first, without asking twice', async () => {
     const t = setup();
     const id = await saved(t, aSubmittedApplication());
-    t.applications.conflicts = 2;
+    t.applications.conflicts = 4;
 
     await t.run.execute(new RunVerificationCommand(id, 'employment'));
 
@@ -197,10 +190,10 @@ describe('verification and scoring', () => {
     expect((await t.applications.findById(id))?.verifications.employment).not.toBeNull();
   });
 
-  it('should give up after three lost races and let the job retry', async () => {
+  it('should give up after five lost races and let the job retry', async () => {
     const t = setup();
     const id = await saved(t, aSubmittedApplication());
-    t.applications.conflicts = 3;
+    t.applications.conflicts = 5;
 
     await expect(t.run.execute(new RunVerificationCommand(id, 'employment'))).rejects.toThrow(
       ConcurrentModificationError,

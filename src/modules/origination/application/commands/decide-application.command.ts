@@ -11,6 +11,7 @@ import {
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
+  ApplicationAccessDeniedError,
   FINANCING_APPLICATION_REPOSITORY,
   type FinancingApplicationRepository,
 } from '../../domain';
@@ -47,6 +48,9 @@ export class DecideApplicationHandler implements ICommandHandler<DecideApplicati
       const application = await this.applications.findById(command.applicationId);
       if (!application || actor.kind !== 'user' || !isStaff(actor)) {
         throw new EntityNotFoundError('FinancingApplication', command.applicationId);
+      }
+      if (application.applicantId === actor.userId) {
+        throw new ApplicationAccessDeniedError();
       }
       const before = application.status;
       application.decideManually(

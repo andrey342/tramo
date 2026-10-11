@@ -11,7 +11,6 @@ import { ReviseRiskPolicyHandler } from './application/commands/revise-risk-poli
 import { RunVerificationHandler } from './application/commands/run-verification.command';
 import { ScoreApplicationHandler } from './application/commands/score-application.command';
 import { StartApplicationHandler } from './application/commands/start-application.command';
-import { StartVerificationHandler } from './application/commands/start-verification.command';
 import { SubmitApplicationHandler } from './application/commands/submit-application.command';
 import { UpdateApplicationDraftHandler } from './application/commands/update-application-draft.command';
 import {
@@ -66,7 +65,6 @@ import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeor
     CancelApplicationHandler,
     AcceptOfferHandler,
     DecideApplicationHandler,
-    StartVerificationHandler,
     RunVerificationHandler,
     ScoreApplicationHandler,
     ExpireApplicationHandler,
@@ -82,7 +80,16 @@ import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeor
     {
       provide: SIMULATED_LATENCY,
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig): SimulatedLatency => config.verification.simulatedLatency,
+      useFactory: (config: AppConfig): SimulatedLatency => {
+        // Simulated providers verify any national id they are given: lending on them in
+        // production would lend to anyone. The process refuses to start instead.
+        if (config.env === 'production') {
+          throw new Error(
+            'VERIFICATION_PROVIDERS is simulated; production needs real KYC, employment and credit bureau providers.',
+          );
+        }
+        return config.verification.simulatedLatency;
+      },
     },
     { provide: KYC_PROVIDER, useClass: SimulatedKycProvider },
     { provide: EMPLOYMENT_HISTORY_PROVIDER, useClass: SimulatedEmploymentHistoryProvider },

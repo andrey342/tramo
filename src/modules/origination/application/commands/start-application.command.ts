@@ -12,6 +12,7 @@ import {
   FINANCING_APPLICATION_REPOSITORY,
   FinancingApplication,
   type FinancingApplicationRepository,
+  ProfileFromStudentOnlyError,
   ProgramNotAvailableError,
   StudentNotFoundError,
 } from '../../domain';
@@ -63,6 +64,9 @@ export class StartApplicationHandler implements ICommandHandler<StartApplication
       throw new ProgramNotAvailableError(input.programId);
     }
     const applicant = await this.applicantFor(actor, program.centerId, input.studentEmail);
+    if (applicant.origin === 'center' && Object.keys(input.profile).length > 0) {
+      throw new ProfileFromStudentOnlyError();
+    }
     const profile = { ...EMPTY_PROFILE, ...toProfileChanges(input.profile) };
 
     return this.uow.run(async () => {

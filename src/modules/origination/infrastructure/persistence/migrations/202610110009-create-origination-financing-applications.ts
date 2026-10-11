@@ -43,6 +43,7 @@ export class CreateOriginationFinancingApplications1791677340000 implements Migr
           CHECK (status IN ('draft', 'submitted', 'verifying', 'scoring', 'approved', 'needs_review',
                             'rejected', 'offer_accepted', 'cancelled', 'expired')),
         status_changed_at timestamptz(3) NOT NULL,
+        last_activity_at timestamptz(3) NOT NULL,
         created_at timestamptz(3) NOT NULL,
         updated_at timestamptz(3) NOT NULL DEFAULT now(),
         version integer NOT NULL CONSTRAINT ck_origination_financing_applications_version
@@ -52,9 +53,10 @@ export class CreateOriginationFinancingApplications1791677340000 implements Migr
         CONSTRAINT ck_origination_financing_applications_term CHECK (
           (product = 'installments') = (term_months IS NOT NULL)
         ),
-        -- Mirrors the domain: past the draft, the applicant's profile is complete.
+        -- Mirrors the domain: from submission on, the applicant's profile is complete. A draft
+        -- may be cancelled or expire half filled in.
         CONSTRAINT ck_origination_financing_applications_profile_complete CHECK (
-          status = 'draft'
+          status IN ('draft', 'cancelled', 'expired')
           OR num_nulls(date_of_birth, national_id_encrypted, residence_country,
                        declared_monthly_income_cents, employment_status) = 0
         ),
@@ -90,11 +92,17 @@ export class CreateOriginationFinancingApplications1791677340000 implements Migr
         ON origination.financing_applications (status_changed_at, id)
         WHERE status = 'needs_review'
     `);
-    // The expiry sweep: applications not final, by how long they have not moved.
+    // The expiry sweep: applications that can expire, by how long nobody has touched them.
     await queryRunner.query(`
-      CREATE INDEX ix_origination_financing_applications_open_status_changed_at
-        ON origination.financing_applications (status_changed_at, id)
-        WHERE status NOT IN ('rejected', 'offer_accepted', 'cancelled', 'expired')
+      CREATE INDEX ix_origination_financing_applications_expiring_last_activity_at
+        ON origination.financing_applications (last_activity_at, id)
+        WHERE status NOT IN ('rejected', 'offer_accepted', 'cancelled', 'expired', 'needs_review')
+    `);
+    // One open application per student and program (an accepted offer counts as open).
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX ux_origination_financing_applications_open_per_program
+        ON origination.financing_applications (applicant_id, program_id)
+        WHERE status NOT IN ('rejected', 'cancelled', 'expired')
     `);
   }
 

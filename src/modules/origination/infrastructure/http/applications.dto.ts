@@ -57,32 +57,35 @@ export class ProductRequest {
   }
 }
 
+// Absent fields are left as they are; a field sent as null is invalid (not "clear it").
+const isGiven = (_: object, value: unknown): boolean => value !== undefined;
+
 export class ProfileRequest {
   @ApiPropertyOptional({ example: '1998-05-20' })
-  @IsOptional()
+  @ValidateIf(isGiven)
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateOfBirth must be a YYYY-MM-DD date' })
   dateOfBirth?: string;
 
   @ApiPropertyOptional({ example: '12345678Z', description: 'Spanish DNI or NIE' })
-  @IsOptional()
+  @ValidateIf(isGiven)
   @IsString()
   @MaxLength(20)
   nationalId?: string;
 
   @ApiPropertyOptional({ example: 'ES', description: 'ISO 3166-1 alpha-2' })
-  @IsOptional()
+  @ValidateIf(isGiven)
   @Matches(/^[A-Za-z]{2}$/, { message: 'residenceCountry must be a two-letter country code' })
   residenceCountry?: string;
 
   @ApiPropertyOptional({ example: 180_000, description: 'Gross monthly income in cents' })
-  @IsOptional()
+  @ValidateIf(isGiven)
   @IsInt()
   @Min(0)
   @Max(MAX_MONTHLY_INCOME_CENTS)
   declaredMonthlyIncomeCents?: number;
 
   @ApiPropertyOptional({ enum: EMPLOYMENT_STATUSES })
-  @IsOptional()
+  @ValidateIf(isGiven)
   @IsIn(EMPLOYMENT_STATUSES)
   employmentStatus?: EmploymentStatus;
 }
