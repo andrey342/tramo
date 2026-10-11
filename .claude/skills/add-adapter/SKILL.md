@@ -32,6 +32,10 @@ kebab-case (`vies`), giving `ViesVatValidator`.
    provider) and document the variable in `.env.example` and the README.
 4. `pnpm typecheck && pnpm lint && pnpm test` (and `pnpm test:int` with `--integration`).
 
+An adapter named after another module (`catalog`, `iam`) asks that module through its public
+query; its integration contract run goes to `test/integration/<port>.int-spec.ts`, which may boot
+both modules (module code may not import another module's internals).
+
 The script notes runs it could not generate (a contract that takes more than a factory, a fake
 whose constructor needs an unknown dependency); write those by hand. A wrong generated file is
 fixed in `scripts/scaffold-adapter.ts` in the same commit.

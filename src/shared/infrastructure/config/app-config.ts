@@ -43,6 +43,10 @@ export interface AppConfig {
     readonly baseUrl: string;
     readonly timeoutMs: number;
   };
+  readonly verification: {
+    readonly providers: 'simulated';
+    readonly simulatedLatency: { readonly minMs: number; readonly maxMs: number };
+  };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -155,6 +159,10 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     },
     crypto: { fieldEncryptionKey: env.FIELD_ENCRYPTION_KEY },
     vies: { mode: env.VIES_MODE, baseUrl: env.VIES_BASE_URL, timeoutMs: env.VIES_TIMEOUT_MS },
+    verification: {
+      providers: env.VERIFICATION_PROVIDERS,
+      simulatedLatency: env.SIMULATED_PROVIDER_LATENCY_MS,
+    },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,

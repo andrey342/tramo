@@ -6,7 +6,7 @@ import 'reflect-metadata';
 
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { CommandBus } from '@nestjs/cqrs';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
 import { CreateProgramCommand } from '../src/modules/catalog/application/commands/create-program.command';
@@ -23,12 +23,24 @@ import {
   type TrainingCenterRepository,
 } from '../src/modules/catalog/domain';
 import { CreateCenterUserCommand } from '../src/modules/iam/application/commands/create-center-user.command';
+import { RegisterStudentCommand } from '../src/modules/iam/application/commands/register-student.command';
 import {
   PASSWORD_HASHER,
   type PasswordHasher,
 } from '../src/modules/iam/application/ports/iam-ports';
 import { User, USER_REPOSITORY, type UserRepository } from '../src/modules/iam/domain';
 import { IamModule } from '../src/modules/iam/iam.module';
+import { type ProfileInput } from '../src/modules/origination/application/application-input';
+import { RunVerificationCommand } from '../src/modules/origination/application/commands/run-verification.command';
+import { ScoreApplicationCommand } from '../src/modules/origination/application/commands/score-application.command';
+import { StartApplicationCommand } from '../src/modules/origination/application/commands/start-application.command';
+import { SubmitApplicationCommand } from '../src/modules/origination/application/commands/submit-application.command';
+import {
+  APPLICATION_QUERIES,
+  type ApplicationQueries,
+} from '../src/modules/origination/application/ports/origination-ports';
+import { GetApplicationQuery } from '../src/modules/origination/application/queries/get-application.query';
+import { OriginationModule } from '../src/modules/origination/origination.module';
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '../src/shared/application';
 import { CLOCK, type Clock, Email, unwrap, VatNumber } from '../src/shared/domain';
 import { APP_CONFIG, type AppConfig, loadDotEnv } from '../src/shared/infrastructure/config';
@@ -37,7 +49,12 @@ import { CoreModule } from '../src/shared/infrastructure/core.module';
 import { DEMO_PASSWORD, DEMO_USERS } from './demo-users';
 
 @Module({
-  imports: [CoreModule.forRoot({ applicationName: 'tramo-seed' }), IamModule, CatalogModule],
+  imports: [
+    CoreModule.forRoot({ applicationName: 'tramo-seed' }),
+    IamModule,
+    CatalogModule,
+    OriginationModule,
+  ],
 })
 class SeedModule {}
 
@@ -151,6 +168,72 @@ async function seed(): Promise<void> {
           log(`program ${program.name}`);
         }
       }
+    }
+
+    // The demo student, with one approved application and one waiting for an analyst. The
+    // verification saga runs here directly, as the worker would.
+    const student = await users.findByEmail(DEMO_USERS.student);
+    const studentId =
+      student?.id ??
+      (await commands.execute(new RegisterStudentCommand(DEMO_USERS.student, DEMO_PASSWORD)))
+        .userId;
+    if (!student) log(`student ${DEMO_USERS.student}`);
+    const applications = app.get<ApplicationQueries>(APPLICATION_QUERIES, { strict: false });
+    const anyCenter = await centers.findByVatNumber(
+      unwrap(VatNumber.create('ES', CENTERS[0].taxId(config.vies.mode))),
+    );
+    const programs = anyCenter
+      ? (await catalog.list({ centerId: anyCenter.id }, { limit: 10 })).data
+      : [];
+    const bootcamp = programs.find((program) => program.name === CENTERS[0].programs[0].name);
+    const master = programs.find((program) => program.name === CENTERS[0].programs[1].name);
+    const hasApplications =
+      (await applications.list({ applicantId: studentId }, { limit: 1 })).data.length > 0;
+    if (bootcamp && master && !hasApplications) {
+      const ana: Principal = {
+        kind: 'user',
+        userId: studentId,
+        roles: ['student'],
+        centerId: null,
+      };
+      const profile = {
+        dateOfBirth: '1998-05-20',
+        nationalId: '56781234F',
+        residenceCountry: 'ES',
+        declaredMonthlyIncomeCents: 1_800_00,
+        employmentStatus: 'employed' as const,
+      };
+      // Approved: 87 % employability, 19 months of work on record and an affordable payment.
+      await applyAndVerify(ana, bootcamp.id, { kind: 'installments', termMonths: 24 }, profile);
+      // Review: 58 % employability and no income to pay from (51.87).
+      await applyAndVerify(
+        ana,
+        master.id,
+        { kind: 'installments', termMonths: 36 },
+        {
+          ...profile,
+          declaredMonthlyIncomeCents: 0,
+          employmentStatus: 'unemployed',
+        },
+      );
+    }
+
+    async function applyAndVerify(
+      actor: Principal,
+      programId: string,
+      product: { kind: 'installments'; termMonths: number },
+      profile: ProfileInput,
+    ): Promise<void> {
+      const draft = await commands.execute(
+        new StartApplicationCommand(actor, { programId, product, profile }),
+      );
+      await commands.execute(new SubmitApplicationCommand(actor, draft.id));
+      for (const type of ['kyc', 'employment', 'bureau'] as const) {
+        await commands.execute(new RunVerificationCommand(draft.id, type));
+      }
+      await commands.execute(new ScoreApplicationCommand(draft.id));
+      const result = await app.get(QueryBus).execute(new GetApplicationQuery(actor, draft.id));
+      log(`application for ${draft.programName}: ${result.status}`);
     }
 
     async function ensureStaff(role: 'admin' | 'ops', email: string): Promise<string> {

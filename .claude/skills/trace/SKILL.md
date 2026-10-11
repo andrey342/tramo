@@ -13,7 +13,9 @@ Arguments: `$ARGUMENTS` (the id of the aggregate, e.g. the `userId` a registrati
    - `event`: outbox events of the aggregate, and of other aggregates whose payload names it;
    - `outbox`: when each was published, or that it was not (with the last error);
    - `job`: the jobs each event fanned out to (`events.<module>`, job id `<eventId>.<consumer>`),
-     their state and error, and any copy in the dead-letter queue;
+     their state and error, and any copy in the dead-letter queue; also the jobs of work queues
+     keyed by the aggregate (`catalog.vat-checks` by center, `origination.verifications` as
+     `<applicationId>.<kyc|employment|bureau>`);
    - `consumer`: consumers that recorded the event as applied (`shared.processed_events`);
    - `audit`: audited actions on it (who, outcome, error code, request id);
    - `mail`: messages in Mailpit that mention it; `webhook`: deliveries the sink received.

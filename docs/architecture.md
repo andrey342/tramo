@@ -41,6 +41,7 @@ flowchart LR
 | [012](adr/012-toolchain-nest12-commonjs-jest.md)                              | NestJS 12 on CommonJS, TypeScript 6 and Jest                   | accepted |
 | [013](adr/013-advisory-locks-for-session-families-and-startup-migrations.md)  | Advisory locks for session families and startup migrations     | accepted |
 | [014](adr/014-field-level-encryption-for-payout-ibans-and-webhook-secrets.md) | Field-level encryption for payout IBANs and webhook secrets    | accepted |
+| [015](adr/015-explainable-scoring-with-versioned-risk-policies.md)            | Explainable scoring with versioned risk policies               | accepted |
 
 ## HTTP pipeline
 
@@ -156,4 +157,80 @@ sequenceDiagram
     Worker->>Outbox: center marked unverified
     Worker-->>Worker: job retried for about a day and a half, then dead-lettered
   end
+```
+
+## Origination
+
+Financing applications, from the student's draft to an accepted offer.
+
+- **Lifecycle.** `draft → submitted → verifying → scoring → approved | needs_review | rejected`;
+  ops settle `needs_review` with a reason; the student accepts an approval (`offer_accepted`,
+  which lending picks up) or cancels anything not final. An application nobody has touched for
+  14 days (no change of status, no edit of the draft) expires, through an hourly sweep in the
+  worker; one waiting for an analyst does not, the review queue being ops' backlog. A student
+  has at most one open application per program (a partial unique index), so two offers for one
+  course cannot both be accepted.
+- **Who does what.** A student applies for themselves; a training center's integration (API key
+  with `applications:write`) starts a draft for a student of its own programs, who must already
+  have an account (`FindStudentQuery`, iam's public query). The center picks the program and the
+  financing; the personal data comes from the student, who alone submits (consenting to the
+  checks), cancels and accepts. The center sees status and program, not the profile, the score or
+  the decision explanation; staff see everything, but an analyst cannot decide their own
+  application. Submitting, accepting and cancelling are audited.
+- **Program snapshot.** The program is copied from the catalog (`FindPublishedProgramQuery`) when
+  the draft starts and again on submit, and must still be open when the offer is accepted: price
+  and options changed later in the catalog do not change an application in flight, and the
+  accepted terms travel in `OfferAccepted`.
+- **Verification saga.** `ApplicationSubmitted` → a consumer queues three jobs on
+  `origination.verifications` (`kyc.verify`, `employment.fetch`, `bureau.check`, job id
+  `<applicationId>.<provider>`), writing nothing itself. Each job asks its provider outside any
+  transaction, then records the answer (`VerificationCompleted`, with how many remain); the first
+  answer moves the application to `verifying`, the third to `scoring`. The jobs run in parallel
+  and a lost optimistic lock is retried on the fresh version without asking the provider again.
+  The consumer of the last `VerificationCompleted` scores it. A provider outage is retried for
+  about two hours, then dead-lettered.
+- **Providers.** KYC, employment history ("vida laboral") and credit bureau are ports with
+  simulated adapters: deterministic by national id (ending in 9 fails KYC, ending in 7 is in a
+  default registry, the rest derived from a hash) with a configurable latency. They verify any
+  national id, so a production process refuses to start with them; real providers replace the
+  adapters, not the ports.
+- **Scoring (ADR 015).** `ScoringEngine` is a pure function of the application, its
+  verifications and the `RiskPolicy` in force: five hard rules (age, residence, identity, default
+  registry, amount above the limit) reject outright; otherwise the score is
+  `40·employability + 25·history + 20·affordability + 15·bureau` (weights and thresholds from the
+  policy, version 1: approve from 70, review from 50, up to 12,000 EUR). Affordability compares the
+  estimated payment with the declared income, but never more income than the employment record
+  shows; an ISA, paid as a share of future income, is judged by that share. The `DecisionRecord`
+  keeps every factor with its weight and value, readable reasons and the policy version.
+- **Personal data.** The national id is encrypted and bound to its row (ADR 014); responses show
+  it masked, logs redact it and the rest of the profile, and events carry ids, outcomes and
+  reason codes, never the profile, the score or the readable reasons.
+
+Known gaps, accepted for now:
+
+- A center's API key learns whether an email belongs to a student (`student_not_found` against a
+  new draft). The route has the credential-endpoint rate limit; an invitation the student accepts
+  would close it.
+- Nothing ties the national id to the account that applies with it: binding identity is the real
+  KYC provider's job (document and selfie), which the simulated one does not do.
+- The idempotency cache keeps the response of `POST /applications` (with the student's profile)
+  in Redis for 24 hours.
+
+```mermaid
+sequenceDiagram
+  participant Student
+  participant Api as api
+  participant Outbox as outbox (Postgres)
+  participant Worker as worker
+  participant Providers as KYC / employment / bureau
+  Student->>Api: POST /applications/:id/submit
+  Api->>Outbox: application submitted + ApplicationSubmitted
+  Worker->>Outbox: publish; consumer queues kyc.verify, employment.fetch, bureau.check
+  par each job, outside any transaction
+    Worker->>Providers: ask
+    Worker->>Outbox: answer recorded + VerificationCompleted
+  end
+  Worker->>Outbox: third answer: scoring; consumer scores with the policy in force
+  Worker->>Outbox: approved | needs_review | rejected + event
+  Student->>Api: GET /applications/:id/decision
 ```

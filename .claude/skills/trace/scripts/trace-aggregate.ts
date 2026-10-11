@@ -36,6 +36,7 @@ void withConnections(async ({ db, redis, queues }) => {
   const entries: Entry[] = [];
   const events = await outboxEvents(db, entries);
   await queueJobs(redis, queues, events, entries);
+  await workJobs(redis, queues, entries);
   await processedMarks(db, events, entries);
   await auditEntries(db, entries);
   await emails(entries);
@@ -119,6 +120,45 @@ async function queueJobs(
                   : undefined,
       });
     }
+  }
+}
+
+// Jobs of a module's own work queues are keyed by the aggregate itself: a center's VAT check
+// (`catalog.vat-checks:<centerId>`), an application's verifications
+// (`origination.verifications:<applicationId>.<provider>`), and their dead letters.
+async function workJobs(redis: Redis, queues: Map<string, Queue>, entries: Entry[]): Promise<void> {
+  const keys = [
+    ...(await scan(redis, `${QUEUE_PREFIX}:*:${id}`)),
+    ...(await scan(redis, `${QUEUE_PREFIX}:*:${id}.*`)),
+    ...(await scan(redis, `${QUEUE_PREFIX}:dead-letter:*.${id}*`)),
+  ];
+  for (const key of new Set(keys)) {
+    const match = /^[^:]+:([^:]+):([^:]+)$/.exec(key);
+    const queue = match ? queues.get(match[1] ?? '') : undefined;
+    if (!match || !queue || queue.name.startsWith('events.')) continue;
+    const job = await Job.fromId(queue, match[2] ?? '');
+    if (!job) continue;
+    const state = await job.getState();
+    const attempts = job.attemptsMade > 0 ? ` after ${String(job.attemptsMade)} attempt(s)` : '';
+    const reason = job.failedReason ? ` - ${truncate(job.failedReason, 120)}` : '';
+    entries.push({
+      at: new Date(job.finishedOn ?? job.processedOn ?? job.timestamp),
+      source: 'job',
+      text:
+        queue.name === 'dead-letter'
+          ? `dead-letter: ${job.name} parked for redelivery or removal`
+          : `${queue.name} ${job.name}: ${state}${attempts}${reason}`,
+      broken:
+        queue.name === 'dead-letter'
+          ? `${job.name} reached the dead-letter queue: pnpm queue:inspect dead-letter ${job.id ?? ''}`
+          : state === 'failed'
+            ? `${job.name} failed: pnpm queue:inspect ${queue.name} ${job.id ?? ''}`
+            : state === 'delayed' && job.attemptsMade > 0
+              ? `${job.name} failed ${String(job.attemptsMade)} time(s) and waits to retry (a provider outage?): pnpm queue:inspect ${queue.name} ${job.id ?? ''}`
+              : state === 'waiting' || state === 'delayed'
+                ? `${job.name} has not run yet: is the worker up?`
+                : undefined,
+    });
   }
 }
 

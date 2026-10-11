@@ -55,7 +55,13 @@ const adapterFile = `${base}/infrastructure/adapters/${name}-${portKebab}.ts`;
 const contractFile = `test/contracts/${portKebab}.contract.ts`;
 const contractFn = `${camel(portKebab)}Contract`;
 const unitSpec = `${base}/infrastructure/adapters/${portKebab}.contract.spec.ts`;
-const intSpec = `${base}/infrastructure/adapters/${portKebab}.contract.int-spec.ts`;
+// An adapter named after another module (`catalog`, `iam`) answers through that module's public
+// queries. Its integration run boots both modules, which module code may not import, so it lives
+// in test/integration.
+const crossModule = name !== module && exists(`src/modules/${name}`);
+const intSpec = crossModule
+  ? `test/integration/${portKebab}.int-spec.ts`
+  : `${base}/infrastructure/adapters/${portKebab}.contract.int-spec.ts`;
 const fakesFile = runtimeFake
   ? `${base}/infrastructure/adapters/fake-${portKebab}.ts`
   : `test/fakes/${module}.ts`;
@@ -233,12 +239,20 @@ const adapterRun = {
   implementation: Adapter,
   importLine: `import { ${Adapter} } from './${name}-${portKebab}';`,
 };
+const intAdapterRun = crossModule
+  ? {
+      implementation: Adapter,
+      importLine: `import { ${Adapter} } from '${relativeImport(intSpec, adapterFile)}';`,
+    }
+  : adapterRun;
 addRuns(unitSpec, integration ? [fakeRun] : [fakeRun, adapterRun]);
 if (integration) {
   addRuns(
     intSpec,
-    [adapterRun],
-    "// Runs against the real dependency (Testcontainers or the provider's test service).\n",
+    [intAdapterRun],
+    crossModule
+      ? `// Crosses two modules (${module}'s adapter, ${name}'s query), so it lives outside both. Build\n// the subject from a Nest context that imports both modules.\n`
+      : "// Runs against the real dependency (Testcontainers or the provider's test service).\n",
   );
 }
 

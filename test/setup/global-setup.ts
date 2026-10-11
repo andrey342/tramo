@@ -18,6 +18,7 @@ export default async function globalSetup(): Promise<void> {
   process.env.FIELD_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   // Tests never depend on the EU's servers; the VIES adapter has its own opt-in suite.
   process.env.VIES_MODE = 'fake';
+  process.env.SIMULATED_PROVIDER_LATENCY_MS = '0-0';
   // Every request of the suites comes from one IP; the limits themselves have their own tests.
   process.env.THROTTLE_LIMIT = '100000';
   process.env.THROTTLE_AUTH_LIMIT = '100000';

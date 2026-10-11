@@ -57,23 +57,24 @@ pnpm worker:dev                      # worker, health on :3100
 The `dev` profile on the command line takes precedence over `COMPOSE_PROFILES=demo` from `.env`,
 so the api and worker containers are not started and the host processes own ports 3000 and 3100.
 
-| Script                                     | What it does                                                                                             |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                                                           |
-| `pnpm build`                               | Compile to `dist/`                                                                                       |
-| `pnpm start`                               | Run the compiled api                                                                                     |
-| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                                                           |
-| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                                                           |
-| `pnpm arch:check`                          | Dependency rules between layers and modules                                                              |
-| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                                                               |
-| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers)                                  |
-| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                                                   |
-| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                                                      |
-| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                                                     |
-| `pnpm seed`                                | Build, then create the demo accounts, a verified training center and its published programs (idempotent) |
+| Script                                     | What it does                                                                                                                                   |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                                                                                                 |
+| `pnpm build`                               | Compile to `dist/`                                                                                                                             |
+| `pnpm start`                               | Run the compiled api                                                                                                                           |
+| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                                                                                                 |
+| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                                                                                                 |
+| `pnpm arch:check`                          | Dependency rules between layers and modules                                                                                                    |
+| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                                                                                                     |
+| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers)                                                                        |
+| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                                                                                         |
+| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                                                                                            |
+| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                                                                                           |
+| `pnpm seed`                                | Build, then create the demo accounts, a verified training center, its published programs and two applications of the demo student (idempotent) |
 
-Demo accounts, created by `pnpm seed` against the database in `.env` (the student registers on
-first use of `pnpm api:call`). All share the password `tramo demo password`; local use only.
+Demo accounts, created by `pnpm seed` against the database in `.env`. All share the password
+`tramo demo password`; local use only. The student has one approved application and one waiting
+in the ops review queue.
 
 | Role                               | Email                    |
 | ---------------------------------- | ------------------------ |
@@ -98,6 +99,7 @@ but real environment variables always win. All variables and their defaults are 
 | `DATABASE_RUN_MIGRATIONS`                                                   | Apply pending migrations when the api starts                                                                                                                                                                    |
 | `JWT_ACCESS_SECRET`                                                         | HS256 key for access tokens (32+ characters, required). With `NODE_ENV=production` the published development value is refused                                                                                   |
 | `FIELD_ENCRYPTION_KEY`                                                      | AES-256 key (32 bytes, base64) for encrypted columns such as payout IBANs (ADR 014). The published development value is refused in production                                                                   |
+| `VERIFICATION_PROVIDERS`, `SIMULATED_PROVIDER_LATENCY_MS`                   | Applicant checks (KYC, employment history, credit bureau): only `simulated` exists, and a production process refuses to start with it; how long they take to answer, `min-max` ms                               |
 | `VIES_MODE`, `VIES_TIMEOUT_MS`                                              | VAT checks of training centers: `live` (VIES), `test` (its test service: only 100 valid and 200 invalid, any other number answers as an outage) or `fake` (same table, offline); production accepts only `live` |
 | `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                          | Session lifetimes (15 minutes, 30 days)                                                                                                                                                                         |
 | `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                        | Progressive lockout after failed sign-ins                                                                                                                                                                       |
@@ -134,10 +136,11 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module    | Responsibility                                                           | Main endpoints                                                                       |
-| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `iam`     | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                      |
-| `catalog` | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public) |
+| Module        | Responsibility                                                           | Main endpoints                                                                                                      |
+| ------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `iam`         | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                     |
+| `catalog`     | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                |
+| `origination` | Financing applications, verification saga, risk policies and scoring     | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies` |
 
 ## API overview
 
@@ -162,6 +165,21 @@ curl -s -X POST localhost:3000/api/v1/auth/register -H 'content-type: applicatio
 curl -s -X POST localhost:3000/api/v1/auth/login -H 'content-type: application/json'   -d '{"email":"ana@example.com","password":"correct horse battery"}'
 curl -s localhost:3000/api/v1/me -H "Authorization: Bearer <accessToken>"
 ```
+
+A financing application, end to end (as the demo student; `pnpm api:call` signs in for you):
+
+```bash
+pnpm api:call POST /applications '{"programId":"<id from GET /programs>","product":{"kind":"installments","termMonths":24},"profile":{"dateOfBirth":"1998-05-20","nationalId":"56781234F","residenceCountry":"ES","declaredMonthlyIncomeCents":180000,"employmentStatus":"employed"}}' --as student
+pnpm api:call POST '/applications/{{last.id}}/submit' --as student
+pnpm api:call GET '/applications/{{last.id}}/decision' --as student
+```
+
+Submitting starts the verification saga in the worker: identity (KYC), employment history and a
+credit bureau check run as three jobs, then the application is scored with the risk policy in
+force and approved, sent to the ops review queue (`GET /ops/applications/review-queue`) or
+rejected. The providers are simulated and answer deterministically from the national id: one
+ending in 9 fails identity verification, one ending in 7 is in a default registry. Applications
+nobody touches for 14 days expire, except those waiting for an analyst.
 
 Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
 progressively after five failed attempts.
@@ -206,6 +224,7 @@ docker compose exec postgres psql -U tramo -d tramo -f /docker-entrypoint-initdb
 
 ## Roadmap
 
-- Catalog of centers and programs, origination and scoring, lending, billing and dunning,
-  notifications and reporting.
+- Lending (contracts, disbursement, repayment plans), billing and dunning, notifications and
+  reporting.
+- Real KYC, employment history and credit bureau providers behind the existing ports.
 - Seed data, an end-to-end demo script and an API collection.

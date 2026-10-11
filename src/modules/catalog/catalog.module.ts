@@ -14,6 +14,7 @@ import {
   type VatValidator,
 } from './application/ports/catalog-ports';
 import { FindCenterHandler } from './application/queries/find-center.query';
+import { FindPublishedProgramHandler } from './application/queries/find-published-program.query';
 import { GetProgramHandler } from './application/queries/get-program.query';
 import { GetTrainingCenterHandler } from './application/queries/get-training-center.query';
 import { ListProgramsHandler } from './application/queries/list-programs.query';
@@ -54,6 +55,7 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
     UpdateTrainingCenterHandler,
     GetTrainingCenterHandler,
     FindCenterHandler,
+    FindPublishedProgramHandler,
     CreateProgramHandler,
     UpdateProgramHandler,
     GetProgramHandler,

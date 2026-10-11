@@ -20,6 +20,8 @@ export const QueueNames = {
   // Work queues of a module, for jobs with their own retry schedule or that must not run inside
   // an event's transaction.
   VAT_CHECKS: 'catalog.vat-checks',
+  VERIFICATIONS: 'origination.verifications',
+  APPLICATION_EXPIRY: 'origination.expiry',
 } as const;
 
 export function eventsQueueForConsumer(consumer: string): string {
@@ -34,4 +36,6 @@ export const ALL_QUEUES: readonly string[] = [
   QueueNames.DEAD_LETTER,
   ...QueueNames.EVENTS,
   QueueNames.VAT_CHECKS,
+  QueueNames.VERIFICATIONS,
+  QueueNames.APPLICATION_EXPIRY,
 ];
