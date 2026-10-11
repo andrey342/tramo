@@ -44,6 +44,16 @@ export const envSchema = z.object({
   VIES_MODE: z.enum(['live', 'test', 'fake']).default('live'),
   VIES_BASE_URL: z.url().default('https://ec.europa.eu/taxation_customs/vies/rest-api'),
   VIES_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5_000),
+  // How long the simulated KYC, employment and bureau providers take to answer, "min-max" in ms.
+  SIMULATED_PROVIDER_LATENCY_MS: z
+    .string()
+    .regex(/^\d{1,5}-\d{1,5}$/, 'Expected "<min>-<max>" milliseconds, e.g. 300-800')
+    .transform((value) => {
+      const [minMs = 0, maxMs = 0] = value.split('-').map(Number);
+      return { minMs, maxMs };
+    })
+    .refine((range) => range.minMs <= range.maxMs, 'The minimum must not exceed the maximum')
+    .default({ minMs: 300, maxMs: 800 }),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
