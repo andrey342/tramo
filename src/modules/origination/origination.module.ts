@@ -37,6 +37,11 @@ import {
   SIMULATED_LATENCY,
   type SimulatedLatency,
 } from './infrastructure/adapters/simulated-providers';
+import {
+  ScoreWhenVerified,
+  StartVerificationOnSubmit,
+} from './infrastructure/consumers/verification-saga.consumers';
+import { VerificationJobs } from './infrastructure/jobs/verifications';
 import { FinancingApplicationOrmEntity } from './infrastructure/persistence/financing-application.orm-entity';
 import { FinancingApplicationMapper } from './infrastructure/persistence/origination.mappers';
 import { RiskPolicyOrmEntity } from './infrastructure/persistence/risk-policy.orm-entity';
@@ -82,7 +87,10 @@ import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeor
     { provide: KYC_PROVIDER, useClass: SimulatedKycProvider },
     { provide: EMPLOYMENT_HISTORY_PROVIDER, useClass: SimulatedEmploymentHistoryProvider },
     { provide: CREDIT_BUREAU, useClass: SimulatedCreditBureau },
+    VerificationJobs,
+    StartVerificationOnSubmit,
+    ScoreWhenVerified,
   ],
-  exports: [],
+  exports: [FINANCING_APPLICATION_REPOSITORY],
 })
 export class OriginationModule {}
