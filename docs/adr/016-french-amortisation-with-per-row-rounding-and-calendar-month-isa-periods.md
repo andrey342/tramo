@@ -44,8 +44,9 @@ of the ones not yet due and the interest accrued since the last due date, pro ra
 the current period, half-up.
 
 An ISA counts calendar months. The course is taken to start on activation and last its
-duration; payments start with the first full month after the grace period, and the obligation
-lapses eight years after the end of the course. Each month is assessed once, in order: at or
+duration; payments start with the first full month after the grace period (the month the grace
+ends in, when it ends on the 1st), and the obligation lapses eight years after the end of the
+course. Each month is assessed once, in order and without gaps: at or
 above the threshold the student pays the share of the income declared, never past the cap; below
 it, or without a declaration, the month is paused and owes nothing; two months in a row without a
 declaration mark the plan overdue for ops. The plan ends at the cap, at the last payment, or when a
@@ -67,4 +68,4 @@ amount shown.
   student starts later. The start date is not captured by origination today; when it is, the plan
   can take it instead.
 - Bad: counting charged amounts towards the cap means a charge written off later must give its
-  amount back. Billing does that when it writes a charge off.
+  amount back; billing has to tell the plan when it writes a charge off.

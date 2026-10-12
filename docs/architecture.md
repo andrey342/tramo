@@ -246,42 +246,58 @@ the repayment plan.
   billing's dunning). One per accepted offer (unique application id). Its terms are fixed when it
   is drawn up: the principal (the program price), the center's platform fee at that moment, and
   the product as accepted (term and TIN, or the ISA's share, threshold, payments, cap and grace).
-- **Signature.** `ContractCreated` → a job renders the contract text (`GET
-/contracts/:id/document`), hashes it (SHA-256) and sends the envelope to the e-signature
-  provider. The provider calls back on `POST /webhooks/esign`, authenticated by
-  `X-Esign-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<raw body>">` (`ESIGN_WEBHOOK_SECRET`),
-  checked in a guard before the body is parsed; a signature older than five minutes is refused,
-  so a captured callback cannot be replayed later. A completed envelope must carry the hash of the
-  document sent, or the signature is refused (`signature_mismatch`). Repeated callbacks change
-  nothing.
+- **Signature.** `ContractCreated` → a job renders the contract text, hashes it (SHA-256) and
+  sends the envelope to the e-signature provider; the text is stored with the envelope, so `GET
+/contracts/:id/document` serves what the student signs whatever the code renders later. The
+  provider calls back on `POST /webhooks/esign`, authenticated by
+  `X-Esign-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<raw body>">` (`ESIGN_WEBHOOK_SECRET`,
+  and `ESIGN_WEBHOOK_PREVIOUS_SECRET` during a rotation), checked in a guard before the body is
+  validated or reaches a command; a signature older than five minutes is refused, so a captured
+  callback cannot be replayed later. A completed envelope must carry the hash of the document sent
+  (`signature_mismatch` otherwise) and a signing time within the life of the envelope. Repeated
+  callbacks write nothing; each one that changes a contract is in the audit log. A callback for an
+  envelope not recorded yet is answered 409, which providers retry.
 - **Disbursement.** `ContractSigned` → one disbursement per contract of the principal less the
   platform fee, `pending → sent → settled | failed`. A job reads the center's payout account
-  through catalog's public query at that moment (a corrected IBAN is used on a retry) and asks the
-  bank for the transfer outside any transaction, with the idempotency key
-  `<disbursementId>.<attempt>`: a repeated call never pays twice. `DisbursementSent` queues a check
-  of the settlement, retried with backoff for about three days while the bank says pending. A
-  bounced transfer, an inactive center or one without a payout account fails the disbursement;
-  ops see it in `GET /ops/disbursements?status=failed` and send it again with `POST
-/ops/disbursements/:id/retry` (audited), a new attempt with a new key.
+  through catalog (the only module allowed to ask for the full IBAN, by a dependency rule) and
+  records it, encrypted, before calling the bank outside any transaction with the idempotency key
+  `<disbursementId>.<attempt>`. From then on the attempt may have paid: a repeated run sends the
+  same key to the same account, and only the bank's answer can fail it. An inactive center, or one
+  without a payout account, fails the attempt before anything is sent. `DisbursementSent` queues a
+  check of the settlement, retried with backoff for about a day and a half while the bank says
+  pending. Ops see failures in `GET /ops/disbursements?status=failed` and send them again with
+  `POST /ops/disbursements/:id/retry`, a new attempt with a new key (the account is read again, so
+  a corrected IBAN is used). A disbursement whose jobs ran out stays `pending` or `sent`; ops
+  reconcile it with `POST /ops/disbursements/:id/reconcile`, which sends a pending attempt again
+  with its key or asks the bank about a sent one. Both are audited.
 - **Activation and plan.** `DisbursementSettled` activates the contract on that day;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
-  the ISA terms with their running totals. `PlanCompleted` completes the contract.
+  the ISA terms with their running totals, assessed month by month without gaps. `PlanCompleted`
+  completes the contract.
 - **Payoff.** For instalments, `POST /contracts/:id/payoff-quote` gives what repaying everything
   costs today or on a day in the coming month; `POST /contracts/:id/payoff` takes today's quote
-  (the amount must match, or `payoff_quote_changed`) and records it (`PayoffRequested`); billing
-  collects it and the plan ends as `paid_off`.
+  (the plan refuses another amount with `payoff_quote_changed`) and records it
+  (`PayoffRequested`); billing collects it and the plan ends as `paid_off`.
 - **Who sees what.** The student sees the contract, its document, schedule and payoff; the center
-  (its admins, or an API key with `portfolio:read`) sees the contract and what it is paid, not the
-  repayment; staff see everything. The student does not see the platform fee.
+  (its admins, or an API key with `portfolio:read`) sees the contract with its terms (the same as
+  its program's financing options) and what it is paid, not the schedule, the payoff or the
+  document; staff see everything. The student does not see the platform fee.
 - **Providers.** E-signature and bank are ports with simulated adapters: the envelope id derives
   from the contract, and transfers to an IBAN ending in 0000 bounce (`account_closed`).
-  `pnpm esign:sign <contractId>` plays the student signing. A production process refuses to start
-  with them.
+  `pnpm esign:sign <contractId>` plays the student signing against a local stack. A production
+  process refuses to start with them.
 
 Known gaps, accepted for now:
 
-- Nothing collects a payoff or an instalment yet: billing does, from its mandate and cycle.
+- Nothing collects a payoff or an instalment yet: billing does, from its mandate and cycle, and
+  tells the plan what was paid.
 - An ISA cannot be paid off early; the cap is its limit.
+- The envelope request carries the student's id only; a real provider needs their name and email,
+  read through a public query of iam when one is wired in. Cancelling a contract does not void the
+  envelope at the provider.
+- A payout IBAN changed after signing is used for the transfer at once; a hold on changes while a
+  disbursement is pending would need a second approval.
+- `eventId` of the callbacks is not stored: replays are absorbed by the idempotent transitions.
 
 ```mermaid
 sequenceDiagram

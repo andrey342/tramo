@@ -50,3 +50,10 @@ to the database with every query, where it can end up in logs and `pg_stat_state
 - Bad: the key is now the secret that matters. It lives in the environment like the JWT secret;
   in production it belongs in a secrets manager, and moving to a KMS means replacing `FieldCipher`'s
   key source, not the format.
+
+### Note (2026-10-12)
+
+Paying a center needs its full IBAN outside catalog. Catalog answers `GetPayoutAccountQuery` in
+its own file, and a dependency rule (`payout-account-only-for-disbursements`) lets only lending's
+catalog adapter import it. Lending keeps the account a transfer was started with encrypted the same
+way, bound to its disbursement (`lending.disbursements.creditor_iban:<id>`).
