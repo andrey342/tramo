@@ -58,9 +58,10 @@ describe('Billing (e2e)', () => {
     await app.get<UnitOfWork>(UNIT_OF_WORK).run(async () => {
       await app.get<ContractRepository>(CONTRACT_REPOSITORY).save(contract);
       await app.get<FinancingPlanRepository>(FINANCING_PLAN_REPOSITORY).save(
+        // An ISA activated a year ago is in its months of repayment.
         aPlan({
           contractId: contract.id,
-          activatedOn: today.toString(),
+          activatedOn: (isa ? today.addMonths(-12) : today).toString(),
           ...(isa ? { product: anIsa() } : {}),
         }),
       );
@@ -184,6 +185,7 @@ describe('Billing (e2e)', () => {
     const twice = await declare(isa.token, isa.contractId, period);
     const notIsa = await declare(loan.token, loan.contractId, period);
     const future = await declare(isa.token, isa.contractId, '2099-01');
+    const beforeStart = await declare(isa.token, isa.contractId, '2020-01');
 
     expect(declared.status).toBe(201);
     expect(declared.body).toMatchObject({
@@ -195,6 +197,8 @@ describe('Billing (e2e)', () => {
     expect(twice.body.code).toBe('income_already_declared');
     expect(notIsa.body.code).toBe('not_an_income_share');
     expect(future.body.code).toBe('invalid_period');
+    expect(beforeStart.status).toBe(422);
+    expect(beforeStart.body.code).toBe('period_not_open');
   });
 
   it('should keep billing to the student and staff', async () => {

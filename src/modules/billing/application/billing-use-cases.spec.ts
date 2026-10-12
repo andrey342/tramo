@@ -21,13 +21,13 @@ import {
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
 import {
   BillingAccessDeniedError,
-  DeclarationTooLateError,
   BillingEvents,
   type Charge,
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
   MandateMissingError,
   NotAnIncomeShareError,
+  PeriodNotOpenError,
   PaymentMismatchError,
   UnknownCollectionAttemptError,
 } from '../domain';
@@ -309,7 +309,7 @@ describe('billing use cases', () => {
       });
       await expect(
         t.declare.execute(new DeclareIncomeCommand(t.student, other, '2026-08', 2_000_00)),
-      ).rejects.toThrow(DeclarationTooLateError);
+      ).rejects.toThrow(PeriodNotOpenError);
     });
 
     it('should go on with the other plans when one fails, and report it', async () => {

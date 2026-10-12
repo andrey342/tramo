@@ -363,7 +363,7 @@ through a payment provider, dunning, ISA income declarations and the account sta
   Ops collect a failed or overdue charge again with `POST /charges/:id/retry`, or ask the
   provider again for one stuck in collection (same key), while the contract is being repaid.
 - **ISA declarations.** `POST /contracts/:id/income-declarations`, one per month that has
-  started and has not been assessed yet (a later one is `declaration_too_late`: the month was
+  started and has not been assessed yet (`period_not_open` otherwise: the month was
   paused); audited, the amount stays in billing (events say only that a month was declared). On
   the 25th students who have not declared the month are reminded once (`IncomeDeclarationDue`).
 - **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once

@@ -36,13 +36,14 @@ export class IncomeAlreadyDeclaredError extends DomainError {
   }
 }
 
-// The month has been assessed already (the billing cycle ran without it): it was paused.
-export class DeclarationTooLateError extends DomainError {
-  readonly code = 'declaration_too_late';
+// A month before the ISA's first one, or one already assessed (the cycle ran without a
+// declaration and paused it).
+export class PeriodNotOpenError extends DomainError {
+  readonly code = 'period_not_open';
   readonly category = 'rule_violation';
 
   constructor(period: string, openFrom: string) {
-    super(`Income for ${period} can no longer be declared; the first open month is ${openFrom}.`, {
+    super(`Income for ${period} cannot be declared; the first open month is ${openFrom}.`, {
       period,
       openFrom,
     });
