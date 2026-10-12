@@ -55,6 +55,10 @@ import {
   OpenFinancingPlanHandler,
 } from './commands/open-financing-plan.command';
 import {
+  ReconcileDisbursementCommand,
+  ReconcileDisbursementHandler,
+} from './commands/reconcile-disbursement.command';
+import {
   RecordSignatureEventCommand,
   RecordSignatureEventHandler,
 } from './commands/record-signature-event.command';
@@ -111,13 +115,16 @@ function setup() {
     principalCents: 6_000_00,
     product,
   });
+  const execute = new ExecuteDisbursementHandler(uow, disbursements, catalog, bank, clock);
+  const check = new CheckDisbursementSettlementHandler(uow, disbursements, bank, clock);
   const handlers = {
     drawUp: new DrawUpContractHandler(uow, contracts, catalog, clock),
     send: new SendContractForSignatureHandler(uow, contracts, signatures, clock),
     signature: new RecordSignatureEventHandler(uow, contracts, clock),
     requestDisbursement: new RequestDisbursementHandler(uow, contracts, disbursements, clock),
-    execute: new ExecuteDisbursementHandler(uow, disbursements, catalog, bank, clock),
-    check: new CheckDisbursementSettlementHandler(uow, disbursements, bank, clock),
+    execute,
+    check,
+    reconcile: new ReconcileDisbursementHandler(disbursements, execute, check),
     retry: new RetryDisbursementHandler(uow, disbursements, clock),
     activate: new ActivateContractHandler(uow, contracts, clock),
     openPlan: new OpenFinancingPlanHandler(uow, contracts, plans, clock),
@@ -456,6 +463,27 @@ describe('lending use cases', () => {
       expect(await t.check.execute(new CheckDisbursementSettlementCommand(id))).toBe(
         'nothing_to_check',
       );
+    });
+
+    it('should let ops reconcile a disbursement whose jobs ran out, without paying twice', async () => {
+      const t = setup();
+      const contractId = await t.signed();
+      const { id } = await t.disbursementOf(contractId);
+      t.bank.failWith = new Error('bank down');
+      await expect(t.execute.execute(new ExecuteDisbursementCommand(id))).rejects.toThrow();
+      t.bank.failWith = null;
+      t.bank.settleImmediately = false;
+
+      const sent = await t.reconcile.execute(new ReconcileDisbursementCommand(OPS, id));
+      t.bank.settleImmediately = true;
+      const settled = await t.reconcile.execute(new ReconcileDisbursementCommand(OPS, id));
+
+      expect(sent.status).toBe('sent');
+      expect(settled.status).toBe('settled');
+      expect(t.bank.transfers.size).toBe(1);
+      await expect(
+        t.reconcile.execute(new ReconcileDisbursementCommand(t.student, id)),
+      ).rejects.toThrow(ContractAccessDeniedError);
     });
 
     it('should let only staff retry a disbursement', async () => {

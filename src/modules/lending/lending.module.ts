@@ -9,6 +9,7 @@ import { CompleteContractHandler } from './application/commands/complete-contrac
 import { DrawUpContractHandler } from './application/commands/draw-up-contract.command';
 import { ExecuteDisbursementHandler } from './application/commands/execute-disbursement.command';
 import { OpenFinancingPlanHandler } from './application/commands/open-financing-plan.command';
+import { ReconcileDisbursementHandler } from './application/commands/reconcile-disbursement.command';
 import { RecordSignatureEventHandler } from './application/commands/record-signature-event.command';
 import { RequestDisbursementHandler } from './application/commands/request-disbursement.command';
 import { RequestPayoffHandler } from './application/commands/request-payoff.command';
@@ -101,6 +102,7 @@ function simulated<T>(config: AppConfig, provider: T): T {
     ExecuteDisbursementHandler,
     CheckDisbursementSettlementHandler,
     RetryDisbursementHandler,
+    ReconcileDisbursementHandler,
     ActivateContractHandler,
     OpenFinancingPlanHandler,
     CompleteContractHandler,

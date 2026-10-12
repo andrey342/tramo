@@ -8,6 +8,7 @@ import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
+import { ReconcileDisbursementCommand } from '../../application/commands/reconcile-disbursement.command';
 import { RetryDisbursementCommand } from '../../application/commands/retry-disbursement.command';
 import { type DisbursementDto } from '../../application/dto/contract.dto';
 import { ListDisbursementsQuery } from '../../application/queries/list-disbursements.query';
@@ -58,5 +59,26 @@ export class OpsDisbursementsController {
     @Param('disbursementId', ParseUUIDPipe) disbursementId: string,
   ): Promise<DisbursementDto> {
     return this.commands.execute(new RetryDisbursementCommand(actor, disbursementId));
+  }
+
+  @Post(':disbursementId/reconcile')
+  @HttpCode(200)
+  @ApiProblems(400, 401, 403, 404)
+  @ApiOkResponse({ type: DisbursementResponse })
+  @Roles('ops', 'admin')
+  @Audited({
+    action: 'disbursement.reconcile',
+    resource: 'disbursement',
+    resourceIdParam: 'disbursementId',
+  })
+  @ApiOperation({
+    summary:
+      'For one whose jobs ran out: send a pending transfer again (same key) or ask the bank about a sent one',
+  })
+  reconcile(
+    @CurrentPrincipal() actor: Principal,
+    @Param('disbursementId', ParseUUIDPipe) disbursementId: string,
+  ): Promise<DisbursementDto> {
+    return this.commands.execute(new ReconcileDisbursementCommand(actor, disbursementId));
   }
 }

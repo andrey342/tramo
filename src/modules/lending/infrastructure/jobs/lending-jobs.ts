@@ -24,11 +24,12 @@ export const JOB_NAMES = {
 } as const;
 
 // A provider or bank outage is retried for about two hours (exponential from 30 s over nine
-// attempts), then dead-lettered for ops.
+// attempts), then dead-lettered; a disbursement left pending is reconciled by ops.
 const PROVIDER_CALL: JobsOptions = { attempts: 9, backoff: { type: 'exponential', delay: 30_000 } };
 
 // A transfer settles when the bank says so: asked a few seconds after it is sent, then with
-// backoff from a minute for about three days (twelve attempts) before ops are left to look.
+// backoff from a minute for about a day and a half (twelve attempts: 60 s × (2¹¹ − 1)). After
+// that ops reconcile it (POST /ops/disbursements/:id/reconcile).
 const SETTLEMENT_CHECK: JobsOptions = {
   delay: 5_000,
   attempts: 12,
