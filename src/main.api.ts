@@ -7,7 +7,11 @@ import { configureHttpApp } from '@shared/infrastructure/http';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+    // Signed webhooks are verified over the exact bytes received.
+    rawBody: true,
+  });
   app.useLogger(app.get(Logger));
   const config = app.get<AppConfig>(APP_CONFIG);
   configureHttpApp(app, config);
