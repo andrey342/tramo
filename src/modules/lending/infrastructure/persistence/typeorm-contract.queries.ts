@@ -5,15 +5,22 @@ import { type TransactionalAdapterTypeOrm } from '@nestjs-cls/transactional-adap
 import { type CursorPage, type PageRequest } from '@shared/application';
 import { paginateByCursor } from '@shared/infrastructure/database';
 
+import { toBillablePlanDto } from '../../application/contract.mapping';
 import {
   type ContractFilter,
   type ContractSummaryDto,
   type DisbursementDto,
   type DisbursementFilter,
 } from '../../application/dto/contract.dto';
+import { type BillablePlanDto } from '../../application/dto/plan-lookup';
 import { type ContractQueries } from '../../application/ports/lending-ports';
 
-import { ContractOrmEntity, DisbursementOrmEntity } from './lending.orm-entities';
+import { FinancingPlanMapper } from './lending.mappers';
+import {
+  ContractOrmEntity,
+  DisbursementOrmEntity,
+  FinancingPlanOrmEntity,
+} from './lending.orm-entities';
 
 // Lists read only the columns they show and map rows straight to DTOs. Each scope has its index
 // on (…, created_at, id).
@@ -67,6 +74,38 @@ export class TypeOrmContractQueries implements ContractQueries {
       })),
       nextCursor: result.nextCursor,
     };
+  }
+
+  // Served by ux_lending_financing_plans_contract_id (order and cursor) and the contract's primary
+  // key for the join.
+  async billablePlans(
+    afterContractId: string | null,
+    limit: number,
+    contractId: string | null = null,
+  ): Promise<readonly BillablePlanDto[]> {
+    const query = this.txHost.tx
+      .getRepository(FinancingPlanOrmEntity)
+      .createQueryBuilder('plan')
+      .innerJoin(ContractOrmEntity, 'contract', 'contract.id = plan.contract_id')
+      .addSelect('contract.status', 'contract_status')
+      .where(`plan.status = 'active'`)
+      .andWhere(`contract.status IN ('active', 'in_arrears')`)
+      // A payoff being collected covers what is left: nothing more is billed meanwhile.
+      .andWhere(`COALESCE(plan.terms -> 'payoffRequest', 'null'::jsonb) = 'null'::jsonb`)
+      .orderBy('plan.contract_id', 'ASC')
+      .limit(limit);
+    if (afterContractId) {
+      query.andWhere('plan.contract_id > :afterContractId', { afterContractId });
+    }
+    if (contractId) {
+      query.andWhere('plan.contract_id = :contractId', { contractId });
+    }
+    const { entities, raw } = await query.getRawAndEntities<{
+      contract_status: 'active' | 'in_arrears';
+    }>();
+    return entities.map((row, index) =>
+      toBillablePlanDto(FinancingPlanMapper.toDomain(row), raw[index]?.contract_status ?? 'active'),
+    );
   }
 
   async listDisbursements(

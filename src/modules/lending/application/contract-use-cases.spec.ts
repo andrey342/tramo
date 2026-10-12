@@ -60,6 +60,14 @@ import {
   ReconcileDisbursementHandler,
 } from './commands/reconcile-disbursement.command';
 import {
+  RecordCollectionStatusCommand,
+  RecordCollectionStatusHandler,
+} from './commands/record-collection-status.command';
+import {
+  RecordRepaymentCommand,
+  RecordRepaymentHandler,
+} from './commands/record-repayment.command';
+import {
   RecordSignatureEventCommand,
   RecordSignatureEventHandler,
 } from './commands/record-signature-event.command';
@@ -133,6 +141,8 @@ function setup() {
     openPlan: new OpenFinancingPlanHandler(uow, contracts, plans, clock),
     complete: new CompleteContractHandler(uow, contracts, clock),
     payoff: new RequestPayoffHandler(uow, contracts, plans, clock),
+    repayment: new RecordRepaymentHandler(uow, plans, clock),
+    collectionStatus: new RecordCollectionStatusHandler(uow, contracts, clock),
   };
 
   // The saga as the consumers and jobs run it.
@@ -556,6 +566,93 @@ describe('lending use cases', () => {
 
       expect((await t.contracts.findById(contractId))?.status).toBe('completed');
       expect(t.events.ofType(LendingEvents.ContractCompleted)).toHaveLength(1);
+    });
+  });
+
+  describe('collection by billing', () => {
+    it('should record the instalments billing collects, once each', async () => {
+      const t = setup();
+      const contractId = await t.active();
+
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber: 2 }),
+      );
+      const version = (await t.plans.findByContractId(contractId))?.version;
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber: 2 }),
+      );
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan?.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([2]);
+      expect(plan?.version).toBe(version);
+    });
+
+    it('should end the plan and the contract when the payoff is collected', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+
+      expect(await t.plans.findByContractId(contractId)).toMatchObject({
+        status: 'completed',
+        completionReason: 'paid_off',
+      });
+      expect(t.events.ofType(LendingEvents.PlanCompleted)).toHaveLength(1);
+    });
+
+    // An instalment in collection when the payoff was settled: the plan is already closed.
+    it('should ignore an instalment collected after the plan was paid off', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+      const version = (await t.plans.findByContractId(contractId))?.version;
+
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber: 1 }),
+      );
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan?.version).toBe(version);
+      expect(plan?.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([]);
+    });
+
+    it('should withdraw a payoff the bank refused, so the student may ask again', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff_failed' }));
+      const version = (await t.plans.findByContractId(contractId))?.version;
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff_failed' }));
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan?.status).toBe('active');
+      expect(plan?.terms.kind === 'installments' && plan.terms.payoffRequest).toBeNull();
+      expect(plan?.version).toBe(version);
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+      expect(t.events.ofType(LendingEvents.PayoffRequested)).toHaveLength(2);
+      expect(t.events.ofType(LendingEvents.PayoffWithdrawn)).toHaveLength(1);
+    });
+
+    it('should follow the arrears and the default dunning decides', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      const status = async (next: 'in_arrears' | 'current' | 'defaulted') => {
+        await t.collectionStatus.execute(
+          new RecordCollectionStatusCommand(contractId, next, new Date()),
+        );
+        return (await t.contracts.findById(contractId))?.status;
+      };
+
+      expect(await status('in_arrears')).toBe('in_arrears');
+      expect(await status('in_arrears')).toBe('in_arrears');
+      expect(await status('current')).toBe('active');
+      expect(await status('defaulted')).toBe('defaulted');
+      expect(await status('in_arrears')).toBe('defaulted');
+      expect(t.events.ofType(LendingEvents.ContractDefaulted)).toHaveLength(1);
     });
   });
 

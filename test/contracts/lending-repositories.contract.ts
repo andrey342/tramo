@@ -179,6 +179,86 @@ export function lendingRepositoriesContract(
       expect(active.data.map((c) => c.id)).toEqual([third.id]);
     });
 
+    it('should page through the plans being repaid, with what is left to bill', async () => {
+      const { contracts, plans, queries, run } = await create();
+      const [repaying, inArrears, defaulted, isaContract] = [
+        anActiveContract(),
+        anActiveContract(),
+        anActiveContract(),
+        anActiveContract({ terms: { product: anIsa() } }),
+      ];
+      inArrears.markInArrears(LATER, LATER);
+      defaulted.declareDefault(LATER);
+      const paidOne = aPlan({ contractId: repaying.id });
+      paidOne.recordInstallmentPaid(1, LATER);
+      const isa = aPlan({
+        contractId: isaContract.id,
+        product: anIsa(),
+        activatedOn: '2026-01-05',
+      });
+      await run(async () => {
+        for (const contract of [repaying, inArrears, defaulted, isaContract]) {
+          await contracts.save(contract);
+        }
+        await plans.save(paidOne);
+        await plans.save(aPlan({ contractId: inArrears.id }));
+        await plans.save(aPlan({ contractId: defaulted.id }));
+        await plans.save(isa);
+      });
+      const ours = new Set([repaying.id, inArrears.id, defaulted.id, isaContract.id]);
+
+      const all = [];
+      let after: string | null = null;
+      for (;;) {
+        const page = await run(() => queries.billablePlans(after, 2));
+        all.push(...page.filter((plan) => ours.has(plan.contractId)));
+        if (page.length < 2) break;
+        after = page.at(-1)?.contractId ?? null;
+      }
+
+      expect(all.map((plan) => plan.contractId).sort()).toEqual(
+        [repaying.id, inArrears.id, isaContract.id].sort(),
+      );
+      const first = all.find((plan) => plan.contractId === repaying.id);
+      expect(first).toMatchObject({ kind: 'installments', contractStatus: 'active' });
+      expect(first?.unpaidInstallments).toHaveLength(23);
+      expect(first?.unpaidInstallments[0]).toEqual({
+        number: 2,
+        dueDate: '2026-12-12',
+        totalCents: 337_50,
+      });
+      expect(all.find((plan) => plan.contractId === inArrears.id)?.contractStatus).toBe(
+        'in_arrears',
+      );
+      expect(all.find((plan) => plan.contractId === isaContract.id)).toMatchObject({
+        kind: 'isa',
+        unpaidInstallments: [],
+        nextIsaPeriod: '2026-07',
+      });
+    });
+
+    // A payoff being collected covers what is left; the cycle bills nothing else meanwhile.
+    it('should leave out a plan whose payoff is being collected, and narrow to one contract', async () => {
+      const { contracts, plans, queries, run } = await create();
+      const [payingOff, other] = [anActiveContract(), anActiveContract()];
+      const plan = aPlan({ contractId: payingOff.id });
+      plan.recordInstallmentPaid(1, LATER);
+      const payoffDay = CalendarDate.parse('2026-11-20');
+      plan.requestPayoff(payoffDay, plan.payoffQuote(payoffDay).total, LATER);
+      await run(async () => {
+        await contracts.save(payingOff);
+        await contracts.save(other);
+        await plans.save(plan);
+        await plans.save(aPlan({ contractId: other.id }));
+      });
+
+      const narrowed = await run(() => queries.billablePlans(null, 50, payingOff.id));
+      const onlyOther = await run(() => queries.billablePlans(null, 50, other.id));
+
+      expect(narrowed).toEqual([]);
+      expect(onlyOther.map((billable) => billable.contractId)).toEqual([other.id]);
+    });
+
     it('should list disbursements by status', async () => {
       const { contracts, disbursements, queries, run } = await create();
       const [paid, bounced] = [anActiveContract(), anActiveContract()];

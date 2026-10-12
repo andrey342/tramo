@@ -43,6 +43,9 @@ export interface ContractProps {
   readonly signature: Signature | null;
   readonly activatedOn: CalendarDate | null;
   readonly cancellationReason: CancellationReason | null;
+  // When billing last moved the contract into or out of arrears: an older notice arriving late
+  // (events are delivered independently) is ignored.
+  readonly arrearsChangedAt: Date | null;
   readonly status: ContractStatus;
   readonly statusChangedAt: Date;
   readonly createdAt: Date;
@@ -52,7 +55,9 @@ export interface ContractProps {
 //
 //   draft → sent_for_signature → signed → active → completed
 //   draft | sent_for_signature → cancelled        (the student declined, or never signed)
-//   active → defaulted                            (billing, after dunning runs out)
+//   active ⇄ in_arrears                           (billing: a charge 30 days overdue, then paid)
+//   active | in_arrears → defaulted               (billing, after dunning runs out)
+//   in_arrears → completed                        (the plan ended while a charge was overdue)
 //
 // Signing starts the disbursement to the center; the contract is active once the center is paid.
 export class Contract extends AggregateRoot {
@@ -81,6 +86,7 @@ export class Contract extends AggregateRoot {
       signature: null,
       activatedOn: null,
       cancellationReason: null,
+      arrearsChangedAt: null,
       status: 'draft',
       statusChangedAt: input.now,
       createdAt: input.now,
@@ -272,12 +278,65 @@ export class Contract extends AggregateRoot {
     });
   }
 
+  get arrearsChangedAt(): Date | null {
+    return this.props.arrearsChangedAt;
+  }
+
+  // A charge has been overdue for 30 days, as billing noticed it at `noticedAt`. Billing owns
+  // the dunning; the contract only reflects it, so it records no event of its own. Idempotent;
+  // a notice older than the last change is ignored, and so are the arrears of a contract that
+  // has ended (completed with a charge still overdue, or defaulted).
+  markInArrears(noticedAt: Date, now: Date): void {
+    if (this.isStale(noticedAt) || this.hasEnded || this.props.status === 'in_arrears') {
+      return;
+    }
+    this.assertStatus('active', 'in_arrears');
+    this.props = { ...this.props, arrearsChangedAt: noticedAt };
+    this.moveTo('in_arrears', now);
+  }
+
+  // Nothing is overdue any more, as of `noticedAt`. Same rules as markInArrears.
+  clearArrears(noticedAt: Date, now: Date): void {
+    if (this.isStale(noticedAt) || this.hasEnded || this.props.status === 'active') {
+      return;
+    }
+    this.assertStatus('in_arrears', 'active');
+    this.props = { ...this.props, arrearsChangedAt: noticedAt };
+    this.moveTo('active', now);
+  }
+
+  // Dunning ran out (90 days overdue): the debt goes to ops and collections. Idempotent. A
+  // contract completed meanwhile (an ISA whose last month reached the cap) stays completed: the
+  // charge written off is a loss of billing, not a default.
+  declareDefault(now: Date): void {
+    if (this.props.status === 'defaulted' || this.props.status === 'completed') {
+      return;
+    }
+    if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {
+      throw new InvalidStateTransitionError('Contract', this.props.status, 'defaulted');
+    }
+    this.moveTo('defaulted', now);
+    this.record({
+      eventType: LendingEvents.ContractDefaulted,
+      aggregateType: 'Contract',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        contractId: this.id,
+        studentId: this.props.studentId,
+        centerId: this.props.centerId,
+      },
+    });
+  }
+
   // The plan has ended: repaid, paid off, or for an ISA its cap, payments or window reached.
   complete(now: Date): void {
     if (this.props.status === 'completed') {
       return;
     }
-    this.assertStatus('active', 'completed');
+    if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {
+      throw new InvalidStateTransitionError('Contract', this.props.status, 'completed');
+    }
     this.moveTo('completed', now);
     this.record({
       eventType: LendingEvents.ContractCompleted,
@@ -290,6 +349,17 @@ export class Contract extends AggregateRoot {
         centerId: this.props.centerId,
       },
     });
+  }
+
+  private isStale(noticedAt: Date): boolean {
+    return (
+      this.props.arrearsChangedAt !== null &&
+      noticedAt.getTime() < this.props.arrearsChangedAt.getTime()
+    );
+  }
+
+  private get hasEnded(): boolean {
+    return this.props.status === 'completed' || this.props.status === 'defaulted';
   }
 
   private assertStatus(expected: ContractStatus, target: ContractStatus): void {

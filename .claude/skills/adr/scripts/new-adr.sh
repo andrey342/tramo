@@ -12,7 +12,8 @@ dir=docs/adr
 index=docs/architecture.md
 last="$(ls "$dir" | grep -oE '^[0-9]{3}' | sort -n | tail -1)"
 number="$(printf '%03d' $((10#${last:-0} + 1)))"
-slug="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+# Apostrophes are dropped, not turned into a dash: "lending's" becomes "lendings".
+slug="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -d "'" | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
 file="$dir/$number-$slug.md"
 [ ! -e "$file" ] || { echo "$file already exists"; exit 1; }
 

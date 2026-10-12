@@ -24,6 +24,11 @@ export const QueueNames = {
   APPLICATION_EXPIRY: 'origination.expiry',
   SIGNATURES: 'lending.signatures',
   DISBURSEMENTS: 'lending.disbursements',
+  BILLING_CYCLE: 'billing.cycle',
+  BILLING_COLLECT: 'billing.collect',
+  BILLING_DUNNING: 'billing.dunning',
+  DECLARATION_REMINDERS: 'billing.declaration-reminders',
+  PSP_SIMULATOR: 'billing.psp-simulator',
 } as const;
 
 export function eventsQueueForConsumer(consumer: string): string {
@@ -42,4 +47,9 @@ export const ALL_QUEUES: readonly string[] = [
   QueueNames.APPLICATION_EXPIRY,
   QueueNames.SIGNATURES,
   QueueNames.DISBURSEMENTS,
+  QueueNames.BILLING_CYCLE,
+  QueueNames.BILLING_COLLECT,
+  QueueNames.BILLING_DUNNING,
+  QueueNames.DECLARATION_REMINDERS,
+  QueueNames.PSP_SIMULATOR,
 ];

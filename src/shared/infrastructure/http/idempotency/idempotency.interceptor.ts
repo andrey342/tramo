@@ -42,8 +42,8 @@ type IdempotencyRecord =
       readonly body: unknown;
     };
 
-// Scope is (principal, key); the fingerprint (method, route, body) decides between "replay" and
-// "key reused for a different request".
+// Scope is (principal, key); the fingerprint (method, route, query, body) decides between
+// "replay" and "key reused for a different request".
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   private readonly logger = new Logger(IdempotencyInterceptor.name);
@@ -181,9 +181,15 @@ export class IdempotencyInterceptor implements NestInterceptor {
     return `tramo:idempotency:${sha256(`${scope}\n${key}`)}`;
   }
 
+  // The query is part of the request (ops runs take their day and contract there), in a stable
+  // order.
   private fingerprint(request: RequestWithPrincipal): string {
-    const path = request.originalUrl.split('?', 1)[0] ?? '';
-    return sha256(`${request.method} ${path}\n${stableStringify(request.body)}`);
+    const [path = '', search = ''] = request.originalUrl.split('?', 2);
+    const query = new URLSearchParams(search);
+    query.sort();
+    return sha256(
+      `${request.method} ${path}?${query.toString()}\n${stableStringify(request.body)}`,
+    );
   }
 }
 

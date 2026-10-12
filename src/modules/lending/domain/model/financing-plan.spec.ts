@@ -102,26 +102,43 @@ describe('FinancingPlan', () => {
       plan.pullEvents();
 
       plan.settlePayoff(LATER);
+      plan.settlePayoff(LATER);
 
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'paid_off' });
       expect(eventTypes(plan)).toEqual([LendingEvents.PlanCompleted]);
       expect(() => plan.payoffQuote(plan.startsOn)).toThrow(PlanEndedError);
     });
 
-    it('should count instalments paid in order, ignore repeats and end with the last', () => {
+    it('should count instalments paid in any order, ignore repeats and end with the last', () => {
       const plan = aPlan({
         product: { kind: 'installments', termMonths: 6, annualRate: Percentage.fromPercent(9) },
       });
 
-      plan.recordInstallmentPaid(1, LATER);
-      plan.recordInstallmentPaid(1, LATER);
+      plan.recordInstallmentPaid(2, LATER);
+      plan.recordInstallmentPaid(2, LATER);
       expect(() => {
-        plan.recordInstallmentPaid(3, LATER);
+        plan.recordInstallmentPaid(7, LATER);
       }).toThrow(InvalidValueError);
-      for (const number of [2, 3, 4, 5, 6]) plan.recordInstallmentPaid(number, LATER);
+      for (const number of [1, 3, 4, 5]) plan.recordInstallmentPaid(number, LATER);
+      expect(plan.status).toBe('active');
+      plan.recordInstallmentPaid(6, LATER);
 
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'repaid' });
       expect(eventTypes(plan)).toEqual([LendingEvents.PlanCompleted]);
+    });
+
+    // Billing is already collecting the instalment that fell due: a payoff would charge it twice.
+    it('should refuse a payoff while an instalment due is unpaid', () => {
+      const plan = aPlan({ activatedOn: '2026-10-12' });
+      const day = CalendarDate.parse('2026-11-12');
+
+      expect(() => plan.requestPayoff(day, plan.payoffQuote(day).total, LATER)).toThrow(
+        PayoffNotAvailableError,
+      );
+      plan.recordInstallmentPaid(1, LATER);
+      expect(plan.requestPayoff(day, plan.payoffQuote(day).total, LATER).overdueInstallments).toBe(
+        0,
+      );
     });
 
     it('should not be assessed by income', () => {

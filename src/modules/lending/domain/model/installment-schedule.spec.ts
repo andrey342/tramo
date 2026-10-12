@@ -138,18 +138,18 @@ describe('firstDueDate', () => {
 });
 
 describe('payoffQuote', () => {
-  const quote = (asOf: string, installmentsPaid: number) =>
+  const quote = (asOf: string, paidInstallments: number[]) =>
     payoffQuote({
       schedule: SIX_MONTHS,
       principal: eur('6000.00'),
       annualRate: Percentage.fromPercent(9),
       startsOn: day('2026-01-10'),
-      installmentsPaid,
+      paidInstallments,
       asOf: day(asOf),
     });
 
   it('should be the principal alone on the day the plan starts', () => {
-    expect(quote('2026-01-10', 0)).toMatchObject({
+    expect(quote('2026-01-10', [])).toMatchObject({
       overdueInstallments: 0,
       outstandingPrincipal: eur('6000.00'),
       accruedInterest: eur('0.00'),
@@ -159,7 +159,7 @@ describe('payoffQuote', () => {
 
   // 15 of the 31 days to the first due date: 6,000 × 0.0075 × 15 / 31 = 21.774... → 21.77.
   it('should add the interest accrued in the month so far', () => {
-    expect(quote('2026-01-25', 0)).toMatchObject({
+    expect(quote('2026-01-25', [])).toMatchObject({
       accruedInterest: eur('21.77'),
       total: eur('6021.77'),
     });
@@ -167,7 +167,7 @@ describe('payoffQuote', () => {
 
   // 14 of the 28 days from 10 February: 5,018.59 × 0.0075 / 2 = 18.819... → 18.82.
   it('should start from the balance after the last instalment paid', () => {
-    expect(quote('2026-02-24', 1)).toMatchObject({
+    expect(quote('2026-02-24', [1])).toMatchObject({
       overdueInstallments: 0,
       outstandingPrincipal: eur('5018.59'),
       accruedInterest: eur('18.82'),
@@ -175,8 +175,19 @@ describe('payoffQuote', () => {
     });
   });
 
+  // Instalments 1 and 2 collected ahead, on 25 January: 6,000 − 981.41 − 988.77 = 4,029.82,
+  // and January's interest came with the first.
+  it('should take off the principal of instalments paid ahead of their date', () => {
+    expect(quote('2026-01-25', [1, 2])).toMatchObject({
+      overdueInstallments: 0,
+      outstandingPrincipal: eur('4029.82'),
+      accruedInterest: eur('0.00'),
+      total: eur('4029.82'),
+    });
+  });
+
   it('should include instalments already due and not paid', () => {
-    expect(quote('2026-02-10', 0)).toMatchObject({
+    expect(quote('2026-02-10', [])).toMatchObject({
       overdueInstallments: 1,
       overdueAmount: eur('1026.41'),
       outstandingPrincipal: eur('5018.59'),
@@ -185,13 +196,22 @@ describe('payoffQuote', () => {
     });
   });
 
+  // A retried instalment collected after the next one: the first is still owed.
+  it('should count as overdue an earlier instalment paid after a later one', () => {
+    expect(quote('2026-03-10', [2])).toMatchObject({
+      overdueInstallments: 1,
+      overdueAmount: eur('1026.41'),
+      outstandingPrincipal: eur('4029.82'),
+    });
+  });
+
   it('should owe only the last instalment once every due date has passed', () => {
-    expect(quote('2026-08-01', 5)).toMatchObject({
+    expect(quote('2026-08-01', [1, 2, 3, 4, 5])).toMatchObject({
       overdueInstallments: 1,
       outstandingPrincipal: eur('0.00'),
       accruedInterest: eur('0.00'),
       total: eur('1026.42'),
     });
-    expect(quote('2026-08-01', 6).total).toEqual(eur('0.00'));
+    expect(quote('2026-08-01', [1, 2, 3, 4, 5, 6]).total).toEqual(eur('0.00'));
   });
 });

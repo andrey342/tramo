@@ -1,0 +1,117 @@
+import { type CommandBus } from '@nestjs/cqrs';
+import { uuidv7 } from 'uuidv7';
+
+import {
+  LendingEvents,
+  type PlanCompletedPayload,
+} from '@modules/lending/domain/events/lending-events';
+import { type IntegrationEvent } from '@shared/application';
+import { CalendarDate } from '@shared/domain';
+
+import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
+import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
+import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
+import { RunBillingCycleCommand } from '../../application/commands/run-billing-cycle.command';
+import { BillingEvents } from '../../domain';
+
+import {
+  CancelChargesOnPlanCompleted,
+  CollectOnMandateSigned,
+  RebillOnPayoffWithdrawn,
+} from './billing.consumers';
+
+const completed = (
+  contractId: string,
+  reason: PlanCompletedPayload['reason'],
+): IntegrationEvent<PlanCompletedPayload> => ({
+  eventId: uuidv7(),
+  eventType: LendingEvents.PlanCompleted,
+  aggregateType: 'FinancingPlan',
+  aggregateId: uuidv7(),
+  occurredAt: new Date('2026-11-12T08:00:00Z').toISOString(),
+  correlationId: null,
+  payload: { planId: uuidv7(), contractId, studentId: uuidv7(), centerId: uuidv7(), reason },
+});
+
+describe('CancelChargesOnPlanCompleted', () => {
+  // The ISA month that reached the cap was charged in the same transaction that ended the plan.
+  it('should cancel scheduled charges only when the plan was paid off', async () => {
+    const executed: unknown[] = [];
+    const commands = {
+      execute: (command: unknown) => {
+        executed.push(command);
+        return Promise.resolve(0);
+      },
+    } as unknown as CommandBus;
+    const consumer = new CancelChargesOnPlanCompleted(commands);
+    const [paidOff, capped] = [uuidv7(), uuidv7()];
+
+    await consumer.handle(completed(paidOff, 'paid_off'));
+    for (const reason of ['repaid', 'cap_reached', 'max_payments', 'window_expired'] as const) {
+      await consumer.handle(completed(capped, reason));
+    }
+
+    expect(executed).toEqual([new CancelOpenChargesCommand(paidOff, 'all')]);
+  });
+});
+
+describe('CollectOnMandateSigned', () => {
+  it('should collect the charges of the contract that were waiting for a mandate', async () => {
+    const executed: unknown[] = [];
+    const commands = {
+      execute: (command: unknown) => {
+        executed.push(command);
+        return Promise.resolve(0);
+      },
+    } as unknown as CommandBus;
+    const contractId = uuidv7();
+
+    await new CollectOnMandateSigned(commands).handle({
+      eventId: uuidv7(),
+      eventType: BillingEvents.MandateSigned,
+      aggregateType: 'PaymentMandate',
+      aggregateId: uuidv7(),
+      occurredAt: '2026-11-20T10:00:00.000Z',
+      correlationId: null,
+      payload: {
+        mandateId: uuidv7(),
+        contractId,
+        studentId: uuidv7(),
+        mandateReference: 'TRAMO-1',
+      },
+    });
+
+    expect(executed).toEqual([
+      new CollectWaitingChargesCommand(contractId, CalendarDate.parse('2026-11-20')),
+    ]);
+  });
+});
+
+describe('RebillOnPayoffWithdrawn', () => {
+  it('should bill and collect the contract as of the day its payoff was withdrawn', async () => {
+    const executed: unknown[] = [];
+    const commands = {
+      execute: (command: unknown) => {
+        executed.push(command);
+        return Promise.resolve({ failedContractIds: [] });
+      },
+    } as unknown as CommandBus;
+    const contractId = uuidv7();
+    const day = CalendarDate.parse('2026-11-22');
+
+    await new RebillOnPayoffWithdrawn(commands).handle({
+      eventId: uuidv7(),
+      eventType: LendingEvents.PayoffWithdrawn,
+      aggregateType: 'FinancingPlan',
+      aggregateId: uuidv7(),
+      occurredAt: '2026-11-22T09:00:00.000Z',
+      correlationId: null,
+      payload: { planId: uuidv7(), contractId, studentId: uuidv7() },
+    });
+
+    expect(executed).toEqual([
+      new RunBillingCycleCommand(day, contractId),
+      new CollectDueChargesCommand(day, contractId),
+    ]);
+  });
+});

@@ -36,7 +36,7 @@ export type PlanTermsJson =
       readonly annualRateBps: number;
       readonly termMonths: number;
       readonly schedule: InstallmentRowJson[];
-      readonly installmentsPaid: number;
+      readonly paidInstallments: number[];
       readonly payoffRequest: {
         readonly amountCents: number;
         readonly asOf: string;
@@ -120,6 +120,9 @@ export class ContractOrmEntity {
 
   @Column('text', { name: 'cancellation_reason', nullable: true })
   cancellationReason: CancellationReason | null;
+
+  @Column({ type: 'timestamptz', name: 'arrears_changed_at', precision: 3, nullable: true })
+  arrearsChangedAt: Date | null;
 
   @Column('text')
   status: ContractStatus;

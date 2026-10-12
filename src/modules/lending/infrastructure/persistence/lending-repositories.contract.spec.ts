@@ -11,11 +11,12 @@ lendingRepositoriesContract('in-memory', () => {
   const events = new RecordingEventBus();
   const contracts = new InMemoryContractRepository(events);
   const disbursements = new InMemoryDisbursementRepository(events);
+  const plans = new InMemoryFinancingPlanRepository(events);
   return {
     contracts,
     disbursements,
-    plans: new InMemoryFinancingPlanRepository(events),
-    queries: new InMemoryContractQueries(contracts, disbursements),
+    plans,
+    queries: new InMemoryContractQueries(contracts, disbursements, plans),
     run: (work) => work(),
   };
 });

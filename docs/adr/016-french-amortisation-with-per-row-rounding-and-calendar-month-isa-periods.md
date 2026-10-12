@@ -67,5 +67,6 @@ amount shown.
 - Bad: assuming the course starts on activation can move an ISA's first payment by weeks if the
   student starts later. The start date is not captured by origination today; when it is, the plan
   can take it instead.
-- Bad: counting charged amounts towards the cap means a charge written off later must give its
-  amount back; billing has to tell the plan when it writes a charge off.
+- Bad: amounts count towards the cap when charged, not when collected. A charge is only written
+  off with the default of the contract, after which the plan is no longer billed, so the cap is
+  never given back.

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { BillingHttpModule } from '@modules/billing/billing-http.module';
 import { CatalogHttpModule } from '@modules/catalog/catalog-http.module';
 import { IamHttpModule } from '@modules/iam/iam-http.module';
 import { LendingHttpModule } from '@modules/lending/lending-http.module';
@@ -17,6 +18,7 @@ import { QueueDashboardModule } from '@shared/infrastructure/queues/queue-dashbo
     CatalogHttpModule,
     OriginationHttpModule,
     LendingHttpModule,
+    BillingHttpModule,
   ],
 })
 export class AppModule {}

@@ -7,6 +7,7 @@ import {
   type DisbursementDto,
   type DisbursementFilter,
 } from '../dto/contract.dto';
+import { type BillablePlanDto } from '../dto/plan-lookup';
 
 export const E_SIGNATURE_PROVIDER = Symbol('E_SIGNATURE_PROVIDER');
 export const BANK_TRANSFER_PROVIDER = Symbol('BANK_TRANSFER_PROVIDER');
@@ -71,4 +72,11 @@ export interface ContractQueries {
     filter: DisbursementFilter,
     page: PageRequest,
   ): Promise<CursorPage<DisbursementDto>>;
+  // Plans being repaid (plan active, contract active or in arrears, no payoff being collected),
+  // in contract id order; one contract only when given.
+  billablePlans(
+    afterContractId: string | null,
+    limit: number,
+    contractId?: string | null,
+  ): Promise<readonly BillablePlanDto[]>;
 }
