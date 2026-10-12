@@ -12,7 +12,13 @@ import { RecordPaymentResultCommand } from '@modules/billing/application/command
 import { SignMandateCommand } from '@modules/billing/application/commands/sign-mandate.command';
 import { GetStatementQuery } from '@modules/billing/application/queries/get-statement.query';
 import { BillingModule } from '@modules/billing/billing.module';
-import { type Charge, CHARGE_REPOSITORY, type ChargeRepository } from '@modules/billing/domain';
+import {
+  type Charge,
+  CHARGE_REPOSITORY,
+  type ChargeRepository,
+  INCOME_DECLARATION_REPOSITORY,
+  type IncomeDeclarationRepository,
+} from '@modules/billing/domain';
 import { RequestPayoffCommand } from '@modules/lending/application/commands/request-payoff.command';
 import {
   CONTRACT_REPOSITORY,
@@ -26,8 +32,8 @@ import { CalendarDate } from '@shared/domain';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/messaging';
 
-import { STUDENT_IBAN } from '../factories/billing';
-import { anActiveContract, aPlan } from '../factories/lending';
+import { aDeclaration, STUDENT_IBAN } from '../factories/billing';
+import { anActiveContract, anIsa, aPlan } from '../factories/lending';
 import { eventually } from '../helpers/eventually';
 
 const OPS: Principal = { kind: 'user', userId: 'ops-1', roles: ['ops'], centerId: null };
@@ -139,6 +145,35 @@ describe('billing saga (integration)', () => {
       },
     );
     expect(statement.balanceCents).toBe(0);
+  }, 60_000);
+
+  // ADR 017: lending assesses the ISA month in billing's transaction. When the charge cannot be
+  // written, the assessment is rolled back with it and the next run assesses the month again.
+  it('should roll back the ISA assessment when its charge is not written', async () => {
+    const contract = anActiveContract({ terms: { product: anIsa() } });
+    await app.get<UnitOfWork>(UNIT_OF_WORK).run(async () => {
+      await contracts.save(contract);
+      await plans.save(
+        aPlan({ contractId: contract.id, product: anIsa(), activatedOn: '2026-01-05' }),
+      );
+      await app
+        .get<IncomeDeclarationRepository>(INCOME_DECLARATION_REPOSITORY)
+        .save(aDeclaration({ contractId: contract.id, period: '2026-07', incomeCents: 2_000_00 }));
+    });
+    const asOf = CalendarDate.parse('2026-08-01');
+    const save = jest.spyOn(charges, 'save').mockRejectedValueOnce(new Error('disk full'));
+
+    const failed = await commands.execute(new RunBillingNowCommand(OPS, asOf, contract.id));
+    const untouched = await plans.findByContractId(contract.id);
+    save.mockRestore();
+    const retried = await commands.execute(new RunBillingNowCommand(OPS, asOf, contract.id));
+
+    expect(failed.failedContractIds).toEqual([contract.id]);
+    expect(untouched?.terms.kind === 'isa' && untouched.terms.lastAssessedPeriod).toBeNull();
+    expect(retried).toMatchObject({ chargesCreated: 1, failedContractIds: [] });
+    expect((await charges.findByReference(contract.id, 'isa:2026-07'))?.amount.cents).toBe(200_00);
+    const plan = await plans.findByContractId(contract.id);
+    expect(plan?.terms.kind === 'isa' && plan.terms.paymentsMade).toBe(1);
   }, 60_000);
 
   it('should put the contract in arrears at 30 days and default it at 90', async () => {
