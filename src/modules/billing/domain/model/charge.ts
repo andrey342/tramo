@@ -237,6 +237,18 @@ export class Charge extends AggregateRoot {
     return key;
   }
 
+  // Ops collect it again, outside dunning: a new attempt for a failed or overdue charge, the same
+  // one asked again for a charge whose request was lost.
+  retryCollection(mandateId: string, now: Date): string {
+    if (this.props.status === 'pending') {
+      return this.resubmit(now);
+    }
+    if (this.props.status !== 'failed' && this.props.status !== 'overdue') {
+      throw new InvalidStateTransitionError('Charge', this.props.status, 'pending');
+    }
+    return this.submitCollection(mandateId, now);
+  }
+
   // A pending attempt asked of the provider again (the job was lost): same key, same request.
   resubmit(now: Date): string {
     const attempt = this.currentAttempt;

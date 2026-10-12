@@ -130,7 +130,7 @@ function setup() {
     execute: new ExecuteChargeCollectionHandler(uow, charges, mandates, gateway),
     result: new RecordPaymentResultHandler(uow, charges, audit, clock),
     dunning: new RunDunningHandler(uow, charges, mandates, clock),
-    retry: new RetryChargeHandler(uow, charges, mandates, clock),
+    retry: new RetryChargeHandler(uow, charges, mandates, plans, clock),
     payoff: new CreatePayoffChargeHandler(uow, charges, mandates, plans, clock),
     cancel: new CancelScheduledChargesHandler(uow, charges, clock),
     remind: new SendDeclarationRemindersHandler(uow, plans, declarations, reminders, events, clock),
@@ -455,11 +455,47 @@ describe('billing use cases', () => {
         MandateMissingError,
       );
       await t.mandate(contractId);
-      expect((await t.retry.execute(new RetryChargeCommand(OPS, charge.id))).status).toBe(
-        'pending',
-      );
       await expect(t.retry.execute(new RetryChargeCommand(OPS, charge.id))).rejects.toThrow(
         InvalidStateTransitionError,
+      );
+    });
+
+    // A failed charge gets a new attempt; one stuck in collection is asked for again, same key.
+    it('should retry a failed charge, resubmit a pending one, and only while repaid', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const defaulted = t.contract('installments', 'defaulted');
+      const stranded = await t.charge({ contractId: defaulted, reference: 'installment:2' });
+      const charge = await t.charge({ contractId });
+      await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12'), contractId));
+
+      const resubmitted = await t.retry.execute(new RetryChargeCommand(OPS, charge.id));
+      await t.result.execute(
+        new RecordPaymentResultCommand({
+          reference: `${charge.id}.1`,
+          paymentId: 'pay-1',
+          outcome: 'failed',
+          failureReason: 'insufficient_funds',
+        }),
+      );
+      const retried = await t.retry.execute(new RetryChargeCommand(OPS, charge.id));
+
+      expect(resubmitted.status).toBe('pending');
+      expect(t.events.ofType(BillingEvents.ChargeSubmitted)).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ attemptKey: `${charge.id}.1` }),
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ attemptKey: `${charge.id}.1` }),
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ attemptKey: `${charge.id}.2` }),
+        }),
+      ]);
+      expect(retried.status).toBe('pending');
+      await expect(t.retry.execute(new RetryChargeCommand(OPS, stranded.id))).rejects.toThrow(
+        ContractNotRepayingError,
       );
     });
   });

@@ -7,6 +7,7 @@ import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 import {
   CHARGE_REPOSITORY,
   type ChargeRepository,
+  ContractNotRepayingError,
   MandateMissingError,
   PAYMENT_MANDATE_REPOSITORY,
   type PaymentMandateRepository,
@@ -14,9 +15,11 @@ import {
 import { assertStaff } from '../billing-access';
 import { toChargeDto } from '../billing.mapping';
 import { type ChargeDto } from '../dto/billing.dto';
+import { REPAYMENT_PLANS, type RepaymentPlans } from '../ports/billing-ports';
 
 // Ops collect a failed or overdue charge again, outside the dunning timeline (the student asked,
-// or fixed their account).
+// or fixed their account), or ask the provider again for a charge stuck in collection. Only
+// while the contract is being repaid.
 export class RetryChargeCommand extends Command<ChargeDto> {
   constructor(
     readonly actor: Principal,
@@ -32,6 +35,7 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
     @Inject(PAYMENT_MANDATE_REPOSITORY) private readonly mandates: PaymentMandateRepository,
+    @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -42,11 +46,15 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
       if (!charge) {
         throw new EntityNotFoundError('Charge', command.chargeId);
       }
+      const contract = await this.plans.findContract(charge.contractId);
+      if (contract?.status !== 'active' && contract?.status !== 'in_arrears') {
+        throw new ContractNotRepayingError(contract?.status ?? 'unknown');
+      }
       const mandate = await this.mandates.findActiveByContract(charge.contractId);
       if (!mandate) {
         throw new MandateMissingError(charge.contractId);
       }
-      charge.submitCollection(mandate.id, this.clock.now());
+      charge.retryCollection(mandate.id, this.clock.now());
       await this.charges.save(charge);
       return toChargeDto(charge);
     });
