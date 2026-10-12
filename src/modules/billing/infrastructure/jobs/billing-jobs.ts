@@ -60,19 +60,28 @@ export class BillingSchedules implements OnApplicationBootstrap {
   }
 }
 
-// Queues the provider call of one collection attempt, keyed by it: a redelivered ChargeSubmitted
-// queues nothing new.
+// Queues the provider call of one submission of a collection attempt (its ChargeSubmitted): a
+// redelivered event queues nothing new, an attempt submitted again (ops, after its job was
+// dead-lettered) queues a new job. The provider sees the same attempt key either way.
 @Injectable()
 export class CollectionJobs {
   constructor(
     @InjectQueue(QueueNames.BILLING_COLLECT) private readonly queue: Queue<CollectionJob>,
   ) {}
 
-  async collect(chargeId: string, attemptKey: string, correlationId: string | null): Promise<void> {
+  async collect(
+    submission: {
+      readonly chargeId: string;
+      readonly attemptKey: string;
+      readonly eventId: string;
+    },
+    correlationId: string | null,
+  ): Promise<void> {
+    const { chargeId, attemptKey, eventId } = submission;
     await this.queue.add(
       COLLECT_CHARGE,
       { chargeId, attemptKey, correlationId },
-      { ...PROVIDER_CALL, jobId: `${attemptKey}.collect` },
+      { ...PROVIDER_CALL, jobId: `${attemptKey}.collect.${eventId}` },
     );
   }
 }

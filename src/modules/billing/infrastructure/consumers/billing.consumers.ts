@@ -32,7 +32,14 @@ export class CollectOnChargeSubmitted implements EventHandler<ChargeSubmittedPay
   constructor(private readonly jobs: CollectionJobs) {}
 
   async handle(event: IntegrationEvent<ChargeSubmittedPayload>): Promise<void> {
-    await this.jobs.collect(event.payload.chargeId, event.payload.attemptKey, event.correlationId);
+    await this.jobs.collect(
+      {
+        chargeId: event.payload.chargeId,
+        attemptKey: event.payload.attemptKey,
+        eventId: event.eventId,
+      },
+      event.correlationId,
+    );
   }
 }
 

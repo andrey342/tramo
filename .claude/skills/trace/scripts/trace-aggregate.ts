@@ -130,7 +130,7 @@ async function queueJobs(
 // (`origination.verifications:<applicationId>.<provider>`), a contract's signature
 // (`lending.signatures:<contractId>.send`), a disbursement's transfers and settlement checks
 // (`lending.disbursements:<disbursementId>.<attempt>.<step>`), a charge's collection and the
-// simulated provider's answer (`billing.collect:<chargeId>.<attempt>.collect`), and their dead
+// simulated provider's answer (`billing.collect:<chargeId>.<attempt>.collect.<eventId>`), and their dead
 // letters.
 async function workJobs(
   redis: Redis,
