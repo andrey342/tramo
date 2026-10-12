@@ -17,6 +17,7 @@ import {
   type Charge,
   type ChargeRepository,
   type IncomeDeclaration,
+  IncomeAlreadyDeclaredError,
   type IncomeDeclarationRepository,
   type PaymentMandate,
   type PaymentMandateRepository,
@@ -110,6 +111,14 @@ export class InMemoryIncomeDeclarationRepository
         (declaration) => declaration.contractId === contractId && declaration.period === period,
       ) ?? null,
     );
+  }
+
+  override async save(declaration: IncomeDeclaration): Promise<void> {
+    const twin = await this.findByPeriod(declaration.contractId, declaration.period);
+    if (twin && twin.id !== declaration.id) {
+      throw new IncomeAlreadyDeclaredError(declaration.period);
+    }
+    await super.save(declaration);
   }
 }
 
