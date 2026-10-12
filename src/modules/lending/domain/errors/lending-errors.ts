@@ -78,6 +78,15 @@ export class LendingRecordExistsError extends DomainError {
   }
 }
 
+export class PeriodSkippedError extends DomainError {
+  readonly code = 'period_skipped';
+  readonly category = 'conflict';
+
+  constructor(expected: string) {
+    super(`The next period to assess is ${expected}.`, { expected });
+  }
+}
+
 export class PlanEndedError extends DomainError {
   readonly code = 'plan_ended';
   readonly category = 'conflict';

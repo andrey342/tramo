@@ -9,7 +9,9 @@ import {
 import {
   PayoffAlreadyRequestedError,
   PayoffNotAvailableError,
+  PayoffQuoteChangedError,
   PeriodAlreadyAssessedError,
+  PeriodSkippedError,
   PlanEndedError,
 } from '../errors/lending-errors';
 import { LendingEvents, type PlanCompletedPayload } from '../events/lending-events';
@@ -210,13 +212,17 @@ export class FinancingPlan extends AggregateRoot {
     });
   }
 
-  // The student repays everything on `asOf`; billing collects the amount and settlePayoff then
-  // ends the plan. One payoff at a time.
-  requestPayoff(asOf: CalendarDate, now: Date): PayoffQuote {
+  // The student repays everything on `asOf`, for the amount they were quoted: if it has moved
+  // (an instalment fell due, a day of interest accrued) they are told instead of charged another
+  // amount. Billing collects it and settlePayoff then ends the plan. One payoff at a time.
+  requestPayoff(asOf: CalendarDate, quotedAmount: Money, now: Date): PayoffQuote {
     const quote = this.payoffQuote(asOf);
     const terms = this.installmentTerms();
     if (terms.payoffRequest) {
       throw new PayoffAlreadyRequestedError();
+    }
+    if (!quote.total.equals(quotedAmount)) {
+      throw new PayoffQuoteChangedError(quote.total.cents);
     }
     this.props = {
       ...this.props,
@@ -273,8 +279,15 @@ export class FinancingPlan extends AggregateRoot {
   assessPeriod(period: CalendarDate, declaredIncome: Money | null, now: Date): IsaAssessment {
     const terms = this.isaTerms();
     const month = period.startOfMonth();
-    if (terms.lastAssessedPeriod && !month.isAfter(terms.lastAssessedPeriod)) {
+    const last = terms.lastAssessedPeriod;
+    if (last && !month.isAfter(last)) {
       throw new PeriodAlreadyAssessedError(month.period);
+    }
+    // No month is skipped: each one counts towards the payments, the cap and the streak of
+    // missing declarations.
+    const expected = last ? last.addMonths(1) : terms.firstPeriod;
+    if (month.isAfter(expected)) {
+      throw new PeriodSkippedError(expected.period);
     }
     if (month.isBefore(terms.firstPeriod)) {
       return { outcome: 'not_started' };

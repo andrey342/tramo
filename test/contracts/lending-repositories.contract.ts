@@ -122,7 +122,8 @@ export function lendingRepositoriesContract(
       const [first, second] = [anActiveContract(), anActiveContract()];
       const installments = aPlan({ contractId: first.id });
       installments.recordInstallmentPaid(1, LATER);
-      installments.requestPayoff(CalendarDate.parse('2026-11-20'), LATER);
+      const payoffDay = CalendarDate.parse('2026-11-20');
+      installments.requestPayoff(payoffDay, installments.payoffQuote(payoffDay).total, LATER);
       const isa = aPlan({ contractId: second.id, product: anIsa(), activatedOn: '2026-01-05' });
       isa.assessPeriod(CalendarDate.parse('2026-07-01'), null, LATER);
       isa.assessPeriod(CalendarDate.parse('2026-08-01'), Money.fromCents(2_000_00), LATER);

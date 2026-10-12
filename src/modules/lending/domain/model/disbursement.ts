@@ -193,7 +193,8 @@ export class Disbursement extends AggregateRoot {
     if (this.props.status === 'pending' && this.props.creditor) {
       throw new InvalidStateTransitionError('Disbursement', 'transfer started', 'failed');
     }
-    const failureReason = reason.slice(0, MAX_REASON_LENGTH);
+    // A bank may report a failure without a reason; the record always says something.
+    const failureReason = reason.trim().slice(0, MAX_REASON_LENGTH) || 'unspecified';
     this.props = { ...this.props, failureReason };
     this.moveTo('failed', now);
     this.record({

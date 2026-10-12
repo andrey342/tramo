@@ -224,8 +224,12 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // The center has been paid. Repayment counts from this day.
+  // The center has been paid. Repayment counts from this day. Idempotent for an active contract
+  // (a redelivered DisbursementSettled).
   activate(now: Date): void {
+    if (this.props.status === 'active') {
+      return;
+    }
     this.assertStatus('signed', 'active');
     const activatedOn = CalendarDate.fromInstant(now);
     this.props = { ...this.props, activatedOn };
@@ -248,6 +252,9 @@ export class Contract extends AggregateRoot {
 
   // The plan has ended: repaid, paid off, or for an ISA its cap, payments or window reached.
   complete(now: Date): void {
+    if (this.props.status === 'completed') {
+      return;
+    }
     this.assertStatus('active', 'completed');
     this.moveTo('completed', now);
     this.record({

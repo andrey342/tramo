@@ -9,9 +9,11 @@ export function programEnd(activatedOn: CalendarDate, durationWeeks: number): Ca
   return activatedOn.addDays(durationWeeks * 7);
 }
 
-// Payments start with the first full month after the grace period.
+// Payments start with the first full month after the grace period: the month the grace ends in
+// if it ends on its first day, the next one otherwise.
 export function firstIsaPeriod(end: CalendarDate, graceMonths: number): CalendarDate {
-  return end.addMonths(graceMonths).startOfMonth().addMonths(1);
+  const graceEnds = end.addMonths(graceMonths);
+  return graceEnds.day === 1 ? graceEnds : graceEnds.startOfMonth().addMonths(1);
 }
 
 export function isaWindowEnd(end: CalendarDate): CalendarDate {

@@ -59,7 +59,10 @@ export class RecordSignatureEventHandler implements ICommandHandler<RecordSignat
           now,
         );
       }
-      await this.contracts.save(contract);
+      // A repeated callback changes nothing: no write, so it cannot collide with the saga.
+      if (contract.hasPendingEvents) {
+        await this.contracts.save(contract);
+      }
     });
   }
 }

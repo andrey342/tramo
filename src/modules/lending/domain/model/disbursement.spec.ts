@@ -115,6 +115,9 @@ describe('Disbursement', () => {
     }).toThrow(InvalidStateTransitionError);
     disbursement.fail('x'.repeat(500), LATER);
     expect(disbursement.failureReason).toHaveLength(200);
+    const silent = aDisbursement();
+    silent.fail('  ', LATER);
+    expect(silent.failureReason).toBe('unspecified');
     expect(() => {
       disbursement.fail('again', LATER);
     }).toThrow(InvalidStateTransitionError);

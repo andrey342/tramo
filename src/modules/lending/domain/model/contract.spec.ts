@@ -188,6 +188,17 @@ describe('Contract', () => {
       ]);
     });
 
+    it('should take a repeated activation or completion as done', () => {
+      const contract = anActiveContract();
+
+      contract.activate(LATER);
+      contract.complete(LATER);
+      contract.complete(LATER);
+
+      expect(contract.status).toBe('completed');
+      expect(eventTypes(contract)).toEqual([LendingEvents.ContractCompleted]);
+    });
+
     it('should not be activated before it is signed', () => {
       expect(() => {
         aContractSentForSignature().activate(NOW);

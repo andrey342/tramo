@@ -28,11 +28,11 @@ export class ActivateContractHandler implements ICommandHandler<ActivateContract
       if (!contract) {
         throw new EntityNotFoundError('Contract', command.contractId);
       }
-      if (contract.status !== 'signed') {
-        return;
-      }
       contract.activate(this.clock.now());
-      await this.contracts.save(contract);
+      // A redelivery finds it done already: nothing to write.
+      if (contract.hasPendingEvents) {
+        await this.contracts.save(contract);
+      }
     });
   }
 }

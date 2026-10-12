@@ -4,7 +4,9 @@ import { aPlan, anIsa, LATER } from '../../../../../test/factories/lending';
 import {
   PayoffAlreadyRequestedError,
   PayoffNotAvailableError,
+  PayoffQuoteChangedError,
   PeriodAlreadyAssessedError,
+  PeriodSkippedError,
   PlanEndedError,
 } from '../errors/lending-errors';
 import { LendingEvents } from '../events/lending-events';
@@ -61,7 +63,7 @@ describe('FinancingPlan', () => {
     it('should quote a payoff and record the request once', () => {
       const plan = aPlan({ activatedOn: '2026-10-12' });
 
-      const quote = plan.requestPayoff(CalendarDate.parse('2026-10-12'), LATER);
+      const quote = plan.requestPayoff(CalendarDate.parse('2026-10-12'), eur('7500.00'), LATER);
 
       expect(quote.total).toEqual(eur('7500.00'));
       expect(plan.pullEvents()).toEqual([
@@ -70,9 +72,19 @@ describe('FinancingPlan', () => {
           payload: expect.objectContaining({ amountCents: 7_500_00, asOf: '2026-10-12' }),
         }),
       ]);
-      expect(() => plan.requestPayoff(CalendarDate.parse('2026-10-13'), LATER)).toThrow(
-        PayoffAlreadyRequestedError,
-      );
+      expect(() =>
+        plan.requestPayoff(CalendarDate.parse('2026-10-13'), eur('7500.00'), LATER),
+      ).toThrow(PayoffAlreadyRequestedError);
+    });
+
+    // 15 days into the first month the balance has accrued interest: the old quote is stale.
+    it('should refuse a payoff for an amount other than the quote of the day', () => {
+      const plan = aPlan({ activatedOn: '2026-10-12' });
+
+      expect(() =>
+        plan.requestPayoff(CalendarDate.parse('2026-10-27'), eur('7500.00'), LATER),
+      ).toThrow(PayoffQuoteChangedError);
+      expect(plan.pullEvents()).toEqual([]);
     });
 
     it('should not quote a payoff before the plan starts', () => {
@@ -86,7 +98,7 @@ describe('FinancingPlan', () => {
       expect(() => {
         plan.settlePayoff(LATER);
       }).toThrow(PayoffNotAvailableError);
-      plan.requestPayoff(plan.startsOn, LATER);
+      plan.requestPayoff(plan.startsOn, plan.principal, LATER);
       plan.pullEvents();
 
       plan.settlePayoff(LATER);
@@ -198,9 +210,15 @@ describe('FinancingPlan', () => {
       expect(isa(plan)).toMatchObject({ paymentsMade: 2, chargedSoFar: eur('400.00') });
     });
 
+    // Eight years below the threshold: every month paused, then the first month that starts
+    // after 30 March 2034 ends the plan.
     it('should end, charging nothing, once a month starts after the window', () => {
       const plan = anIsaPlan();
-      plan.assessPeriod(month('2026-07'), eur('2000.00'), LATER);
+      let period = month('2026-07');
+      while (!period.isAfter(month('2034-02'))) {
+        plan.assessPeriod(period, eur('1000.00'), LATER);
+        period = period.addMonths(1);
+      }
 
       expect(plan.assessPeriod(month('2034-03'), eur('2000.00'), LATER)).toEqual({
         outcome: 'charge',
@@ -210,7 +228,7 @@ describe('FinancingPlan', () => {
         outcome: 'ended',
       });
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'window_expired' });
-      expect(isa(plan).chargedSoFar).toEqual(eur('400.00'));
+      expect(isa(plan).chargedSoFar).toEqual(eur('200.00'));
     });
 
     it('should mark declarations overdue after two months without one, and clear it with the next', () => {
@@ -240,16 +258,31 @@ describe('FinancingPlan', () => {
       });
     });
 
-    it('should assess each month once, in order', () => {
+    it('should assess each month once, in order, skipping none', () => {
       const plan = anIsaPlan();
-      plan.assessPeriod(month('2026-08'), eur('2000.00'), LATER);
 
       expect(() => plan.assessPeriod(month('2026-08'), eur('2000.00'), LATER)).toThrow(
-        PeriodAlreadyAssessedError,
+        PeriodSkippedError,
       );
+      plan.assessPeriod(month('2026-07'), eur('2000.00'), LATER);
       expect(() => plan.assessPeriod(month('2026-07'), eur('2000.00'), LATER)).toThrow(
         PeriodAlreadyAssessedError,
       );
+      expect(() => plan.assessPeriod(month('2026-06'), eur('2000.00'), LATER)).toThrow(
+        PeriodAlreadyAssessedError,
+      );
+      expect(() => plan.assessPeriod(month('2026-09'), eur('2000.00'), LATER)).toThrow(
+        PeriodSkippedError,
+      );
+      expect(plan.assessPeriod(month('2026-08'), eur('2000.00'), LATER).outcome).toBe('charge');
+    });
+
+    // Activated 7 January for 12 weeks: the program ends on 1 April, the grace on 1 July, and
+    // July is already a full month after it.
+    it('should start in the month the grace ends when it ends on the first', () => {
+      const plan = aPlan({ product: anIsa(), activatedOn: '2026-01-07', durationWeeks: 12 });
+
+      expect(isa(plan).firstPeriod.toString()).toBe('2026-07-01');
     });
 
     it('should have no payoff', () => {

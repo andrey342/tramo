@@ -2,7 +2,7 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CalendarDate, CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
+import { CalendarDate, CLOCK, type Clock, EntityNotFoundError, Money } from '@shared/domain';
 
 import {
   ContractAccessDeniedError,
@@ -10,7 +10,6 @@ import {
   type ContractRepository,
   FINANCING_PLAN_REPOSITORY,
   type FinancingPlanRepository,
-  PayoffQuoteChangedError,
 } from '../../domain';
 import { findVisibleContract, isStudentOf } from '../contract-access';
 import { toPayoffQuoteDto } from '../contract.mapping';
@@ -50,11 +49,7 @@ export class RequestPayoffHandler implements ICommandHandler<RequestPayoffComman
       }
       const now = this.clock.now();
       const today = CalendarDate.fromInstant(now);
-      const quote = plan.payoffQuote(today);
-      if (quote.total.cents !== command.expectedAmountCents) {
-        throw new PayoffQuoteChangedError(quote.total.cents);
-      }
-      plan.requestPayoff(today, now);
+      const quote = plan.requestPayoff(today, Money.fromCents(command.expectedAmountCents), now);
       await this.plans.save(plan);
       return toPayoffQuoteDto(contract.id, quote);
     });
