@@ -146,6 +146,19 @@ function assertProductionSettings(env: Env): void {
   const problems = published.map(
     (name) => `✖ ${name} still has the development value; set a secret of your own.`,
   );
+  // A center could point its webhook inside the network (ADR 018).
+  if (env.WEBHOOK_PRIVATE_TARGETS_ENABLED === true) {
+    problems.push(
+      '✖ WEBHOOK_PRIVATE_TARGETS_ENABLED is true; production posts only to public addresses.',
+    );
+  }
+  // The compose defaults: no real mail server, and a sender domain nobody owns.
+  if (env.SMTP_HOST === 'localhost' || env.SMTP_HOST === 'mailpit') {
+    problems.push(`✖ SMTP_HOST is ${env.SMTP_HOST}; production needs a real mail server.`);
+  }
+  if (/@tramo\.test>?$/i.test(env.EMAIL_FROM)) {
+    problems.push('✖ EMAIL_FROM is the development sender; set an address of your own domain.');
+  }
   // The test service and the fake activate centers whose VAT number nobody checked.
   if (env.VIES_MODE !== 'live') {
     problems.push(`✖ VIES_MODE is ${env.VIES_MODE}; production checks VAT numbers on VIES (live).`);

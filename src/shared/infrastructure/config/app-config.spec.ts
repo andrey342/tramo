@@ -7,6 +7,8 @@ const validEnv = {
   FIELD_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   ESIGN_WEBHOOK_SECRET: 'e'.repeat(32),
   PSP_WEBHOOK_SECRET: 'p'.repeat(32),
+  SMTP_HOST: 'smtp.example.com',
+  EMAIL_FROM: 'Tramo <no-reply@tramo.example>',
 };
 
 describe('parseConfig', () => {
@@ -85,6 +87,20 @@ describe('parseConfig', () => {
         JWT_ACCESS_SECRET: 'local-development-secret-change-me-0123456789',
       }).env,
     ).toBe('development');
+  });
+
+  it('should refuse the compose mail settings and private webhook targets in production', () => {
+    const production = { ...validEnv, NODE_ENV: 'production' };
+
+    expect(() => parseConfig({ ...production, SMTP_HOST: 'mailpit' })).toThrow(/SMTP_HOST/);
+    expect(() => parseConfig({ ...production, EMAIL_FROM: 'Tramo <no-reply@tramo.test>' })).toThrow(
+      /EMAIL_FROM/,
+    );
+    expect(() => parseConfig({ ...production, WEBHOOK_PRIVATE_TARGETS_ENABLED: 'true' })).toThrow(
+      /WEBHOOK_PRIVATE_TARGETS_ENABLED/,
+    );
+    expect(parseConfig(production).notifications.webhooks.privateTargetsEnabled).toBe(false);
+    expect(parseConfig(validEnv).notifications.webhooks.privateTargetsEnabled).toBe(true);
   });
 
   it('should serve the API docs by default everywhere but production', () => {
