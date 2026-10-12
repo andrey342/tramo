@@ -15,6 +15,9 @@ import {
 import { REPAYMENT_PLANS, type RepaymentPlans } from '../ports/billing-ports';
 
 export interface PayoffRequest {
+  // The request (lending's PayoffRequested event): a payoff refused and asked for again is a new
+  // charge.
+  readonly requestId: string;
   readonly planId: string;
   readonly contractId: string;
   readonly amountCents: number;
@@ -22,7 +25,9 @@ export interface PayoffRequest {
 }
 
 // The student asked to repay everything (lending's PayoffRequested): one charge for the quoted
-// amount, due that day and collected at once when there is a mandate. Once per plan.
+// amount, due that day and collected at once when there is a mandate. Once per request. While it
+// is collected, nothing else of the contract is (it covers what is left); charges still
+// scheduled are cancelled when the plan is paid off, or collected as usual if the bank refuses.
 export class CreatePayoffChargeCommand extends Command<void> {
   constructor(readonly payoff: PayoffRequest) {
     super();
@@ -41,7 +46,7 @@ export class CreatePayoffChargeHandler implements ICommandHandler<CreatePayoffCh
 
   async execute(command: CreatePayoffChargeCommand): Promise<void> {
     const { payoff } = command;
-    const reference = `payoff:${payoff.planId}`;
+    const reference = `payoff:${payoff.requestId}`;
     await this.uow.run(async () => {
       if (await this.charges.findByReference(payoff.contractId, reference)) {
         return;

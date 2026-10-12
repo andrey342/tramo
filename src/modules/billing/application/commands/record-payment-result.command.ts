@@ -54,6 +54,9 @@ export class RecordPaymentResultHandler implements ICommandHandler<RecordPayment
       const now = this.clock.now();
       charge.recordAccepted(reference, paymentId);
       if (outcome === 'succeeded') {
+        // Two payments of one contract at once: the second sees the first, and only the last
+        // charge in arrears to be paid clears them.
+        await this.charges.lockContract(charge.contractId);
         const others = await this.charges.hasOtherChargesInArrears(charge.contractId, charge.id);
         charge.recordSucceeded(reference, now, others);
       } else {

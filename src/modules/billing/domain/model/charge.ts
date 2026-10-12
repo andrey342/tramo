@@ -41,7 +41,8 @@ export interface ChargeProps {
   readonly studentId: string;
   readonly centerId: string;
   readonly kind: ChargeKind;
-  // Unique per contract: what the charge is for (`installment:3`, `isa:2026-07`, `payoff:<plan>`).
+  // Unique per contract: what the charge is for (`installment:3`, `isa:2026-07`,
+  // `payoff:<request>`).
   readonly reference: string;
   readonly installmentNumber: number | null;
   // The month it belongs to, as YYYY-MM: the instalment's, or the ISA month of income.

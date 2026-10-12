@@ -37,7 +37,7 @@ export class RunBillingNowHandler implements ICommandHandler<RunBillingNowComman
       plansBilled: billed.plansBilled,
       chargesCreated: billed.chargesCreated,
       failedContractIds: billed.failedContractIds,
-      collectionsSubmitted: submitted,
+      collectionsSubmitted: submitted.submitted,
     };
   }
 }
@@ -57,7 +57,9 @@ export class RunDunningNowHandler implements ICommandHandler<RunDunningNowComman
 
   async execute(command: RunDunningNowCommand): Promise<DunningRunDto> {
     assertStaff(command.actor);
-    const result = await this.dunning.execute(new RunDunningCommand(command.asOf));
-    return { asOf: command.asOf.toString(), ...result };
+    const { chargesReviewed, retries } = await this.dunning.execute(
+      new RunDunningCommand(command.asOf),
+    );
+    return { asOf: command.asOf.toString(), chargesReviewed, retries };
   }
 }

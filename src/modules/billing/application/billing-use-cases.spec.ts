@@ -306,7 +306,10 @@ describe('billing use cases', () => {
       });
       const noMandate = await t.charge({ contractId: t.contract() });
 
-      expect(await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12')))).toBe(1);
+      expect(await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12')))).toEqual({
+        submitted: 1,
+        failedChargeIds: [],
+      });
       expect((await t.charges.findById(due.id))?.status).toBe('pending');
       expect((await t.charges.findById(later.id))?.status).toBe('scheduled');
       expect((await t.charges.findById(noMandate.id))?.status).toBe('scheduled');
@@ -433,8 +436,8 @@ describe('billing use cases', () => {
       await t.mandate(contractId);
       const retry = await t.dunning.execute(new RunDunningCommand(day('2026-11-15')));
 
-      expect(notice).toEqual({ chargesReviewed: 1, retries: 0 });
-      expect(retry).toEqual({ chargesReviewed: 1, retries: 1 });
+      expect(notice).toEqual({ chargesReviewed: 1, retries: 0, failedChargeIds: [] });
+      expect(retry).toEqual({ chargesReviewed: 1, retries: 1, failedChargeIds: [] });
       expect((await t.charges.findById(charge.id))?.status).toBe('pending');
       expect(t.events.ofType(BillingEvents.ChargeOverdue)).toHaveLength(1);
     });
@@ -460,6 +463,7 @@ describe('billing use cases', () => {
       const contractId = t.contract();
       await t.mandate(contractId);
       const payoff = {
+        requestId: uuidv7(),
         planId: uuidv7(),
         contractId,
         amountCents: 6_000_00,
@@ -469,9 +473,66 @@ describe('billing use cases', () => {
       await t.payoff.execute(new CreatePayoffChargeCommand(payoff));
       await t.payoff.execute(new CreatePayoffChargeCommand(payoff));
 
-      const charge = await t.charges.findByReference(contractId, `payoff:${payoff.planId}`);
+      const charge = await t.charges.findByReference(contractId, `payoff:${payoff.requestId}`);
       expect(charge).toMatchObject({ kind: 'payoff', status: 'pending', period: '2026-11' });
       expect(t.charges.all()).toHaveLength(1);
+    });
+
+    // The payoff covers what is left: the instalment waits, then is collected once the bank
+    // refused the payoff, and a new request is a new charge.
+    it('should hold the other charges while a payoff is collected, and charge a new request', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const instalment = await t.charge({ contractId, dueDate: '2026-11-20' });
+      const request = (requestId: string) =>
+        new CreatePayoffChargeCommand({
+          requestId,
+          planId: uuidv7(),
+          contractId,
+          amountCents: 6_000_00,
+          asOf: day('2026-11-20'),
+        });
+      const first = uuidv7();
+      await t.payoff.execute(request(first));
+
+      const held = await t.collect.execute(new CollectDueChargesCommand(day('2026-11-20')));
+      const payoff = await t.charges.findByReference(contractId, `payoff:${first}`);
+      await t.result.execute(
+        new RecordPaymentResultCommand({
+          reference: payoff?.currentAttempt?.key ?? '',
+          paymentId: 'pay-1',
+          outcome: 'failed',
+          failureReason: 'insufficient_funds',
+        }),
+      );
+      const resumed = await t.collect.execute(new CollectDueChargesCommand(day('2026-11-20')));
+      await t.payoff.execute(request(uuidv7()));
+
+      expect(held.submitted).toBe(0);
+      expect((await t.charges.findById(payoff?.id ?? ''))?.status).toBe('cancelled');
+      expect(resumed.submitted).toBe(1);
+      expect((await t.charges.findById(instalment.id))?.status).toBe('pending');
+      expect(t.charges.all().filter((charge) => charge.kind === 'payoff')).toHaveLength(2);
+    });
+
+    it('should collect and dun one contract only when asked to', async () => {
+      const t = setup();
+      const [mine, other] = [t.contract(), t.contract()];
+      await t.mandate(mine);
+      await t.mandate(other);
+      const ours = await t.charge({ contractId: mine });
+      const theirs = await t.charge({ contractId: other });
+
+      const collected = await t.collect.execute(
+        new CollectDueChargesCommand(day('2026-11-12'), mine),
+      );
+      const dunned = await t.dunning.execute(new RunDunningCommand(day('2026-11-13'), other));
+
+      expect(collected.submitted).toBe(1);
+      expect((await t.charges.findById(ours.id))?.status).toBe('pending');
+      expect((await t.charges.findById(theirs.id))?.status).toBe('overdue');
+      expect(dunned.chargesReviewed).toBe(1);
     });
 
     it('should cancel the charges not yet in collection', async () => {

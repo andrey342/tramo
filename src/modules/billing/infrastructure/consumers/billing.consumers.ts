@@ -43,6 +43,7 @@ export class ChargeOnPayoffRequested implements EventHandler<PayoffRequestedPayl
     const { planId, contractId, amountCents, asOf } = event.payload;
     await this.commands.execute(
       new CreatePayoffChargeCommand({
+        requestId: event.eventId,
         planId,
         contractId,
         amountCents,

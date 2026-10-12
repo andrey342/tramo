@@ -166,15 +166,23 @@ describe('billing saga (integration)', () => {
     );
   }, 60_000);
 
+  // The payoff charge being collected for a contract (one per request).
+  async function payoffOf(contractId: string): Promise<Charge | null> {
+    const rows = await app
+      .get(DataSource)
+      .query<{ id: string }[]>(
+        `SELECT id FROM billing.charges WHERE contract_id = $1 AND kind = 'payoff' AND status = 'pending'`,
+        [contractId],
+      );
+    return rows[0] ? charges.findById(rows[0].id) : null;
+  }
+
   it('should collect a payoff the student asked for and close the plan and the contract', async () => {
     const { contractId, student } = await repaying(true);
 
     await commands.execute(new RequestPayoffCommand(student, contractId, 7_500_00));
     const payoff = await until(
-      async () => {
-        const plan = await plans.findByContractId(contractId);
-        return charges.findByReference(contractId, `payoff:${plan?.id ?? ''}`);
-      },
+      () => payoffOf(contractId),
       (charge) => {
         expect(charge?.status).toBe('pending');
       },
@@ -188,5 +196,27 @@ describe('billing saga (integration)', () => {
       },
     );
     expect((await plans.findByContractId(contractId))?.completionReason).toBe('paid_off');
+  }, 60_000);
+
+  it('should withdraw a payoff the bank refused, so the student may ask again', async () => {
+    const { contractId, student } = await repaying(true);
+
+    await commands.execute(new RequestPayoffCommand(student, contractId, 7_500_00));
+    const payoff = await until(
+      () => payoffOf(contractId),
+      (charge) => {
+        expect(charge?.status).toBe('pending');
+      },
+    );
+    await collect(payoff, 'failed');
+
+    await until(
+      () => plans.findByContractId(contractId),
+      (plan) => {
+        expect(plan?.terms.kind === 'installments' && plan.terms.payoffRequest).toBeNull();
+      },
+    );
+    expect((await charges.findById(payoff?.id ?? ''))?.status).toBe('cancelled');
+    expect((await contracts.findById(contractId))?.status).toBe('active');
   }, 60_000);
 });
