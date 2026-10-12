@@ -57,7 +57,7 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
-  `Idempotent-Replayed: true`. The same key with a different method, path or body returns 422.
+  `Idempotent-Replayed: true`. The same key with a different method, path, query or body returns 422.
   Failed requests are not stored, so a client can fix the request and retry with the same key.
   The in-progress record is renewed while the handler runs; if the response cannot be stored after
   a success, the record is left to expire instead of being released: an immediate retry gets 409
@@ -330,7 +330,7 @@ through a payment provider, dunning, ISA income declarations and the account sta
 - **Mandate.** The student authorises the debit of a contract from an account
   (`POST /contracts/:id/mandate`, from signature on); the IBAN is encrypted and bound to its row
   (ADR 014) and shown masked. A new mandate revokes the one in force, and collects at once the
-  charges that fell due while the contract had none.
+  charges that fell due while the contract had none, scheduled or already overdue.
 - **Cycle.** `billing.cycle` on the 1st at 03:00 UTC, or `POST /ops/billing/run?asOf=` for a
   demo or a catch-up (`&contractId=` for one contract; a day still to come only where
   `BILLING_FUTURE_RUNS_ENABLED`, off in production): for every plan being repaid
@@ -361,17 +361,21 @@ through a payment provider, dunning, ISA income declarations and the account sta
   arrears clears them (`ArrearsCleared`); lending applies these notices in the order billing
   saw them, whatever the order they arrive in. A charge being collected waits for the answer.
   Ops collect a failed or overdue charge again with `POST /charges/:id/retry`, or ask the
-  provider again for one stuck in collection (same key), while the contract is being repaid.
+  provider again for one stuck in collection (same key, a new job), unless the contract
+  defaulted. Declarations and the ISA step of the cycle take the same lock on the contract, so
+  a declaration cannot land in a month being assessed without it.
 - **ISA declarations.** `POST /contracts/:id/income-declarations`, one per month that has
   started and has not been assessed yet (`period_not_open` otherwise: the month was
   paused); audited, the amount stays in billing (events say only that a month was declared). On
   the 25th students who have not declared the month are reminded once (`IncomeDeclarationDue`).
 - **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once
-  and never dunned; meanwhile nothing else of the contract is collected, since it covers what is
-  left. Paid, the plan ends (`paid_off`) and the charges still scheduled are cancelled, as are
-  those of a defaulted contract; a plan that ends on its last instalment or ISA payment keeps
-  its last charge. Refused, the charge is cancelled and lending withdraws the payoff: billing
-  goes on as before and the student may ask again, which is a new charge.
+  and never dunned; meanwhile nothing else of the contract is collected or dunned, since it
+  covers what is left. Paid, the plan ends (`paid_off`) and every charge not collected is
+  cancelled, overdue ones included; a defaulted contract has only those not yet due cancelled,
+  and a plan that ends on its last instalment or ISA payment keeps its last charge. Refused, or
+  impossible without a mandate, the charge is cancelled and lending withdraws the payoff
+  (`PayoffWithdrawn`): billing bills and collects the contract that same day and the student
+  may ask again, which is a new charge.
 - **Statement.** `GET /contracts/:id/statement`: a projection of the charge events (charge,
   payment, write-off, cancellation), one line per event, with the running balance; charges in
   `GET /contracts/:id/charges`. The student and staff see them; centers see their portfolio in
