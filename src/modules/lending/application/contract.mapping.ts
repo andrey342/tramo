@@ -16,6 +16,7 @@ import {
   type PayoffQuoteDto,
   type ScheduleDto,
 } from './dto/contract.dto';
+import { type BillablePlanDto } from './dto/plan-lookup';
 
 export function toContractDto(
   contract: Contract,
@@ -116,6 +117,34 @@ export function toScheduleDto(plan: FinancingPlan): ScheduleDto {
     chargedSoFarCents: terms.chargedSoFar.cents,
     paymentsMade: terms.paymentsMade,
     declarationOverdue: terms.declarationOverdue,
+  };
+}
+
+export function toBillablePlanDto(
+  plan: FinancingPlan,
+  contractStatus: BillablePlanDto['contractStatus'],
+): BillablePlanDto {
+  const { terms } = plan;
+  return {
+    contractId: plan.contractId,
+    studentId: plan.studentId,
+    centerId: plan.centerId,
+    contractStatus,
+    kind: terms.kind,
+    unpaidInstallments:
+      terms.kind === 'installments'
+        ? terms.schedule
+            .filter((row) => !terms.paidInstallments.includes(row.number))
+            .map((row) => ({
+              number: row.number,
+              dueDate: row.dueDate.toString(),
+              totalCents: row.total.cents,
+            }))
+        : [],
+    nextIsaPeriod:
+      terms.kind === 'isa'
+        ? (terms.lastAssessedPeriod?.addMonths(1) ?? terms.firstPeriod).period
+        : null,
   };
 }
 

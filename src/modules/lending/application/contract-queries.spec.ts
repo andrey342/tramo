@@ -9,6 +9,7 @@ import {
   aContractSentForSignature,
   aDisbursement,
   anActiveContract,
+  anIsa,
   aPlan,
   NOW,
 } from '../../../../test/factories/lending';
@@ -18,9 +19,13 @@ import {
   InMemoryDisbursementRepository,
   InMemoryFinancingPlanRepository,
 } from '../../../../test/fakes/lending';
-import { RecordingEventBus } from '../../../../test/fakes/shared';
+import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
 import { type Contract, ContractAccessDeniedError, renderContractDocument } from '../domain';
 
+import { AssessIsaPeriodHandler } from './commands/assess-isa-period.command';
+import { FindContractQuery } from './dto/contract-lookup';
+import { AssessIsaPeriodCommand } from './dto/plan-lookup';
+import { FindContractHandler } from './queries/find-contract.query';
 import {
   GetContractDocumentHandler,
   GetContractDocumentQuery,
@@ -67,7 +72,7 @@ function setup() {
   const contracts = new InMemoryContractRepository(events);
   const disbursements = new InMemoryDisbursementRepository(events);
   const plans = new InMemoryFinancingPlanRepository(events);
-  const queries = new InMemoryContractQueries(contracts, disbursements);
+  const queries = new InMemoryContractQueries(contracts, disbursements, plans);
   const clock = new FixedClock(NOW);
   return {
     contracts,
@@ -234,6 +239,54 @@ describe('lending queries', () => {
       );
 
       expect(document).toBe(renderContractDocument(contract));
+    });
+  });
+
+  describe('facades for billing', () => {
+    it('should tell billing whose contract it is and in what state', async () => {
+      const t = setup();
+      const contract = anActiveContract();
+      await t.contracts.save(contract);
+      const handler = new FindContractHandler(t.contracts);
+
+      expect(await handler.execute(new FindContractQuery(contract.id))).toEqual({
+        id: contract.id,
+        studentId: contract.studentId,
+        centerId: contract.centerId,
+        product: 'installments',
+        status: 'active',
+      });
+      expect(await handler.execute(new FindContractQuery(uuidv7()))).toBeNull();
+    });
+
+    // 10 % of the 2,000 declared for July 2026, the first month of the plan.
+    it('should assess a month of an ISA for billing and keep the result', async () => {
+      const t = setup();
+      const contract = anActiveContract({ terms: { product: anIsa() } });
+      await t.contracts.save(contract);
+      await t.plans.save(
+        aPlan({ contractId: contract.id, product: anIsa(), activatedOn: '2026-01-05' }),
+      );
+      const handler = new AssessIsaPeriodHandler(new InlineUnitOfWork(), t.plans, t.clock);
+
+      const before = await handler.execute(
+        new AssessIsaPeriodCommand(contract.id, '2026-06', null),
+      );
+      const july = await handler.execute(
+        new AssessIsaPeriodCommand(contract.id, '2026-07', 2_000_00),
+      );
+      const august = await handler.execute(
+        new AssessIsaPeriodCommand(contract.id, '2026-08', null),
+      );
+
+      expect(before).toEqual({ outcome: 'not_started' });
+      expect(july).toEqual({ outcome: 'charge', amountCents: 200_00 });
+      expect(august).toEqual({ outcome: 'paused', reason: 'no_declaration' });
+      const plan = await t.plans.findByContractId(contract.id);
+      expect(plan?.terms.kind === 'isa' && plan.terms.paymentsMade).toBe(1);
+      await expect(
+        handler.execute(new AssessIsaPeriodCommand(uuidv7(), '2026-07', null)),
+      ).rejects.toThrow(EntityNotFoundError);
     });
   });
 

@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import { ActivateContractHandler } from './application/commands/activate-contract.command';
+import { AssessIsaPeriodHandler } from './application/commands/assess-isa-period.command';
 import { CheckDisbursementSettlementHandler } from './application/commands/check-disbursement-settlement.command';
 import { CompleteContractHandler } from './application/commands/complete-contract.command';
 import { DrawUpContractHandler } from './application/commands/draw-up-contract.command';
@@ -21,10 +22,12 @@ import {
   CONTRACTING_DIRECTORY,
   E_SIGNATURE_PROVIDER,
 } from './application/ports/lending-ports';
+import { FindContractHandler } from './application/queries/find-contract.query';
 import { GetContractDocumentHandler } from './application/queries/get-contract-document.query';
 import { GetContractScheduleHandler } from './application/queries/get-contract-schedule.query';
 import { GetContractHandler } from './application/queries/get-contract.query';
 import { GetPayoffQuoteHandler } from './application/queries/get-payoff-quote.query';
+import { ListBillablePlansHandler } from './application/queries/list-billable-plans.query';
 import { ListContractsHandler } from './application/queries/list-contracts.query';
 import { ListDisbursementsHandler } from './application/queries/list-disbursements.query';
 import { CONTRACT_REPOSITORY, DISBURSEMENT_REPOSITORY, FINANCING_PLAN_REPOSITORY } from './domain';
@@ -113,6 +116,9 @@ function simulated<T>(config: AppConfig, provider: T): T {
     GetPayoffQuoteHandler,
     GetContractDocumentHandler,
     ListDisbursementsHandler,
+    FindContractHandler,
+    ListBillablePlansHandler,
+    AssessIsaPeriodHandler,
     LendingJobs,
     DrawUpContractOnOfferAccepted,
     SendForSignatureOnContractCreated,

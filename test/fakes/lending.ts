@@ -1,9 +1,11 @@
+import { toBillablePlanDto } from '../../src/modules/lending/application/contract.mapping';
 import {
   type ContractFilter,
   type ContractSummaryDto,
   type DisbursementDto,
   type DisbursementFilter,
 } from '../../src/modules/lending/application/dto/contract.dto';
+import { type BillablePlanDto } from '../../src/modules/lending/application/dto/plan-lookup';
 import {
   type BankTransferProvider,
   type ContractingDirectory,
@@ -118,7 +120,27 @@ export class InMemoryContractQueries implements ContractQueries {
   constructor(
     private readonly contracts: InMemoryContractRepository,
     private readonly disbursements: InMemoryDisbursementRepository,
+    private readonly plans: InMemoryFinancingPlanRepository,
   ) {}
+
+  async billablePlans(
+    afterContractId: string | null,
+    limit: number,
+  ): Promise<readonly BillablePlanDto[]> {
+    const billable: BillablePlanDto[] = [];
+    const plans = this.plans
+      .all()
+      .filter((plan) => plan.status === 'active')
+      .filter((plan) => !afterContractId || plan.contractId > afterContractId)
+      .sort((a, b) => a.contractId.localeCompare(b.contractId));
+    for (const plan of plans) {
+      const contract = await this.contracts.findById(plan.contractId);
+      if (contract?.status === 'active' || contract?.status === 'in_arrears') {
+        billable.push(toBillablePlanDto(plan, contract.status));
+      }
+    }
+    return billable.slice(0, limit);
+  }
 
   list(filter: ContractFilter, request: PageRequest): Promise<CursorPage<ContractSummaryDto>> {
     const matching = this.contracts
