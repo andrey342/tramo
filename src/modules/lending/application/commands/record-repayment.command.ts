@@ -10,11 +10,13 @@ import {
   type FinancingPlanRepository,
 } from '../../domain';
 
-// Billing collected a charge (ChargePaid): an instalment of the table, or the payoff. An ISA
-// charge needs nothing more, its amount counted when the month was assessed.
+// Billing collected a charge (ChargePaid): an instalment of the table, or the payoff; or could
+// not collect a payoff (ChargeFailed), which is withdrawn. An ISA charge needs nothing more, its
+// amount counted when the month was assessed.
 export type Repayment =
   | { readonly kind: 'installment'; readonly installmentNumber: number }
-  | { readonly kind: 'payoff' };
+  | { readonly kind: 'payoff' }
+  | { readonly kind: 'payoff_failed' };
 
 export class RecordRepaymentCommand extends Command<void> {
   constructor(
@@ -40,15 +42,18 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
       if (!plan) {
         throw new EntityNotFoundError('FinancingPlan', command.contractId);
       }
-      // A redelivered payment changes nothing, and writes nothing.
-      if (alreadyRecorded(plan, repayment)) {
+      // A redelivered payment changes nothing, and writes nothing. A plan that has ended (paid
+      // off while an instalment was in collection) has nothing left to record either.
+      if (alreadyRecorded(plan, repayment) || plan.status !== 'active') {
         return;
       }
       const now = this.clock.now();
       if (repayment.kind === 'installment') {
         plan.recordInstallmentPaid(repayment.installmentNumber, now);
-      } else {
+      } else if (repayment.kind === 'payoff') {
         plan.settlePayoff(now);
+      } else {
+        plan.withdrawPayoff();
       }
       await this.plans.save(plan);
     });
@@ -58,6 +63,9 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
 function alreadyRecorded(plan: FinancingPlan, repayment: Repayment): boolean {
   if (repayment.kind === 'payoff') {
     return plan.completionReason === 'paid_off';
+  }
+  if (repayment.kind === 'payoff_failed') {
+    return plan.terms.kind !== 'installments' || plan.terms.payoffRequest === null;
   }
   return (
     plan.terms.kind === 'installments' &&

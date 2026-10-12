@@ -602,6 +602,40 @@ describe('lending use cases', () => {
       expect(t.events.ofType(LendingEvents.PlanCompleted)).toHaveLength(1);
     });
 
+    // An instalment in collection when the payoff was settled: the plan is already closed.
+    it('should ignore an instalment collected after the plan was paid off', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+      const version = (await t.plans.findByContractId(contractId))?.version;
+
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber: 1 }),
+      );
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan?.version).toBe(version);
+      expect(plan?.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([]);
+    });
+
+    it('should withdraw a payoff the bank refused, so the student may ask again', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff_failed' }));
+      const version = (await t.plans.findByContractId(contractId))?.version;
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff_failed' }));
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan?.status).toBe('active');
+      expect(plan?.terms.kind === 'installments' && plan.terms.payoffRequest).toBeNull();
+      expect(plan?.version).toBe(version);
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+      expect(t.events.ofType(LendingEvents.PayoffRequested)).toHaveLength(2);
+    });
+
     it('should follow the arrears and the default dunning decides', async () => {
       const t = setup();
       const contractId = await t.active();

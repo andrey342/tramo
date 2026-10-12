@@ -4,6 +4,7 @@ import { CommandBus } from '@nestjs/cqrs';
 import {
   type ArrearsClearedPayload,
   BillingEvents,
+  type ChargeFailedPayload,
   type ChargePaidPayload,
   type ChargeWrittenOffPayload,
   type ContractInArrearsPayload,
@@ -28,6 +29,22 @@ export class RecordRepaymentOnChargePaid implements EventHandler<ChargePaidPaylo
       );
     } else if (kind === 'payoff') {
       await this.commands.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+    }
+  }
+}
+
+// A payoff the bank refused is withdrawn: the plan is billed as before and the student may ask
+// again.
+@Injectable()
+@EventSubscriber({ event: BillingEvents.ChargeFailed, consumer: 'lending.withdraw-payoff' })
+export class WithdrawPayoffOnChargeFailed implements EventHandler<ChargeFailedPayload> {
+  constructor(private readonly commands: CommandBus) {}
+
+  async handle(event: IntegrationEvent<ChargeFailedPayload>): Promise<void> {
+    if (event.payload.kind === 'payoff') {
+      await this.commands.execute(
+        new RecordRepaymentCommand(event.payload.contractId, { kind: 'payoff_failed' }),
+      );
     }
   }
 }

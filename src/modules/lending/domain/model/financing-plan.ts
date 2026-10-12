@@ -250,6 +250,15 @@ export class FinancingPlan extends AggregateRoot {
     return quote;
   }
 
+  // The payoff could not be collected: the plan goes on as before, and the student may ask
+  // again. Idempotent.
+  withdrawPayoff(): void {
+    const terms = this.installmentTerms();
+    if (terms.payoffRequest) {
+      this.props = { ...this.props, terms: { ...terms, payoffRequest: null } };
+    }
+  }
+
   // Idempotent: a redelivered payment finds the plan paid off.
   settlePayoff(now: Date): void {
     if (this.props.completionReason === 'paid_off') {

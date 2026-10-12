@@ -41,6 +41,7 @@ import {
   DefaultOnChargeWrittenOff,
   MarkInArrearsOnContractInArrears,
   RecordRepaymentOnChargePaid,
+  WithdrawPayoffOnChargeFailed,
 } from './infrastructure/consumers/collection.consumers';
 import {
   ActivateOnDisbursementSettled,
@@ -143,6 +144,7 @@ function simulated<T>(config: AppConfig, provider: T): T {
     MarkInArrearsOnContractInArrears,
     ClearArrearsOnArrearsCleared,
     DefaultOnChargeWrittenOff,
+    WithdrawPayoffOnChargeFailed,
   ],
   exports: [CONTRACT_REPOSITORY, DISBURSEMENT_REPOSITORY, FINANCING_PLAN_REPOSITORY],
 })
