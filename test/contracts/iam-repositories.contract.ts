@@ -48,6 +48,20 @@ export function iamRepositoriesContract(
         expect(await t.users.findByEmail(`missing.${uuidv7()}@example.com`)).toBeNull();
       });
 
+      it('should list the users of a center', async () => {
+        const centerId = uuidv7();
+        const [first, second] = [
+          await saved(aCenterAdmin({ centerId })),
+          await saved(aCenterAdmin({ centerId })),
+        ];
+        await saved(aCenterAdmin());
+
+        const users = await t.users.listByCenter(centerId);
+
+        expect(users.map((user) => user.id).sort()).toEqual([first.id, second.id].sort());
+        expect(await t.users.listByCenter(uuidv7())).toEqual([]);
+      });
+
       it('should bump the version on every save', async () => {
         const student = await saved(aStudent());
         const loaded = await t.users.findById(student.id);

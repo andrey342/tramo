@@ -26,6 +26,10 @@ export class InMemoryUserRepository extends InMemoryRepository<User> implements 
   findByEmail(email: string): Promise<User | null> {
     return Promise.resolve(this.all().find((user) => user.email.value === email) ?? null);
   }
+
+  listByCenter(centerId: string): Promise<User[]> {
+    return Promise.resolve(this.all().filter((user) => user.centerId === centerId));
+  }
 }
 
 export class InMemoryRefreshTokenRepository

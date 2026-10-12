@@ -11,6 +11,8 @@ export const API_KEY_REPOSITORY = Symbol('API_KEY_REPOSITORY');
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
+  // The users of a training center (its admins): a handful, bounded by design.
+  listByCenter(centerId: string): Promise<User[]>;
   save(user: User): Promise<void>;
 }
 

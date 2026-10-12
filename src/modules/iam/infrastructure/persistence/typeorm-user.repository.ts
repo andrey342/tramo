@@ -29,6 +29,15 @@ export class TypeOrmUserRepository implements UserRepository {
     return row ? UserMapper.toDomain(row) : null;
   }
 
+  // Served by ix_iam_users_center_id.
+  async listByCenter(centerId: string): Promise<User[]> {
+    const rows = await this.txHost.tx.find(UserOrmEntity, {
+      where: { centerId },
+      order: { createdAt: 'ASC' },
+    });
+    return rows.map((row) => UserMapper.toDomain(row));
+  }
+
   async save(user: User): Promise<void> {
     try {
       await this.persister.save(UserOrmEntity, user, UserMapper.toRow(user), 'User');
