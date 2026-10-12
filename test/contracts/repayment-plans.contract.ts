@@ -27,6 +27,7 @@ export function repaymentPlansContract(
         centerId: expect.any(String),
         product: 'installments',
         status: 'active',
+        nextIsaPeriod: null,
       });
       expect(await plans.findContract(UNKNOWN)).toBeNull();
     });
@@ -58,8 +59,28 @@ export function repaymentPlansContract(
       expect(await plans.assessIsaPeriod(isaContractId, '2026-07', 2_000_00)).toEqual({
         outcome: 'charge',
         amountCents: 200_00,
+        planEnded: false,
       });
       expect((await plans.assessIsaPeriod(isaContractId, '2026-08', null)).outcome).toBe('paused');
+      expect((await plans.findContract(isaContractId))?.nextIsaPeriod).toBe('2026-09');
+    });
+
+    // The cycle and a declaration racing for a month: the second assessment is refused.
+    it('should refuse to assess a month twice', async () => {
+      const { plans, isaContractId } = await create();
+      await plans.assessIsaPeriod(isaContractId, '2026-07', null);
+
+      await expect(plans.assessIsaPeriod(isaContractId, '2026-07', 2_000_00)).rejects.toMatchObject(
+        { code: 'period_already_assessed' },
+      );
+    });
+
+    it('should narrow the plans being repaid to one contract', async () => {
+      const { plans, isaContractId } = await create();
+
+      const page = await plans.billablePlans(null, 50, isaContractId);
+
+      expect(page.map((plan) => plan.contractId)).toEqual([isaContractId]);
     });
   });
 }

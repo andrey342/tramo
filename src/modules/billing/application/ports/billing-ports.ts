@@ -29,6 +29,8 @@ export interface RepaidContract {
   readonly centerId: string;
   readonly product: 'installments' | 'isa';
   readonly status: string;
+  // ISA only: the first month of income not assessed yet (YYYY-MM).
+  readonly nextIsaPeriod: string | null;
 }
 
 export interface BillablePlan {
@@ -44,15 +46,22 @@ export interface BillablePlan {
   readonly nextIsaPeriod: string | null;
 }
 
-export type IsaAssessment =
+// `planEnded`: the month assessed ended the plan; there is nothing more to assess.
+export type IsaAssessment = (
   | { readonly outcome: 'charge'; readonly amountCents: number }
-  | { readonly outcome: 'paused' | 'not_started' | 'ended' };
+  | { readonly outcome: 'paused' | 'not_started' | 'ended' }
+) & { readonly planEnded: boolean };
 
 // What billing reads from lending, through its public queries and command.
 export interface RepaymentPlans {
   findContract(contractId: string): Promise<RepaidContract | null>;
-  // Plans being repaid, a page at a time in contract id order.
-  billablePlans(afterContractId: string | null, limit: number): Promise<readonly BillablePlan[]>;
+  // Plans being repaid (none with a payoff in collection), a page at a time in contract id
+  // order; one contract only when given.
+  billablePlans(
+    afterContractId: string | null,
+    limit: number,
+    contractId?: string | null,
+  ): Promise<readonly BillablePlan[]>;
   // Lending's ISA rules applied to the income declared for a month (null if none was).
   assessIsaPeriod(
     contractId: string,

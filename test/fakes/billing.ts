@@ -23,6 +23,7 @@ import {
   type PaymentMandate,
   type PaymentMandateRepository,
 } from '../../src/modules/billing/domain';
+import { PeriodAlreadyAssessedError } from '../../src/modules/lending/domain';
 import { type CursorPage, type PageRequest } from '../../src/shared/application';
 import { type CalendarDate, ConcurrentModificationError } from '../../src/shared/domain';
 
@@ -222,13 +223,16 @@ export class FakePaymentGateway implements PaymentGateway {
 
 // Contracts and plans as lending would answer; an ISA assessment is a function of the income
 // declared (10 % of it, nothing below 1,500), and records the months asked about.
+// Lending's ISA rules, simplified: 10 % of an income from 1,500, one month after the other; a
+// plan can be set to end with a given month (its cap or last payment).
 export class FakeRepaymentPlans implements RepaymentPlans {
-  readonly contracts = new Map<string, RepaidContract>();
+  readonly contracts = new Map<string, Omit<RepaidContract, 'nextIsaPeriod'>>();
   readonly plans: BillablePlan[] = [];
   readonly assessed: { contractId: string; period: string; incomeCents: number | null }[] = [];
+  private readonly lastPeriods = new Map<string, string>();
 
   addContract(
-    contract: RepaidContract,
+    contract: Omit<RepaidContract, 'nextIsaPeriod'>,
     plan?: Omit<BillablePlan, 'contractId' | 'studentId' | 'centerId'>,
   ): this {
     this.contracts.set(contract.id, contract);
@@ -243,15 +247,30 @@ export class FakeRepaymentPlans implements RepaymentPlans {
     return this;
   }
 
-  findContract(contractId: string): Promise<RepaidContract | null> {
-    return Promise.resolve(this.contracts.get(contractId) ?? null);
+  endsWith(contractId: string, period: string): this {
+    this.lastPeriods.set(contractId, period);
+    return this;
   }
 
-  billablePlans(afterContractId: string | null, limit: number): Promise<readonly BillablePlan[]> {
+  findContract(contractId: string): Promise<RepaidContract | null> {
+    const contract = this.contracts.get(contractId);
+    const plan = this.plans.find((candidate) => candidate.contractId === contractId);
+    return Promise.resolve(
+      contract ? { ...contract, nextIsaPeriod: plan?.nextIsaPeriod ?? null } : null,
+    );
+  }
+
+  billablePlans(
+    afterContractId: string | null,
+    limit: number,
+    contractId: string | null = null,
+  ): Promise<readonly BillablePlan[]> {
     return Promise.resolve(
       [...this.plans]
         .sort((a, b) => a.contractId.localeCompare(b.contractId))
         .filter((plan) => !afterContractId || plan.contractId > afterContractId)
+        .filter((plan) => !contractId || plan.contractId === contractId)
+        .filter((plan) => plan.kind !== 'isa' || plan.nextIsaPeriod !== null)
         .slice(0, limit),
     );
   }
@@ -261,13 +280,26 @@ export class FakeRepaymentPlans implements RepaymentPlans {
     period: string,
     declaredIncomeCents: number | null,
   ): Promise<IsaAssessment> {
+    const index = this.plans.findIndex((plan) => plan.contractId === contractId);
+    const plan = this.plans[index];
+    if (!plan?.nextIsaPeriod || period < plan.nextIsaPeriod) {
+      return Promise.reject(new PeriodAlreadyAssessedError(period));
+    }
     this.assessed.push({ contractId, period, incomeCents: declaredIncomeCents });
+    const planEnded = this.lastPeriods.get(contractId) === period;
+    const [year, month] = period.split('-').map(Number) as [number, number];
+    const next =
+      month === 12
+        ? `${String(year + 1)}-01`
+        : `${String(year)}-${String(month + 1).padStart(2, '0')}`;
+    this.plans[index] = { ...plan, nextIsaPeriod: planEnded ? null : next };
     if (declaredIncomeCents === null || declaredIncomeCents < 1_500_00) {
-      return Promise.resolve({ outcome: 'paused' });
+      return Promise.resolve({ outcome: 'paused', planEnded });
     }
     return Promise.resolve({
       outcome: 'charge',
       amountCents: Math.round(declaredIncomeCents / 10),
+      planEnded,
     });
   }
 }

@@ -28,8 +28,12 @@ export class LendingRepaymentPlans implements RepaymentPlans {
     return this.queries.execute(new FindContractQuery(contractId));
   }
 
-  billablePlans(afterContractId: string | null, limit: number): Promise<readonly BillablePlan[]> {
-    return this.queries.execute(new ListBillablePlansQuery(afterContractId, limit));
+  billablePlans(
+    afterContractId: string | null,
+    limit: number,
+    contractId: string | null = null,
+  ): Promise<readonly BillablePlan[]> {
+    return this.queries.execute(new ListBillablePlansQuery(afterContractId, limit, contractId));
   }
 
   async assessIsaPeriod(
@@ -40,6 +44,8 @@ export class LendingRepaymentPlans implements RepaymentPlans {
     const assessment = await this.commands.execute(
       new AssessIsaPeriodCommand(contractId, period, declaredIncomeCents),
     );
-    return assessment.outcome === 'charge' ? assessment : { outcome: assessment.outcome };
+    return assessment.outcome === 'charge'
+      ? assessment
+      : { outcome: assessment.outcome, planEnded: assessment.planEnded };
   }
 }
