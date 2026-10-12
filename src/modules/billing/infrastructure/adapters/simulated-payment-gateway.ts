@@ -1,0 +1,41 @@
+import { createHash } from 'node:crypto';
+
+import { Inject, Injectable } from '@nestjs/common';
+
+import { type CollectionRequest, type PaymentGateway } from '../../application/ports/billing-ports';
+
+// The answer the simulated provider sends later to POST /webhooks/psp.
+export interface SimulatedPspCallback {
+  readonly reference: string;
+  readonly paymentId: string;
+  readonly outcome: 'succeeded' | 'failed';
+  readonly failureReason: string | null;
+}
+
+export const PSP_CALLBACK_SCHEDULER = Symbol('PSP_CALLBACK_SCHEDULER');
+
+export interface PspCallbackScheduler {
+  schedule(callback: SimulatedPspCallback): Promise<void>;
+}
+
+// Stands in for a payment service provider collecting SEPA direct debits: it accepts every
+// request at once and answers a little later through the signed webhook, as a real one does. An
+// amount ending in 13 cents is refused for insufficient funds, which is how the demo shows
+// dunning. Deterministic and stateless: the payment id derives from the idempotency key, so a
+// repeated request gets the same payment (and the same answer, which the charge ignores).
+@Injectable()
+export class SimulatedPaymentGateway implements PaymentGateway {
+  constructor(@Inject(PSP_CALLBACK_SCHEDULER) private readonly callbacks: PspCallbackScheduler) {}
+
+  async collect(request: CollectionRequest): Promise<{ readonly paymentId: string }> {
+    const paymentId = `sim-pay-${createHash('sha256').update(request.idempotencyKey).digest('hex').slice(0, 24)}`;
+    const refused = request.amount.cents % 100 === 13;
+    await this.callbacks.schedule({
+      reference: request.idempotencyKey,
+      paymentId,
+      outcome: refused ? 'failed' : 'succeeded',
+      failureReason: refused ? 'insufficient_funds' : null,
+    });
+    return { paymentId };
+  }
+}
