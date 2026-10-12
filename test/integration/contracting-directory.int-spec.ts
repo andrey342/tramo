@@ -39,6 +39,8 @@ describe('CatalogContractingDirectory (integration)', () => {
   contractingDirectoryContract('CatalogContractingDirectory over the query bus', async () => {
     const center = anActiveTrainingCenter({ feePercent: 5 });
     const program = aProgram({ centerId: center.id, details: { durationWeeks: 12 } });
+    const archived = aProgram({ centerId: center.id });
+    archived.archive(NOW);
     const other = anActiveTrainingCenter();
     const otherProgram = aProgram({ centerId: other.id });
     const suspended = anActiveTrainingCenter();
@@ -50,6 +52,7 @@ describe('CatalogContractingDirectory (integration)', () => {
       await centers.save(other);
       await centers.save(suspended);
       await programs.save(program);
+      await programs.save(archived);
       await programs.save(otherProgram);
     });
     return {
@@ -57,6 +60,7 @@ describe('CatalogContractingDirectory (integration)', () => {
       centerId: center.id,
       programId: program.id,
       payoutIban: VALID_IBAN,
+      archivedProgramId: archived.id,
       otherCenterProgramId: otherProgram.id,
       suspendedCenterId: suspended.id,
     };

@@ -5,18 +5,20 @@ import { FakeContractingDirectory, OPEN_IBAN } from '../../../../../test/fakes/l
 
 contractingDirectoryContract('FakeContractingDirectory', () => {
   const [centerId, otherCenterId, suspendedCenterId] = [uuidv7(), uuidv7(), uuidv7()];
-  const [programId, otherCenterProgramId] = [uuidv7(), uuidv7()];
+  const [programId, archivedProgramId, otherCenterProgramId] = [uuidv7(), uuidv7(), uuidv7()];
   const directory = new FakeContractingDirectory()
     .addCenter(centerId)
     .addCenter(otherCenterId)
     .addCenter(suspendedCenterId, { active: false })
     .addProgram(programId, centerId, 12)
+    .addProgram(archivedProgramId, centerId)
     .addProgram(otherCenterProgramId, otherCenterId);
   return {
     directory,
     centerId,
     programId,
     payoutIban: OPEN_IBAN,
+    archivedProgramId,
     otherCenterProgramId,
     suspendedCenterId,
   };

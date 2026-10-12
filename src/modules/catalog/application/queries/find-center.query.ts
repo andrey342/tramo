@@ -2,12 +2,8 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, QueryHandler } from '@nestjs/cqrs';
 
 import { TRAINING_CENTER_REPOSITORY, type TrainingCenterRepository } from '../../domain';
-import {
-  type CenterSummaryDto,
-  FindCenterQuery,
-  GetPayoutAccountQuery,
-  type PayoutAccountDto,
-} from '../dto/center-lookup';
+import { type CenterSummaryDto, FindCenterQuery } from '../dto/center-lookup';
+import { GetPayoutAccountQuery, type PayoutAccountDto } from '../dto/payout-account';
 
 @QueryHandler(FindCenterQuery)
 export class FindCenterHandler implements IQueryHandler<FindCenterQuery> {

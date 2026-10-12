@@ -13,10 +13,12 @@ describe('FindProgram', () => {
     await programs.save(archived);
     const handler = new FindProgramHandler(programs);
 
-    expect(await handler.execute(new FindProgramQuery(archived.id))).toMatchObject({
+    expect(await handler.execute(new FindProgramQuery(archived.id))).toEqual({
       id: archived.id,
-      status: 'archived',
+      centerId: archived.centerId,
+      name: archived.details.name,
       durationWeeks: archived.details.durationWeeks,
+      status: 'archived',
     });
     expect(await handler.execute(new FindProgramQuery('missing'))).toBeNull();
   });

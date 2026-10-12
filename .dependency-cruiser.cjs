@@ -65,6 +65,20 @@ module.exports = {
       },
     },
     {
+      name: 'payout-account-only-for-disbursements',
+      comment:
+        'The full payout IBAN leaves catalog only to pay the center: the catalog adapter of lending is the one place allowed to ask for it (ADR 014).',
+      severity: 'error',
+      from: {
+        path: '^src/',
+        pathNot: [
+          '^src/modules/catalog/',
+          '^src/modules/lending/infrastructure/adapters/catalog-contracting-directory[.]ts$',
+        ],
+      },
+      to: { path: '^src/modules/catalog/application/dto/payout-account[.]ts$' },
+    },
+    {
       name: 'shared-does-not-know-modules',
       severity: 'error',
       from: { path: '^src/shared/' },

@@ -1,10 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 
-import {
-  FindCenterQuery,
-  GetPayoutAccountQuery,
-} from '@modules/catalog/application/dto/center-lookup';
+import { FindCenterQuery } from '@modules/catalog/application/dto/center-lookup';
+import { GetPayoutAccountQuery } from '@modules/catalog/application/dto/payout-account';
 import { FindProgramQuery } from '@modules/catalog/application/dto/program-lookup';
 import { Percentage } from '@shared/domain';
 

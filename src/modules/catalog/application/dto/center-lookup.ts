@@ -17,18 +17,3 @@ export class FindCenterQuery extends Query<CenterSummaryDto | null> {
     super();
   }
 }
-
-// The account a disbursement is paid into, in full. Only lending asks, to make the transfer;
-// everything else sees the masked IBAN of TrainingCenterDto.
-export interface PayoutAccountDto {
-  readonly centerId: string;
-  readonly holderName: string;
-  readonly iban: string;
-  readonly centerStatus: CenterStatus;
-}
-
-export class GetPayoutAccountQuery extends Query<PayoutAccountDto | null> {
-  constructor(readonly centerId: string) {
-    super();
-  }
-}

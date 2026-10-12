@@ -6,6 +6,8 @@ export interface ContractingDirectoryHarness {
   readonly centerId: string;
   readonly programId: string;
   readonly payoutIban: string;
+  // A program of the center withdrawn from the catalog: contracts already signed still finance it.
+  readonly archivedProgramId: string;
   // A program of another center, and a suspended center.
   readonly otherCenterProgramId: string;
   readonly suspendedCenterId: string;
@@ -26,6 +28,12 @@ export function contractingDirectoryContract(
 
       expect(details?.platformFee.basisPoints).toBe(500);
       expect(details?.programDurationWeeks).toBe(12);
+    });
+
+    it('should still know a program withdrawn from the catalog', async () => {
+      const { directory, centerId, archivedProgramId } = await create();
+
+      expect(await directory.contractingDetails(centerId, archivedProgramId)).not.toBeNull();
     });
 
     it('should know nothing of a program of another center or of unknown ids', async () => {

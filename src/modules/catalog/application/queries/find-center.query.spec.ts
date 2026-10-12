@@ -1,7 +1,8 @@
 import { aTrainingCenter } from '../../../../../test/factories/catalog';
 import { InMemoryTrainingCenterRepository } from '../../../../../test/fakes/catalog';
 import { RecordingEventBus } from '../../../../../test/fakes/shared';
-import { FindCenterQuery, GetPayoutAccountQuery } from '../dto/center-lookup';
+import { FindCenterQuery } from '../dto/center-lookup';
+import { GetPayoutAccountQuery } from '../dto/payout-account';
 
 import { FindCenterHandler, GetPayoutAccountHandler } from './find-center.query';
 
