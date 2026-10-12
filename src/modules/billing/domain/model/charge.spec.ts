@@ -6,6 +6,7 @@ import { BillingEvents } from '../events/billing-events';
 
 import { type Charge } from './charge';
 
+const MANDATE_ID = '0199a000-0000-7000-8000-00000000000m';
 const eventTypes = (charge: Charge): string[] =>
   charge.pullEvents().map((event) => event.eventType);
 const fresh = (overrides: Parameters<typeof aCharge>[0] = {}): Charge => {
@@ -31,7 +32,7 @@ describe('Charge', () => {
     it('should be paid through an attempt whose key the provider echoes, once', () => {
       const charge = fresh();
 
-      const key = charge.submitCollection(NOW);
+      const key = charge.submitCollection(MANDATE_ID, NOW);
       charge.recordAccepted(key, 'pay-1');
       charge.recordAccepted(key, 'pay-2');
       charge.recordSucceeded(key, LATER, false);
@@ -48,12 +49,12 @@ describe('Charge', () => {
       const late = fresh();
 
       onTime.recordFailed(
-        onTime.submitCollection(NOW),
+        onTime.submitCollection(MANDATE_ID, NOW),
         'insufficient_funds',
         day('2026-11-12'),
         NOW,
       );
-      late.recordFailed(late.submitCollection(NOW), '', day('2026-11-15'), NOW);
+      late.recordFailed(late.submitCollection(MANDATE_ID, NOW), '', day('2026-11-15'), NOW);
 
       expect(onTime.status).toBe('failed');
       expect(late.status).toBe('overdue');
@@ -67,13 +68,13 @@ describe('Charge', () => {
     it('should try again with a new key after a failure', () => {
       const charge = fresh();
       charge.recordFailed(
-        charge.submitCollection(NOW),
+        charge.submitCollection(MANDATE_ID, NOW),
         'insufficient_funds',
         day('2026-11-12'),
         NOW,
       );
 
-      const second = charge.submitCollection(LATER);
+      const second = charge.submitCollection(MANDATE_ID, LATER);
 
       expect(second).toBe(`${charge.id}.2`);
       expect(charge.status).toBe('pending');
@@ -82,7 +83,7 @@ describe('Charge', () => {
 
     it('should refuse callbacks that do not fit', () => {
       const charge = fresh();
-      const key = charge.submitCollection(NOW);
+      const key = charge.submitCollection(MANDATE_ID, NOW);
 
       expect(() => {
         charge.recordSucceeded(`${charge.id}.9`, NOW, false);
@@ -91,7 +92,7 @@ describe('Charge', () => {
       expect(() => {
         charge.recordFailed(key, 'late', day('2026-11-12'), NOW);
       }).toThrow(InvalidStateTransitionError);
-      expect(() => charge.submitCollection(NOW)).toThrow(InvalidStateTransitionError);
+      expect(() => charge.submitCollection(MANDATE_ID, NOW)).toThrow(InvalidStateTransitionError);
     });
 
     it('should be cancelled only before collection starts', () => {
@@ -103,7 +104,7 @@ describe('Charge', () => {
       expect(charge.status).toBe('cancelled');
       expect(eventTypes(charge)).toEqual([BillingEvents.ChargeCancelled]);
       const collecting = fresh();
-      collecting.submitCollection(NOW);
+      collecting.submitCollection(MANDATE_ID, NOW);
       expect(() => {
         collecting.cancel(NOW);
       }).toThrow(InvalidStateTransitionError);
@@ -169,10 +170,10 @@ describe('Charge', () => {
 
     it('should leave a paid charge alone, and wait for the answer on one being collected', () => {
       const paid = fresh();
-      paid.recordSucceeded(paid.submitCollection(NOW), NOW, false);
+      paid.recordSucceeded(paid.submitCollection(MANDATE_ID, NOW), NOW, false);
       paid.pullEvents();
       const collecting = fresh();
-      collecting.submitCollection(NOW);
+      collecting.submitCollection(MANDATE_ID, NOW);
       collecting.pullEvents();
 
       expect(dun(paid, '2027-03-01')).toEqual({ retry: false, events: [], status: 'paid' });
@@ -187,7 +188,7 @@ describe('Charge', () => {
     it('should clear the arrears of the contract when the last charge in arrears is paid', () => {
       const charge = fresh();
       dun(charge, '2026-12-12');
-      const key = charge.submitCollection(NOW);
+      const key = charge.submitCollection(MANDATE_ID, NOW);
 
       charge.recordSucceeded(key, LATER, false);
 
@@ -203,7 +204,7 @@ describe('Charge', () => {
       const charge = fresh();
       dun(charge, '2026-12-12');
 
-      charge.recordSucceeded(charge.submitCollection(NOW), LATER, true);
+      charge.recordSucceeded(charge.submitCollection(MANDATE_ID, NOW), LATER, true);
 
       expect(eventTypes(charge)).not.toContain(BillingEvents.ArrearsCleared);
     });

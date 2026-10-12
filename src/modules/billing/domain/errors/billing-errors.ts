@@ -54,3 +54,12 @@ export class UnknownCollectionAttemptError extends DomainError {
     super('No collection attempt matches this reference.', { reference });
   }
 }
+
+export class MandateMissingError extends DomainError {
+  readonly code = 'mandate_missing';
+  readonly category = 'rule_violation';
+
+  constructor(contractId: string) {
+    super('The contract has no active direct debit mandate.', { contractId });
+  }
+}

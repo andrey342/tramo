@@ -27,6 +27,8 @@ const MAX_REASON_LENGTH = 200;
 export interface CollectionAttempt {
   readonly number: number;
   readonly key: string;
+  // The mandate it debits, fixed when the attempt starts: a repeated call sends the same request.
+  readonly mandateId: string;
   readonly submittedAt: Date;
   readonly paymentId: string | null;
   readonly outcome: 'pending' | 'succeeded' | 'failed';
@@ -196,8 +198,9 @@ export class Charge extends AggregateRoot {
     return this.props.attempts.at(-1) ?? null;
   }
 
-  // Starts a collection attempt; ChargeSubmitted has a job ask the provider with its key.
-  submitCollection(now: Date): string {
+  // Starts a collection attempt under a mandate; ChargeSubmitted has a job ask the provider with
+  // its key.
+  submitCollection(mandateId: string, now: Date): string {
     if (!this.collectible) {
       throw new InvalidStateTransitionError('Charge', this.props.status, 'pending');
     }
@@ -210,6 +213,7 @@ export class Charge extends AggregateRoot {
         {
           number,
           key,
+          mandateId,
           submittedAt: now,
           paymentId: null,
           outcome: 'pending',
