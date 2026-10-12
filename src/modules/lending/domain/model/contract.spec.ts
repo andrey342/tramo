@@ -1,6 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 
-import { InvalidStateTransitionError, Money, Percentage } from '@shared/domain';
+import { InvalidStateTransitionError, InvalidValueError, Money, Percentage } from '@shared/domain';
 
 import {
   aContract,
@@ -154,6 +154,20 @@ describe('Contract', () => {
           NOW,
         );
       }).toThrow(SignatureMismatchError);
+      expect(contract.status).toBe('sent_for_signature');
+    });
+
+    it('should refuse a signing time before the envelope or ahead of now', () => {
+      const contract = aContractSentForSignature();
+      const sign = (signedAt: Date) => () => {
+        contract.sign(
+          { envelopeId: `env_${contract.id}`, documentHash: DOCUMENT_HASH, signedAt },
+          NOW,
+        );
+      };
+
+      expect(sign(new Date(NOW.getTime() - 6 * 60_000))).toThrow(InvalidValueError);
+      expect(sign(new Date(NOW.getTime() + 6 * 60_000))).toThrow(InvalidValueError);
       expect(contract.status).toBe('sent_for_signature');
     });
 

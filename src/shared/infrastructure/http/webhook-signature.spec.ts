@@ -52,6 +52,15 @@ describe('webhook signatures', () => {
     );
   });
 
+  it('should accept the previous secret while a new one is rolled out', () => {
+    const header = signWebhook('previous-secret-of-at-least-32-chars', BODY, NOW);
+
+    expect(
+      verifyWebhook([SECRET, 'previous-secret-of-at-least-32-chars'], header, BODY, NOW).valid,
+    ).toBe(true);
+    expect(verifyWebhook([SECRET], header, BODY, NOW).valid).toBe(false);
+  });
+
   it('should accept any of several signatures, as during a secret rotation', () => {
     const [timestamp, current] = signWebhook(SECRET, BODY, NOW).split(',');
     const old = `v1=${'0'.repeat(64)}`;

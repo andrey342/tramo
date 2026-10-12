@@ -189,7 +189,8 @@ describe('Contracts (e2e)', () => {
     expect(createHash('sha256').update(document.text).digest('hex')).toBe(
       sent.body.signature.documentHash,
     );
-    expect(signed.status).toBe(204);
+    expect(signed.status).toBe(200);
+    expect(signed.body).toEqual({ id: contractId, status: 'signed' });
     expect(asStudent.body).toMatchObject({
       status: 'active',
       principalCents: 600_000,
@@ -231,8 +232,9 @@ describe('Contracts (e2e)', () => {
       expect(refused.status).toBe(401);
       expect(refused.body.code).toBe('invalid_webhook_signature');
     }
-    expect(declined.status).toBe(204);
-    expect(replayed.status).toBe(204);
+    expect(declined.status).toBe(200);
+    expect(declined.body.status).toBe('cancelled');
+    expect(replayed.status).toBe(200);
   });
 
   it('should refuse a signature over another document, and an unknown envelope', async () => {
@@ -260,7 +262,8 @@ describe('Contracts (e2e)', () => {
 
     expect(forged.status).toBe(422);
     expect(forged.body.code).toBe('signature_mismatch');
-    expect(unknown.status).toBe(404);
+    expect(unknown.status).toBe(409);
+    expect(unknown.body.code).toBe('envelope_not_recorded');
     expect(incomplete.status).toBe(400);
   });
 

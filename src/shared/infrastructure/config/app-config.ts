@@ -49,7 +49,8 @@ export interface AppConfig {
   };
   readonly lending: {
     readonly providers: 'simulated';
-    readonly esignWebhookSecret: string;
+    // Current first, then the previous one during a rotation.
+    readonly esignWebhookSecrets: readonly string[];
   };
   readonly outbox: {
     readonly enabled: boolean;
@@ -173,7 +174,9 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     },
     lending: {
       providers: env.LENDING_PROVIDERS,
-      esignWebhookSecret: env.ESIGN_WEBHOOK_SECRET,
+      esignWebhookSecrets: [env.ESIGN_WEBHOOK_SECRET, env.ESIGN_WEBHOOK_PREVIOUS_SECRET].filter(
+        (secret) => secret !== undefined,
+      ),
     },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,

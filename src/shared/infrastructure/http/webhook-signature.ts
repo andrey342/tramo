@@ -15,8 +15,9 @@ export type WebhookVerification =
   | { readonly valid: true }
   | { readonly valid: false; readonly reason: 'malformed' | 'expired' | 'mismatch' };
 
+// `secrets`: the current one first, then the previous one while senders move to the new one.
 export function verifyWebhook(
-  secret: string,
+  secrets: string | readonly string[],
   header: string | undefined,
   rawBody: Buffer,
   now: Date,
@@ -35,8 +36,12 @@ export function verifyWebhook(
   if (Math.abs(now.getTime() / 1000 - timestamp) > toleranceSeconds) {
     return { valid: false, reason: 'expired' };
   }
-  const expected = Buffer.from(hmac(secret, timestamp, rawBody), 'hex');
-  const matches = signatures.some((value) => timingSafeEqual(Buffer.from(value, 'hex'), expected));
+  const expected = (typeof secrets === 'string' ? [secrets] : secrets).map((secret) =>
+    Buffer.from(hmac(secret, timestamp, rawBody), 'hex'),
+  );
+  const matches = signatures.some((value) =>
+    expected.some((candidate) => timingSafeEqual(Buffer.from(value, 'hex'), candidate)),
+  );
   return matches ? { valid: true } : { valid: false, reason: 'mismatch' };
 }
 

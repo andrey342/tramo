@@ -1,4 +1,9 @@
-import { AggregateRoot, CalendarDate, InvalidStateTransitionError } from '@shared/domain';
+import {
+  AggregateRoot,
+  CalendarDate,
+  InvalidStateTransitionError,
+  InvalidValueError,
+} from '@shared/domain';
 
 import { SignatureMismatchError } from '../errors/lending-errors';
 import { LendingEvents } from '../events/lending-events';
@@ -10,6 +15,8 @@ import {
   type FinancedProgram,
   validTerms,
 } from './contract-terms';
+
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 // Why a contract was cancelled before it took effect.
 export type CancellationReason = 'signature_declined' | 'signature_expired';
@@ -183,6 +190,18 @@ export class Contract extends AggregateRoot {
     }
     if (signature.documentHash !== callback.documentHash) {
       throw new SignatureMismatchError('documentHash');
+    }
+    // The signing time comes from the provider: it cannot precede the envelope, nor lie ahead of
+    // now beyond the clock skew webhooks tolerate.
+    const signedAt = callback.signedAt.getTime();
+    if (
+      signedAt < signature.sentAt.getTime() - CLOCK_SKEW_MS ||
+      signedAt > now.getTime() + CLOCK_SKEW_MS
+    ) {
+      throw new InvalidValueError(
+        'signedAt',
+        'The signing time is outside the life of the envelope.',
+      );
     }
     this.props = { ...this.props, signature: { ...signature, signedAt: callback.signedAt } };
     this.moveTo('signed', now);

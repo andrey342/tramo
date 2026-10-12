@@ -20,6 +20,18 @@ export class SignatureMismatchError extends DomainError {
   }
 }
 
+// A callback for an envelope this module has not recorded (yet: the provider may call back
+// before the envelope id is saved). A conflict, which providers retry, rather than a 404 they
+// may take as final.
+export class EnvelopeNotRecordedError extends DomainError {
+  readonly code = 'envelope_not_recorded';
+  readonly category = 'conflict';
+
+  constructor(envelopeId: string) {
+    super('No contract is waiting on this envelope.', { envelopeId });
+  }
+}
+
 export class ContractAccessDeniedError extends DomainError {
   readonly code = 'contract_access_denied';
   readonly category = 'forbidden';

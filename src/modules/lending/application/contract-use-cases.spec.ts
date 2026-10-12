@@ -1,6 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal } from '@shared/application';
+import { type AuditChanges, type Principal } from '@shared/application';
 import {
   EntityNotFoundError,
   FixedClock,
@@ -23,6 +23,7 @@ import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shar
 import {
   ContractAccessDeniedError,
   type ContractProduct,
+  EnvelopeNotRecordedError,
   LendingEvents,
   PayoffQuoteChangedError,
   renderContractDocument,
@@ -117,10 +118,12 @@ function setup() {
   });
   const execute = new ExecuteDisbursementHandler(uow, disbursements, catalog, bank, clock);
   const check = new CheckDisbursementSettlementHandler(uow, disbursements, bank, clock);
+  const audited: AuditChanges[] = [];
+  const audit = { describeChanges: (changes: AuditChanges) => audited.push(changes) };
   const handlers = {
     drawUp: new DrawUpContractHandler(uow, contracts, catalog, clock),
     send: new SendContractForSignatureHandler(uow, contracts, signatures, clock),
-    signature: new RecordSignatureEventHandler(uow, contracts, clock),
+    signature: new RecordSignatureEventHandler(uow, contracts, audit, clock),
     requestDisbursement: new RequestDisbursementHandler(uow, contracts, disbursements, clock),
     execute,
     check,
@@ -176,6 +179,7 @@ function setup() {
     signatures,
     bank,
     catalog,
+    audited,
     centerId,
     programId,
     student,
@@ -275,6 +279,27 @@ describe('lending use cases', () => {
       expect(t.disbursements.all()).toHaveLength(1);
       // 6,000 less the 5 % fee.
       expect((await t.disbursementOf(contractId)).amount.cents).toBe(5_700_00);
+      expect(t.audited).toEqual([{ status: { before: 'sent_for_signature', after: 'signed' } }]);
+    });
+
+    it('should neither write nor audit a repeated callback', async () => {
+      const t = setup();
+      const contractId = await t.signed();
+      const contract = await t.contracts.findById(contractId);
+      const version = contract?.version;
+
+      const result = await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'signed',
+          envelopeId: contract?.signature?.envelopeId ?? '',
+          documentHash: contract?.signature?.documentHash ?? '',
+          occurredAt: NOW,
+        }),
+      );
+
+      expect(result).toEqual({ id: contractId, status: 'signed' });
+      expect((await t.contracts.findById(contractId))?.version).toBe(version);
+      expect(t.audited).toHaveLength(1);
     });
 
     it('should refuse a callback over another document', async () => {
@@ -325,7 +350,7 @@ describe('lending use cases', () => {
             occurredAt: NOW,
           }),
         ),
-      ).rejects.toThrow(EntityNotFoundError);
+      ).rejects.toThrow(EnvelopeNotRecordedError);
     });
 
     it('should not disburse a contract that is not signed', async () => {
