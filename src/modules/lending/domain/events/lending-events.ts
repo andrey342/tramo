@@ -9,8 +9,10 @@ export const LendingEvents = {
   ContractActivated: 'ContractActivated',
   ContractCompleted: 'ContractCompleted',
   DisbursementRequested: 'DisbursementRequested',
+  DisbursementSent: 'DisbursementSent',
   DisbursementSettled: 'DisbursementSettled',
   DisbursementFailed: 'DisbursementFailed',
+  DisbursementRetried: 'DisbursementRetried',
   PayoffRequested: 'PayoffRequested',
   IsaDeclarationOverdue: 'IsaDeclarationOverdue',
   PlanCompleted: 'PlanCompleted',
@@ -74,6 +76,13 @@ export type DisbursementRequestedPayload = {
   readonly amountCents: number;
 };
 
+// The bank accepted the transfer; it settles later.
+export type DisbursementSentPayload = {
+  readonly disbursementId: string;
+  readonly contractId: string;
+  readonly attempt: number;
+};
+
 export type DisbursementSettledPayload = {
   readonly disbursementId: string;
   readonly contractId: string;
@@ -86,6 +95,14 @@ export type DisbursementFailedPayload = {
   readonly contractId: string;
   readonly centerId: string;
   readonly reason: string;
+  readonly attempt: number;
+};
+
+// Ops sent a failed disbursement again, as a new attempt.
+export type DisbursementRetriedPayload = {
+  readonly disbursementId: string;
+  readonly contractId: string;
+  readonly centerId: string;
   readonly attempt: number;
 };
 

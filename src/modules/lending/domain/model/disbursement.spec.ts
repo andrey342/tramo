@@ -27,6 +27,10 @@ describe('Disbursement', () => {
     expect(disbursement).toMatchObject({ status: 'settled', transferId: 'tr_1', settledAt: LATER });
     expect(disbursement.pullEvents()).toEqual([
       expect.objectContaining({
+        eventType: LendingEvents.DisbursementSent,
+        payload: expect.objectContaining({ attempt: 1 }),
+      }),
+      expect.objectContaining({
         eventType: LendingEvents.DisbursementSettled,
         payload: expect.objectContaining({ amountCents: 7_125_00 }),
       }),
@@ -64,6 +68,12 @@ describe('Disbursement', () => {
       failureReason: null,
     });
     expect(disbursement.idempotencyKey).toBe(`${disbursement.id}.2`);
+    expect(disbursement.pullEvents()).toEqual([
+      expect.objectContaining({
+        eventType: LendingEvents.DisbursementRetried,
+        payload: expect.objectContaining({ attempt: 2 }),
+      }),
+    ]);
   });
 
   it('should keep a long failure reason short and retry only a failure', () => {

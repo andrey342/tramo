@@ -47,12 +47,34 @@ export class PayoffAlreadyRequestedError extends DomainError {
   }
 }
 
+export class PayoffQuoteChangedError extends DomainError {
+  readonly code = 'payoff_quote_changed';
+  readonly category = 'conflict';
+
+  constructor(currentAmountCents: number) {
+    super('The payoff amount has changed since it was quoted; ask for a new quote.', {
+      currentAmountCents,
+    });
+  }
+}
+
 export class PeriodAlreadyAssessedError extends DomainError {
   readonly code = 'period_already_assessed';
   readonly category = 'conflict';
 
   constructor(period: string) {
     super(`The period ${period} has already been assessed.`, { period });
+  }
+}
+
+// One contract per application, one disbursement and one plan per contract: a second one is a
+// duplicate of work already done (a redelivered event racing the first delivery).
+export class LendingRecordExistsError extends DomainError {
+  readonly code = 'already_exists';
+  readonly category = 'conflict';
+
+  constructor(entity: string, owner: 'application' | 'contract', ownerId: string) {
+    super(`A ${entity} already exists for ${owner} ${ownerId}.`, { entity, owner, ownerId });
   }
 }
 

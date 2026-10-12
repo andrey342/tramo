@@ -123,6 +123,17 @@ export class Disbursement extends AggregateRoot {
     this.assertStatus(['pending'], 'sent');
     this.props = { ...this.props, transferId };
     this.moveTo('sent', now);
+    this.record({
+      eventType: LendingEvents.DisbursementSent,
+      aggregateType: 'Disbursement',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        disbursementId: this.id,
+        contractId: this.props.contractId,
+        attempt: this.props.attempt,
+      },
+    });
   }
 
   settle(now: Date): void {
@@ -172,6 +183,18 @@ export class Disbursement extends AggregateRoot {
       failureReason: null,
     };
     this.moveTo('pending', now);
+    this.record({
+      eventType: LendingEvents.DisbursementRetried,
+      aggregateType: 'Disbursement',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        disbursementId: this.id,
+        contractId: this.props.contractId,
+        centerId: this.props.centerId,
+        attempt: this.props.attempt,
+      },
+    });
   }
 
   private assertStatus(expected: readonly DisbursementStatus[], target: DisbursementStatus): void {
