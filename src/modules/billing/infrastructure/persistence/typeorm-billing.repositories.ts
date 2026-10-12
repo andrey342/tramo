@@ -47,7 +47,7 @@ export class TypeOrmChargeRepository implements ChargeRepository {
     return row ? ChargeMapper.toDomain(row) : null;
   }
 
-  // Served by ix_billing_charges_scheduled_due_date.
+  // Served by ix_billing_charges_scheduled_id.
   async findDueIds(
     asOf: CalendarDate,
     limit: number,

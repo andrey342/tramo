@@ -54,10 +54,11 @@ export class CreateBillingCharges1791835980000 implements MigrationInterface {
       CREATE INDEX ix_billing_charges_contract_id_created_at_id
         ON billing.charges (contract_id, created_at DESC, id DESC)
     `);
-    // Collection: scheduled charges by due date.
+    // Collection pages through the scheduled charges by id and keeps those already due: the due
+    // date rides along, so no row is read for one that is not.
     await queryRunner.query(`
-      CREATE INDEX ix_billing_charges_scheduled_due_date
-        ON billing.charges (due_date, id)
+      CREATE INDEX ix_billing_charges_scheduled_id
+        ON billing.charges (id) INCLUDE (due_date)
         WHERE status = 'scheduled'
     `);
     // Dunning walks the charges not settled, by id.
