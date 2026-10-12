@@ -15,7 +15,6 @@ export {
   type FinancedProgram,
   isaCap,
   monthlyInstallment,
-  platformFeeAmount,
 } from './model/contract-terms';
 export {
   Disbursement,
@@ -33,14 +32,6 @@ export {
   type PayoffRequest,
   type PlanStatus,
 } from './model/financing-plan';
-export {
-  amortizationSchedule,
-  firstDueDate,
-  type InstallmentRow,
-  LATEST_DUE_DAY,
-  type PayoffQuote,
-  payoffQuote,
-} from './model/installment-schedule';
-export { firstIsaPeriod, ISA_WINDOW_YEARS, isaWindowEnd, programEnd } from './model/isa-rules';
+export { type InstallmentRow, type PayoffQuote } from './model/installment-schedule';
 export * from './ports/lending-repositories';
 export { renderContractDocument } from './services/contract-document';

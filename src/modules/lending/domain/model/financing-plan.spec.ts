@@ -9,7 +9,7 @@ import {
 } from '../errors/lending-errors';
 import { LendingEvents } from '../events/lending-events';
 
-import { type FinancingPlan, type IsaPlanTerms } from './financing-plan';
+import { FinancingPlan, type IsaPlanTerms } from './financing-plan';
 
 const eur = (amount: string): Money => Money.fromDecimal(amount);
 const month = (period: string): CalendarDate => CalendarDate.parse(`${period}-01`);
@@ -18,6 +18,33 @@ const eventTypes = (plan: FinancingPlan): string[] =>
 const isa = (plan: FinancingPlan): IsaPlanTerms => plan.terms as IsaPlanTerms;
 
 describe('FinancingPlan', () => {
+  it('should be reconstituted as it was saved, without events', () => {
+    const plan = aPlan();
+    plan.pullEvents();
+
+    const loaded = FinancingPlan.reconstitute(plan.id, {
+      contractId: plan.contractId,
+      studentId: plan.studentId,
+      centerId: plan.centerId,
+      principal: plan.principal,
+      startsOn: plan.startsOn,
+      terms: plan.terms,
+      status: plan.status,
+      completionReason: plan.completionReason,
+      completedAt: plan.completedAt,
+      createdAt: plan.createdAt,
+    });
+
+    expect(loaded).toMatchObject({
+      contractId: plan.contractId,
+      studentId: plan.studentId,
+      centerId: plan.centerId,
+      createdAt: plan.createdAt,
+      completedAt: null,
+    });
+    expect(loaded.hasPendingEvents).toBe(false);
+  });
+
   describe('instalments', () => {
     it('should open with the table of the contract, from the month after activation', () => {
       const plan = aPlan({ activatedOn: '2026-10-12' });
