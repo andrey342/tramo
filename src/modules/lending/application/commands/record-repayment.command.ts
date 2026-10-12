@@ -53,7 +53,7 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
       } else if (repayment.kind === 'payoff') {
         plan.settlePayoff(now);
       } else {
-        plan.withdrawPayoff();
+        plan.withdrawPayoff(now);
       }
       await this.plans.save(plan);
     });

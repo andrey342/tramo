@@ -252,11 +252,23 @@ export class FinancingPlan extends AggregateRoot {
 
   // The payoff could not be collected: the plan goes on as before, and the student may ask
   // again. Idempotent.
-  withdrawPayoff(): void {
+  withdrawPayoff(now: Date): void {
     const terms = this.installmentTerms();
-    if (terms.payoffRequest) {
-      this.props = { ...this.props, terms: { ...terms, payoffRequest: null } };
+    if (!terms.payoffRequest) {
+      return;
     }
+    this.props = { ...this.props, terms: { ...terms, payoffRequest: null } };
+    this.record({
+      eventType: LendingEvents.PayoffWithdrawn,
+      aggregateType: 'FinancingPlan',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        planId: this.id,
+        contractId: this.props.contractId,
+        studentId: this.props.studentId,
+      },
+    });
   }
 
   // Idempotent: a redelivered payment finds the plan paid off.

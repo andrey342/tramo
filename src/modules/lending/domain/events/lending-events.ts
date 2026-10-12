@@ -15,6 +15,7 @@ export const LendingEvents = {
   DisbursementFailed: 'DisbursementFailed',
   DisbursementRetried: 'DisbursementRetried',
   PayoffRequested: 'PayoffRequested',
+  PayoffWithdrawn: 'PayoffWithdrawn',
   IsaDeclarationOverdue: 'IsaDeclarationOverdue',
   PlanCompleted: 'PlanCompleted',
 } as const;
@@ -121,6 +122,13 @@ export type PayoffRequestedPayload = {
   readonly studentId: string;
   readonly amountCents: number;
   readonly asOf: string;
+};
+
+// The payoff could not be collected: the plan is repaid as before (billing bills it again).
+export type PayoffWithdrawnPayload = {
+  readonly planId: string;
+  readonly contractId: string;
+  readonly studentId: string;
 };
 
 // Two months in a row without an income declaration: the student is reminded, ops can see it.

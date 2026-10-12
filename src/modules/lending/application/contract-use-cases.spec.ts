@@ -634,6 +634,7 @@ describe('lending use cases', () => {
       expect(plan?.version).toBe(version);
       await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
       expect(t.events.ofType(LendingEvents.PayoffRequested)).toHaveLength(2);
+      expect(t.events.ofType(LendingEvents.PayoffWithdrawn)).toHaveLength(1);
     });
 
     it('should follow the arrears and the default dunning decides', async () => {
