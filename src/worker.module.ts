@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { CatalogWorkerModule } from '@modules/catalog/catalog-worker.module';
+import { LendingWorkerModule } from '@modules/lending/lending-worker.module';
 import { OriginationWorkerModule } from '@modules/origination/origination-worker.module';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
@@ -13,6 +14,7 @@ import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
     MessagingWorkerModule,
     CatalogWorkerModule,
     OriginationWorkerModule,
+    LendingWorkerModule,
   ],
 })
 export class WorkerModule {}

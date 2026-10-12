@@ -11,3 +11,9 @@ export { CurrentPrincipal, principalOf, type RequestWithPrincipal } from './prin
 export * from './problem-details';
 export { API_KEY_HEADER, setupSwagger } from './swagger';
 export { createValidationPipe } from './validation';
+export {
+  signWebhook,
+  verifyWebhook,
+  WEBHOOK_TOLERANCE_SECONDS,
+  type WebhookVerification,
+} from './webhook-signature';

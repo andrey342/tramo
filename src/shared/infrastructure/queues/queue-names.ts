@@ -22,6 +22,8 @@ export const QueueNames = {
   VAT_CHECKS: 'catalog.vat-checks',
   VERIFICATIONS: 'origination.verifications',
   APPLICATION_EXPIRY: 'origination.expiry',
+  SIGNATURES: 'lending.signatures',
+  DISBURSEMENTS: 'lending.disbursements',
 } as const;
 
 export function eventsQueueForConsumer(consumer: string): string {
@@ -38,4 +40,6 @@ export const ALL_QUEUES: readonly string[] = [
   QueueNames.VAT_CHECKS,
   QueueNames.VERIFICATIONS,
   QueueNames.APPLICATION_EXPIRY,
+  QueueNames.SIGNATURES,
+  QueueNames.DISBURSEMENTS,
 ];

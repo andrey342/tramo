@@ -7,6 +7,8 @@ export {
   ROLES,
 } from './access';
 export { AggregateRoot } from './aggregate-root';
+export { annualPercentageRate, annuityPayment, monthlyRate } from './annuity';
+export { CalendarDate } from './calendar-date';
 export { CLOCK, type Clock, FixedClock } from './clock';
 export { DateRange } from './date-range';
 export {
@@ -21,6 +23,7 @@ export { type DomainEvent, type EventPayload, type JsonValue } from './domain-ev
 export { Email } from './email';
 export { Entity } from './entity';
 export { Iban } from './iban';
+export { incomeShareCap } from './income-share';
 export { type Currency, Money, type Rounding } from './money';
 export { NationalId, type NationalIdKind } from './national-id';
 export { Percentage } from './percentage';

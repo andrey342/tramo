@@ -6,6 +6,8 @@ export interface CenterSummaryDto {
   readonly id: string;
   readonly name: string;
   readonly status: CenterStatus;
+  // What Tramo keeps from each disbursement to the center.
+  readonly platformFeeBasisPoints: number;
 }
 
 // Part of the module's public surface: other modules ask whether a training center exists, and

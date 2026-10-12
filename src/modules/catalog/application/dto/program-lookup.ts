@@ -1,10 +1,28 @@
 import { Query } from '@nestjs/cqrs';
 
+import { type ProgramStatus } from '../../domain';
+
 import { type CatalogProgramDto } from './program.dto';
 
 // Part of the module's public surface: origination snapshots the program a student applies for.
 // Only programs students can apply for are found: published, of an active center.
 export class FindPublishedProgramQuery extends Query<CatalogProgramDto | null> {
+  constructor(readonly programId: string) {
+    super();
+  }
+}
+
+export interface ProgramSummaryDto {
+  readonly id: string;
+  readonly centerId: string;
+  readonly name: string;
+  readonly durationWeeks: number;
+  readonly status: ProgramStatus;
+}
+
+// Any program, whatever its state: lending reads the course a contract finances, which may have
+// been withdrawn from the catalog since the student applied.
+export class FindProgramQuery extends Query<ProgramSummaryDto | null> {
   constructor(readonly programId: string) {
     super();
   }

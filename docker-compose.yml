@@ -28,6 +28,7 @@ x-app: &app
     JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-development-secret-change-me-0123456789}
     VIES_MODE: ${VIES_MODE:-test}
     FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=}
+    ESIGN_WEBHOOK_SECRET: ${ESIGN_WEBHOOK_SECRET:-local-esign-webhook-secret-change-me-0123456789}
     BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-ops}
     # Default only when unset; an empty value in .env disables the dashboard.
     BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD-tramo-queues}

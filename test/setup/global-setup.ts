@@ -16,6 +16,7 @@ export default async function globalSetup(): Promise<void> {
   process.env.REDIS_URL = infra.redis.getConnectionUrl();
   process.env.JWT_ACCESS_SECRET = 'test-secret-that-is-at-least-32-characters';
   process.env.FIELD_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+  process.env.ESIGN_WEBHOOK_SECRET = 'test-esign-webhook-secret-of-32-characters';
   // Tests never depend on the EU's servers; the VIES adapter has its own opt-in suite.
   process.env.VIES_MODE = 'fake';
   process.env.SIMULATED_PROVIDER_LATENCY_MS = '0-0';

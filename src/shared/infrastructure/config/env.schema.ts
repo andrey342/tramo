@@ -57,6 +57,16 @@ export const envSchema = z.object({
     })
     .refine((range) => range.minMs <= range.maxMs, 'The minimum must not exceed the maximum')
     .default({ minMs: 300, maxMs: 800 }),
+  // Who signs contracts electronically and pays the training centers. Only simulated ones exist
+  // so far; a production process refuses to start with them (LendingModule).
+  LENDING_PROVIDERS: z.enum(['simulated']).default('simulated'),
+  // HMAC-SHA256 key the e-signature provider signs its callbacks with (POST /webhooks/esign).
+  ESIGN_WEBHOOK_SECRET: z.string().min(32),
+  // The secret being replaced, accepted too while the provider moves to the new one.
+  ESIGN_WEBHOOK_PREVIOUS_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(32).optional(),
+  ),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
