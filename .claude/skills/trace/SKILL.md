@@ -17,7 +17,8 @@ Arguments: `$ARGUMENTS` (the id of the aggregate, e.g. the `userId` a registrati
      keyed by the aggregate or by one its events name (`catalog.vat-checks` by center,
      `origination.verifications` as `<applicationId>.<kyc|employment|bureau>`,
      `lending.signatures` as `<contractId>.send`, `lending.disbursements` as
-     `<disbursementId>.<attempt>.<transfer|settlement>`);
+     `<disbursementId>.<attempt>.<transfer|settlement>`, `billing.collect` and
+     `billing.psp-simulator` as `<chargeId>.<attempt>.<collect|callback>`);
    - `consumer`: consumers that recorded the event as applied (`shared.processed_events`);
    - `audit`: audited actions on it (who, outcome, error code, request id);
    - `mail`: messages in Mailpit that mention it; `webhook`: deliveries the sink received.
