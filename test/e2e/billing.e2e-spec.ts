@@ -228,6 +228,19 @@ describe('Billing (e2e)', () => {
     const noKey = await api()
       .post('/api/v1/ops/billing/run')
       .set(...bearer(opsToken));
+    const reusedKey = uuidv7();
+    const firstDay = await api()
+      .post(`/api/v1/ops/dunning/run?contractId=${contractId}&asOf=2026-11-14`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', reusedKey);
+    const sameDay = await api()
+      .post(`/api/v1/ops/dunning/run?asOf=2026-11-14&contractId=${contractId}`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', reusedKey);
+    const otherDay = await api()
+      .post(`/api/v1/ops/dunning/run?asOf=2026-11-15&contractId=${contractId}`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', reusedKey);
 
     expect(strangerCharges.status).toBe(404);
     expect(strangerMandate.status).toBe(404);
@@ -241,5 +254,8 @@ describe('Billing (e2e)', () => {
     });
     expect(badAsOf.status).toBe(400);
     expect(noKey.status).toBe(400);
+    expect(sameDay.body).toEqual(firstDay.body);
+    expect(otherDay.status).toBe(422);
+    expect(otherDay.body.code).toBe('idempotency_key_reused');
   });
 });
