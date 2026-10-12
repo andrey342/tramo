@@ -43,6 +43,9 @@ export interface ContractProps {
   readonly signature: Signature | null;
   readonly activatedOn: CalendarDate | null;
   readonly cancellationReason: CancellationReason | null;
+  // When billing last moved the contract into or out of arrears: an older notice arriving late
+  // (events are delivered independently) is ignored.
+  readonly arrearsChangedAt: Date | null;
   readonly status: ContractStatus;
   readonly statusChangedAt: Date;
   readonly createdAt: Date;
@@ -83,6 +86,7 @@ export class Contract extends AggregateRoot {
       signature: null,
       activatedOn: null,
       cancellationReason: null,
+      arrearsChangedAt: null,
       status: 'draft',
       statusChangedAt: input.now,
       createdAt: input.now,
@@ -274,29 +278,38 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // A charge has been overdue for 30 days. Billing announces it (ContractInArrears) and owns the
-  // dunning; the contract only reflects it, so it records no event of its own. Idempotent.
-  markInArrears(now: Date): void {
-    if (this.props.status === 'in_arrears' || this.hasEnded) {
+  get arrearsChangedAt(): Date | null {
+    return this.props.arrearsChangedAt;
+  }
+
+  // A charge has been overdue for 30 days, as billing noticed it at `noticedAt`. Billing owns
+  // the dunning; the contract only reflects it, so it records no event of its own. Idempotent;
+  // a notice older than the last change is ignored, and so are the arrears of a contract that
+  // has ended (completed with a charge still overdue, or defaulted).
+  markInArrears(noticedAt: Date, now: Date): void {
+    if (this.isStale(noticedAt) || this.hasEnded || this.props.status === 'in_arrears') {
       return;
     }
     this.assertStatus('active', 'in_arrears');
+    this.props = { ...this.props, arrearsChangedAt: noticedAt };
     this.moveTo('in_arrears', now);
   }
 
-  // Nothing is overdue any more. Idempotent. The arrears of a contract that has ended (completed
-  // with a charge still overdue, or defaulted) no longer change it.
-  clearArrears(now: Date): void {
-    if (this.props.status === 'active' || this.hasEnded) {
+  // Nothing is overdue any more, as of `noticedAt`. Same rules as markInArrears.
+  clearArrears(noticedAt: Date, now: Date): void {
+    if (this.isStale(noticedAt) || this.hasEnded || this.props.status === 'active') {
       return;
     }
     this.assertStatus('in_arrears', 'active');
+    this.props = { ...this.props, arrearsChangedAt: noticedAt };
     this.moveTo('active', now);
   }
 
-  // Dunning ran out (90 days overdue): the debt goes to ops and collections. Idempotent.
+  // Dunning ran out (90 days overdue): the debt goes to ops and collections. Idempotent. A
+  // contract completed meanwhile (an ISA whose last month reached the cap) stays completed: the
+  // charge written off is a loss of billing, not a default.
   declareDefault(now: Date): void {
-    if (this.props.status === 'defaulted') {
+    if (this.props.status === 'defaulted' || this.props.status === 'completed') {
       return;
     }
     if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {
@@ -336,6 +349,13 @@ export class Contract extends AggregateRoot {
         centerId: this.props.centerId,
       },
     });
+  }
+
+  private isStale(noticedAt: Date): boolean {
+    return (
+      this.props.arrearsChangedAt !== null &&
+      noticedAt.getTime() < this.props.arrearsChangedAt.getTime()
+    );
   }
 
   private get hasEnded(): boolean {

@@ -606,7 +606,9 @@ describe('lending use cases', () => {
       const t = setup();
       const contractId = await t.active();
       const status = async (next: 'in_arrears' | 'current' | 'defaulted') => {
-        await t.collectionStatus.execute(new RecordCollectionStatusCommand(contractId, next));
+        await t.collectionStatus.execute(
+          new RecordCollectionStatusCommand(contractId, next, new Date()),
+        );
         return (await t.contracts.findById(contractId))?.status;
       };
 

@@ -39,7 +39,11 @@ export class MarkInArrearsOnContractInArrears implements EventHandler<ContractIn
 
   async handle(event: IntegrationEvent<ContractInArrearsPayload>): Promise<void> {
     await this.commands.execute(
-      new RecordCollectionStatusCommand(event.payload.contractId, 'in_arrears'),
+      new RecordCollectionStatusCommand(
+        event.payload.contractId,
+        'in_arrears',
+        new Date(event.occurredAt),
+      ),
     );
   }
 }
@@ -51,7 +55,11 @@ export class ClearArrearsOnArrearsCleared implements EventHandler<ArrearsCleared
 
   async handle(event: IntegrationEvent<ArrearsClearedPayload>): Promise<void> {
     await this.commands.execute(
-      new RecordCollectionStatusCommand(event.payload.contractId, 'current'),
+      new RecordCollectionStatusCommand(
+        event.payload.contractId,
+        'current',
+        new Date(event.occurredAt),
+      ),
     );
   }
 }
@@ -63,7 +71,11 @@ export class DefaultOnChargeWrittenOff implements EventHandler<ChargeWrittenOffP
 
   async handle(event: IntegrationEvent<ChargeWrittenOffPayload>): Promise<void> {
     await this.commands.execute(
-      new RecordCollectionStatusCommand(event.payload.contractId, 'defaulted'),
+      new RecordCollectionStatusCommand(
+        event.payload.contractId,
+        'defaulted',
+        new Date(event.occurredAt),
+      ),
     );
   }
 }

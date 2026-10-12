@@ -15,6 +15,8 @@ export class RecordCollectionStatusCommand extends Command<void> {
   constructor(
     readonly contractId: string,
     readonly status: CollectionStatus,
+    // When billing noticed it: the order of the notices, whatever the order they arrive in.
+    readonly noticedAt: Date,
   ) {
     super();
   }
@@ -38,10 +40,10 @@ export class RecordCollectionStatusHandler implements ICommandHandler<RecordColl
       const now = this.clock.now();
       switch (command.status) {
         case 'in_arrears':
-          contract.markInArrears(now);
+          contract.markInArrears(command.noticedAt, now);
           break;
         case 'current':
-          contract.clearArrears(now);
+          contract.clearArrears(command.noticedAt, now);
           break;
         case 'defaulted':
           contract.declareDefault(now);

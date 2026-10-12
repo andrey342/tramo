@@ -187,7 +187,7 @@ export function lendingRepositoriesContract(
         anActiveContract(),
         anActiveContract({ terms: { product: anIsa() } }),
       ];
-      inArrears.markInArrears(LATER);
+      inArrears.markInArrears(LATER, LATER);
       defaulted.declareDefault(LATER);
       const paidOne = aPlan({ contractId: repaying.id });
       paidOne.recordInstallmentPaid(1, LATER);
