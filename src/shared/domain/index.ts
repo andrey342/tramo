@@ -7,6 +7,7 @@ export {
   ROLES,
 } from './access';
 export { AggregateRoot } from './aggregate-root';
+export { annualPercentageRate, annuityPayment, monthlyRate } from './annuity';
 export { CLOCK, type Clock, FixedClock } from './clock';
 export { DateRange } from './date-range';
 export {
