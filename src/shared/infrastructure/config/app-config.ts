@@ -52,6 +52,13 @@ export interface AppConfig {
     // Current first, then the previous one during a rotation.
     readonly esignWebhookSecrets: readonly string[];
   };
+  readonly billing: {
+    readonly provider: 'simulated';
+    // Current first, then the previous one during a rotation.
+    readonly pspWebhookSecrets: readonly string[];
+    readonly pspCallbackUrl: string;
+    readonly simulatedPspDelayMs: number;
+  };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -99,6 +106,7 @@ const PUBLISHED_SECRETS = {
   BULL_BOARD_PASSWORD: (value: string | undefined) => value === 'tramo-queues',
   FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
   ESIGN_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
+  PSP_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
 } as const;
 
 function assertProductionSettings(env: Env): void {
@@ -116,6 +124,7 @@ function assertProductionSettings(env: Env): void {
     PUBLISHED_SECRETS.ESIGN_WEBHOOK_SECRET(env.ESIGN_WEBHOOK_SECRET)
       ? 'ESIGN_WEBHOOK_SECRET'
       : undefined,
+    PUBLISHED_SECRETS.PSP_WEBHOOK_SECRET(env.PSP_WEBHOOK_SECRET) ? 'PSP_WEBHOOK_SECRET' : undefined,
   ].filter((name) => name !== undefined);
   const problems = published.map(
     (name) => `✖ ${name} still has the development value; set a secret of your own.`,
@@ -177,6 +186,14 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       esignWebhookSecrets: [env.ESIGN_WEBHOOK_SECRET, env.ESIGN_WEBHOOK_PREVIOUS_SECRET].filter(
         (secret) => secret !== undefined,
       ),
+    },
+    billing: {
+      provider: env.PAYMENT_PROVIDER,
+      pspWebhookSecrets: [env.PSP_WEBHOOK_SECRET, env.PSP_WEBHOOK_PREVIOUS_SECRET].filter(
+        (secret) => secret !== undefined,
+      ),
+      pspCallbackUrl: env.PSP_CALLBACK_URL,
+      simulatedPspDelayMs: env.SIMULATED_PSP_DELAY_MS,
     },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,

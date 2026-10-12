@@ -29,6 +29,9 @@ x-app: &app
     VIES_MODE: ${VIES_MODE:-test}
     FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=}
     ESIGN_WEBHOOK_SECRET: ${ESIGN_WEBHOOK_SECRET:-local-esign-webhook-secret-change-me-0123456789}
+    PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:-local-psp-webhook-secret-change-me-0123456789}
+    # The worker reaches the api by its service name.
+    PSP_CALLBACK_URL: ${PSP_CALLBACK_URL:-http://api:3000}
     BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-ops}
     # Default only when unset; an empty value in .env disables the dashboard.
     BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD-tramo-queues}

@@ -67,6 +67,20 @@ export const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.string().min(32).optional(),
   ),
+  // Who collects the students' direct debits. Only a simulated provider exists so far; a
+  // production process refuses to start with it (BillingModule).
+  PAYMENT_PROVIDER: z.enum(['simulated']).default('simulated'),
+  // HMAC-SHA256 key the provider signs its callbacks with (POST /webhooks/psp), and the one it
+  // replaces during a rotation.
+  PSP_WEBHOOK_SECRET: z.string().min(32),
+  PSP_WEBHOOK_PREVIOUS_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(32).optional(),
+  ),
+  // Where the simulated provider posts its callbacks (the api, seen from the worker), and after
+  // how long.
+  PSP_CALLBACK_URL: z.url().default('http://localhost:3000'),
+  SIMULATED_PSP_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(2_000),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
