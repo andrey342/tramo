@@ -34,8 +34,9 @@ export interface ChargeRepository {
   // Whether a payoff of the contract is scheduled, being collected or paid: it covers what is
   // left, so nothing else of the contract is collected or dunned meanwhile, nor after.
   hasPayoff(contractId: string): Promise<boolean>;
-  // Serialises, until the end of the transaction, the work that decides whether a contract is in
-  // arrears: two payments of one contract cannot both see the other still unpaid.
+  // Serialises, until the end of the transaction, the billing work on a contract: two payments
+  // cannot both see the other still unpaid, and a declaration cannot land in a month the cycle is
+  // assessing without it.
   lockContract(contractId: string): Promise<void>;
   save(charge: Charge): Promise<void>;
 }

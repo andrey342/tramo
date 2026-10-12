@@ -6,6 +6,8 @@ import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/applicati
 import { CLOCK, type Clock, Money } from '@shared/domain';
 
 import {
+  CHARGE_REPOSITORY,
+  type ChargeRepository,
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
   IncomeDeclaration,
@@ -38,11 +40,14 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
     @Inject(INCOME_DECLARATION_REPOSITORY)
     private readonly declarations: IncomeDeclarationRepository,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
+    @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
+  // Under the contract's lock: the open month is read after any cycle assessing it has finished.
   async execute(command: DeclareIncomeCommand): Promise<IncomeDeclarationDto> {
     return this.uow.run(async () => {
+      await this.charges.lockContract(command.contractId);
       const contract = await findOwnContract(this.plans, command.actor, command.contractId);
       if (contract.product !== 'isa') {
         throw new NotAnIncomeShareError();

@@ -103,8 +103,10 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
     return created;
   }
 
-  // Every month of income that has ended and lending has not assessed yet, in order.
+  // Every month of income that has ended and lending has not assessed yet, in order; under the
+  // contract's lock, so the declarations read are the last ones.
   private async billIncomeShare(plan: BillablePlan, asOf: CalendarDate): Promise<number> {
+    await this.charges.lockContract(plan.contractId);
     let created = 0;
     let period = plan.nextIsaPeriod;
     while (period !== null && period < asOf.period) {
