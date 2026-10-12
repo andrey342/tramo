@@ -305,6 +305,7 @@ export class Charge extends AggregateRoot {
         chargeId: this.id,
         contractId: this.props.contractId,
         studentId: this.props.studentId,
+        kind: this.props.kind,
         attempt: attempt.number,
         reason: failureReason,
       },
