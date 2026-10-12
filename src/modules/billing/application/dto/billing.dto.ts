@@ -55,6 +55,7 @@ export interface BillingRunDto {
   readonly asOf: string;
   readonly plansBilled: number;
   readonly chargesCreated: number;
+  readonly failedContractIds: readonly string[];
   readonly collectionsSubmitted: number;
 }
 

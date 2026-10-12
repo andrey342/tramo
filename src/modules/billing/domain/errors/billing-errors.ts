@@ -63,3 +63,14 @@ export class MandateMissingError extends DomainError {
     super('The contract has no active direct debit mandate.', { contractId });
   }
 }
+
+// Two runs created the same charge at once (unique per contract and reference); the next run
+// finds it.
+export class ConcurrentChargeError extends DomainError {
+  readonly code = 'concurrent_charge';
+  readonly category = 'conflict';
+
+  constructor(reference: string) {
+    super(`The charge ${reference} was created by another run.`, { reference });
+  }
+}

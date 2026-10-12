@@ -18,4 +18,4 @@ export {
   type PaymentMandateProps,
 } from './model/payment-mandate';
 export * from './ports/billing-repositories';
-export { DUNNING_STEPS, type DunningAction } from './services/dunning';
+export { ARREARS_STEP, DUNNING_STEPS, type DunningAction } from './services/dunning';
