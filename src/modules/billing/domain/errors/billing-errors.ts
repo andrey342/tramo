@@ -36,6 +36,19 @@ export class IncomeAlreadyDeclaredError extends DomainError {
   }
 }
 
+// The month has been assessed already (the billing cycle ran without it): it was paused.
+export class DeclarationTooLateError extends DomainError {
+  readonly code = 'declaration_too_late';
+  readonly category = 'rule_violation';
+
+  constructor(period: string, openFrom: string) {
+    super(`Income for ${period} can no longer be declared; the first open month is ${openFrom}.`, {
+      period,
+      openFrom,
+    });
+  }
+}
+
 export class InvalidPeriodError extends DomainError {
   readonly code = 'invalid_period';
   readonly category = 'validation';

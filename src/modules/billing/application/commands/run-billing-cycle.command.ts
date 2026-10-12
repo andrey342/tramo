@@ -1,4 +1,4 @@
-import { Inject } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
@@ -26,18 +26,25 @@ export interface BillingCycleResult {
 }
 
 // The monthly cycle, as of a day (the 1st in production, any day for a demo): for every plan
-// being repaid, a charge for each instalment falling due by the end of that month and not
-// charged yet, and for an ISA each month of income up to the previous one, assessed by lending's
-// rules on what the student declared. Each plan in its own transaction; charges are unique per
-// contract and reference, so a second run of the same month creates nothing.
+// being repaid (one contract's, when given), a charge for each instalment falling due by the end
+// of that month and not charged yet, and for an ISA each month of income up to the previous one,
+// assessed by lending's rules on what the student declared, until one ends the plan. Each plan
+// in its own transaction; charges are unique per contract and reference, so a second run of the
+// same month creates nothing. A charge caught up late is due on the day of the run, not before:
+// dunning counts from when the student could have paid.
 export class RunBillingCycleCommand extends Command<BillingCycleResult> {
-  constructor(readonly asOf: CalendarDate) {
+  constructor(
+    readonly asOf: CalendarDate,
+    readonly contractId: string | null = null,
+  ) {
     super();
   }
 }
 
 @CommandHandler(RunBillingCycleCommand)
 export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCommand> {
+  private readonly logger = new Logger(RunBillingCycleHandler.name);
+
   constructor(
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
@@ -53,13 +60,14 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
     const failedContractIds: string[] = [];
     let after: string | null = null;
     for (;;) {
-      const page = await this.plans.billablePlans(after, PAGE);
+      const page = await this.plans.billablePlans(after, PAGE, command.contractId);
       for (const plan of page) {
         try {
           chargesCreated += await this.uow.run(() => this.bill(plan, command.asOf));
           plansBilled += 1;
-        } catch {
+        } catch (error) {
           failedContractIds.push(plan.contractId);
+          this.logger.error({ contractId: plan.contractId, err: error }, 'Plan not billed');
         }
       }
       if (page.length < PAGE) {
@@ -89,7 +97,7 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
         installmentNumber: row.number,
         period: dueDate.period,
         amount: Money.fromCents(row.totalCents),
-        dueDate,
+        dueDate: latest(dueDate, asOf),
       });
     }
     return created;
@@ -106,9 +114,6 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
         period,
         declaration?.grossMonthlyIncome.cents ?? null,
       );
-      if (assessment.outcome === 'ended') {
-        break;
-      }
       const month = CalendarDate.parse(`${period}-01`);
       if (assessment.outcome === 'charge' && assessment.amountCents > 0) {
         created += await this.create(plan, {
@@ -117,8 +122,12 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
           installmentNumber: null,
           period,
           amount: Money.fromCents(assessment.amountCents),
-          dueDate: month.addMonths(1).withDay(ISA_DUE_DAY),
+          dueDate: latest(month.addMonths(1).withDay(ISA_DUE_DAY), asOf),
         });
+      }
+      // The cap, the last payment or the window: lending has closed the plan.
+      if (assessment.planEnded) {
+        break;
       }
       period = month.addMonths(1).period;
     }
@@ -147,4 +156,8 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
     );
     return 1;
   }
+}
+
+function latest(dueDate: CalendarDate, asOf: CalendarDate): CalendarDate {
+  return dueDate.isBefore(asOf) ? asOf : dueDate;
 }

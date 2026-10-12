@@ -60,6 +60,7 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
         period: command.period,
         grossMonthlyIncome: Money.fromCents(command.grossMonthlyIncomeCents),
         source: 'self',
+        openFrom: contract.nextIsaPeriod,
         now: this.clock.now(),
       });
       await this.declarations.save(declaration);

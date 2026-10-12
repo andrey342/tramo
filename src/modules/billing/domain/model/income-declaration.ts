@@ -1,6 +1,6 @@
 import { AggregateRoot, CalendarDate, InvalidValueError, type Money } from '@shared/domain';
 
-import { InvalidPeriodError } from '../errors/billing-errors';
+import { DeclarationTooLateError, InvalidPeriodError } from '../errors/billing-errors';
 import { BillingEvents } from '../events/billing-events';
 
 export type IncomeSource = 'self' | 'employment_provider';
@@ -35,6 +35,8 @@ export class IncomeDeclaration extends AggregateRoot {
     period: string;
     grossMonthlyIncome: Money;
     source: IncomeSource;
+    // The first month lending has not assessed yet; an earlier one is closed.
+    openFrom?: string | null;
     now: Date;
   }): IncomeDeclaration {
     if (!PERIOD.test(input.period)) {
@@ -42,6 +44,9 @@ export class IncomeDeclaration extends AggregateRoot {
     }
     if (input.period > CalendarDate.fromInstant(input.now).period) {
       throw new InvalidPeriodError('income is declared for a month that has started');
+    }
+    if (input.openFrom && input.period < input.openFrom) {
+      throw new DeclarationTooLateError(input.period, input.openFrom);
     }
     if (input.grossMonthlyIncome.isNegative()) {
       throw new InvalidValueError('grossMonthlyIncome', 'Income cannot be negative.');

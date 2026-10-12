@@ -21,6 +21,7 @@ import {
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
 import {
   BillingAccessDeniedError,
+  DeclarationTooLateError,
   BillingEvents,
   type Charge,
   ContractNotRepayingError,
@@ -246,7 +247,8 @@ describe('billing use cases', () => {
       expect(fourth?.dueDate.toString()).toBe('2027-02-12');
     });
 
-    // Income of July (2,000) and August (none) are assessed in September.
+    // Income of July (2,000) and August (none) are assessed in September. July was due on
+    // 5 August; billed late, it is due on the day of the run.
     it('should assess every ended month of an ISA on what was declared, and charge the share', async () => {
       const t = setup();
       const contractId = uuidv7();
@@ -271,7 +273,43 @@ describe('billing use cases', () => {
       ]);
       const july = await t.charges.findByReference(contractId, 'isa:2026-07');
       expect(july?.amount.cents).toBe(200_00);
-      expect(july?.dueDate.toString()).toBe('2026-08-05');
+      expect(july?.dueDate.toString()).toBe('2026-09-01');
+    });
+
+    // July reaches the cap: August is not assessed, and its declaration comes too late.
+    it('should stop at the month that ends an ISA, and refuse declarations for assessed months', async () => {
+      const t = setup();
+      const contractId = uuidv7();
+      t.plans
+        .addContract(
+          {
+            id: contractId,
+            studentId: t.studentId,
+            centerId: t.centerId,
+            product: 'isa',
+            status: 'active',
+          },
+          { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-07' },
+        )
+        .endsWith(contractId, '2026-07');
+      await t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-07', 2_000_00));
+
+      const result = await t.cycle.execute(new RunBillingCycleCommand(day('2026-09-05')));
+
+      expect(result.chargesCreated).toBe(1);
+      expect(t.plans.assessed.map((assessed) => assessed.period)).toEqual(['2026-07']);
+      const other = t.contract('isa');
+      t.plans.plans.push({
+        contractId: other,
+        studentId: t.studentId,
+        centerId: t.centerId,
+        kind: 'isa',
+        unpaidInstallments: [],
+        nextIsaPeriod: '2026-09',
+      });
+      await expect(
+        t.declare.execute(new DeclareIncomeCommand(t.student, other, '2026-08', 2_000_00)),
+      ).rejects.toThrow(DeclarationTooLateError);
     });
 
     it('should go on with the other plans when one fails, and report it', async () => {
