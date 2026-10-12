@@ -39,7 +39,8 @@
     "queue:inspect": "tsx .claude/skills/debug-job/scripts/inspect-queue.ts",
     "trace": "tsx .claude/skills/trace/scripts/trace-aggregate.ts",
     "api:call": "tsx .claude/skills/try-endpoint/scripts/call-api.ts",
-    "seed": "nest build && node dist/scripts/seed.js"
+    "seed": "nest build && node dist/scripts/seed.js",
+    "esign:sign": "tsx scripts/esign-sign.ts"
   },
   "dependencies": {
     "@bull-board/api": "9.10.4",
