@@ -21,7 +21,8 @@ const COLLECT_DUE = 'collect.due';
 const COLLECT_CHARGE = 'charge.collect';
 
 // A provider outage is retried for about two hours (exponential from 30 s over nine attempts),
-// then dead-lettered; the charge stays pending with its key, and ops retry or dunning moves on.
+// then dead-lettered; the charge stays pending with its key (dunning leaves it alone) until ops
+// ask the provider again with the same key (POST /charges/:id/retry).
 const PROVIDER_CALL: JobsOptions = { attempts: 9, backoff: { type: 'exponential', delay: 30_000 } };
 
 // The calendar of billing, in UTC: the cycle on the 1st, collection and dunning every morning,

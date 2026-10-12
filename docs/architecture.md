@@ -329,34 +329,49 @@ through a payment provider, dunning, ISA income declarations and the account sta
 
 - **Mandate.** The student authorises the debit of a contract from an account
   (`POST /contracts/:id/mandate`, from signature on); the IBAN is encrypted and bound to its row
-  (ADR 014) and shown masked. A new mandate revokes the one in force.
+  (ADR 014) and shown masked. A new mandate revokes the one in force, and collects at once the
+  charges that fell due while the contract had none.
 - **Cycle.** `billing.cycle` on the 1st at 03:00 UTC, or `POST /ops/billing/run?asOf=` for a
-  demo or a catch-up: for every plan being repaid (`ListBillablePlansQuery` of lending), a
-  charge for each instalment falling due by the end of the month, and for an ISA each month of
-  income that has ended, assessed by the rules of lending on the income declared (ADR 017) and
-  due on the 5th of the next month. Charges are unique per contract and reference
-  (`installment:3`, `isa:2026-07`, `payoff:<plan>`): a second run creates nothing. One plan
-  per transaction; the run reports the plans it could not bill.
+  demo or a catch-up (`&contractId=` for one contract; a day still to come only where
+  `BILLING_FUTURE_RUNS_ENABLED`, off in production): for every plan being repaid
+  (`ListBillablePlansQuery` of lending, which leaves out a plan whose payoff is being
+  collected), a charge for each instalment falling due by the end of the month, and for an ISA
+  each month of income that has ended, assessed by the rules of lending on the income declared
+  (ADR 017) and due on the 5th of the next month, until the month that ends the plan. A charge
+  billed late is due on the day of the run, so dunning counts from when the student could pay.
+  Charges are unique per contract and reference (`installment:3`, `isa:2026-07`,
+  `payoff:<request>`): a second run creates nothing. One plan per transaction; the run goes on
+  past the plans it cannot bill, reports them, and the scheduled job then fails so it shows on
+  the dashboard and is retried. Collection and dunning do the same per charge.
 - **Collection.** Every morning (`billing.collect`) the charges due are submitted under the
   mandate in force: each attempt has its key, `<chargeId>.<attempt>`, and records the mandate
   it uses, so a repeated provider call sends the same request and is never collected twice. The
   provider accepts at once and answers later on `POST /webhooks/psp`, signed like the
-  e-signature callbacks (`PSP_WEBHOOK_SECRET`), echoing the key; the answer is audited and a
-  repeated one writes nothing. A charge without a mandate stays scheduled and dunning chases it.
+  e-signature callbacks (`PSP_WEBHOOK_SECRET`), echoing the key and its payment id, which must
+  be the one the provider accepted for the attempt; the answer is audited and a repeated one
+  writes nothing. A charge without a mandate stays scheduled and dunning chases it. Whether a
+  payment clears the arrears of a contract is decided under a lock on the contract, so two
+  payments at once cannot both see the other unpaid.
 - **Dunning.** Every morning (`billing.dunning`), or `POST /ops/dunning/run?asOf=`, every
   charge not settled moves through the steps it has reached, each applied once: a reminder three
   days before (`ChargeDueSoon`), a notice the day after (`ChargeOverdue`, the charge
   `overdue`), collection retried at 3 and 7 days, a second notice at 15, arrears at 30
   (`ContractInArrears`, the contract `in_arrears` and its center told) and at 90 the charge
   written off and the contract defaulted. A payment that leaves nothing of the contract in
-  arrears clears them (`ArrearsCleared`). A charge being collected waits for the answer. Ops
-  collect a charge again with `POST /charges/:id/retry`.
+  arrears clears them (`ArrearsCleared`); lending applies these notices in the order billing
+  saw them, whatever the order they arrive in. A charge being collected waits for the answer.
+  Ops collect a failed or overdue charge again with `POST /charges/:id/retry`, or ask the
+  provider again for one stuck in collection (same key), while the contract is being repaid.
 - **ISA declarations.** `POST /contracts/:id/income-declarations`, one per month that has
-  started; the amount stays in billing (events say only that a month was declared). On the 25th
-  students who have not declared the month are reminded once (`IncomeDeclarationDue`).
-- **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once;
-  when it is paid the plan ends and the charges not yet in collection are cancelled. Those of a
-  defaulted contract are too.
+  started and has not been assessed yet (a later one is `declaration_too_late`: the month was
+  paused); audited, the amount stays in billing (events say only that a month was declared). On
+  the 25th students who have not declared the month are reminded once (`IncomeDeclarationDue`).
+- **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once
+  and never dunned; meanwhile nothing else of the contract is collected, since it covers what is
+  left. Paid, the plan ends (`paid_off`) and the charges still scheduled are cancelled, as are
+  those of a defaulted contract; a plan that ends on its last instalment or ISA payment keeps
+  its last charge. Refused, the charge is cancelled and lending withdraws the payoff: billing
+  goes on as before and the student may ask again, which is a new charge.
 - **Statement.** `GET /contracts/:id/statement`: a projection of the charge events (charge,
   payment, write-off, cancellation), one line per event, with the running balance; charges in
   `GET /contracts/:id/charges`. The student and staff see them; centers see their portfolio in
@@ -367,7 +382,12 @@ through a payment provider, dunning, ISA income declarations and the account sta
 
 Known gaps, accepted for now:
 
-- A charge whose provider never answers stays pending; dunning waits for it and ops look at it.
+- A charge whose provider never answers stays pending; dunning waits for it, and ops ask the
+  provider again with the retry endpoint.
+- The mandate's account is not checked to belong to the student: the provider's mandate
+  confirmation (or an account ownership check) would do it before the first debit.
+- An instalment already in collection when the payoff is requested is part of the quote too: if
+  both are collected, the student has paid it twice and ops refund the difference.
 - Income declarations come from the student only; the employment history provider could confirm
   them (`source: employment_provider`).
 - A charge written off counts towards an ISA cap; it only happens with the default, after which
@@ -381,10 +401,10 @@ sequenceDiagram
   participant PSP as payment provider
   participant Api as api
   Ops->>Billing: run the cycle as of a day
-  Billing->>Lending: ListBillablePlansQuery; AssessIsaPeriodCommand (same transaction)
+  Billing->>Lending: ListBillablePlansQuery; AssessIsaPeriodCommand (same transaction, planEnded stops)
   Billing->>Billing: charges; collect what is due under the mandate (ChargeSubmitted)
   Billing->>PSP: collect (key <chargeId>.<attempt>)
   PSP->>Api: POST /webhooks/psp (signed, echoes the key)
-  Api->>Lending: ChargePaid (outbox): instalment paid, payoff settled
+  Api->>Lending: ChargePaid (outbox): instalment paid, payoff settled; ChargeFailed: payoff withdrawn
   Ops->>Billing: dunning: notices, retries, arrears at 30 days, default at 90
 ```

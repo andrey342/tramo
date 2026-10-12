@@ -35,10 +35,12 @@ the charge disagreeing after a failure?
 
 Option 3. The cycle walks the plans being repaid through `ListBillablePlansQuery` and, for an
 ISA, each month that has ended and lending has not assessed yet, in order: the declaration of the
-month (or none), `AssessIsaPeriodCommand`, and the charge when there is one. Lending's handler
+month (or none), `AssessIsaPeriodCommand`, and the charge when there is one; the outcome says
+whether that month ended the plan (`planEnded`), where the walk stops. Lending's handler
 joins the transaction billing opened (nested units of work join the outer one), so the plan and
 the charge are committed together, one plan per transaction. The reverse direction stays on
-events: lending follows `ChargePaid`, `ContractInArrears`, `ArrearsCleared` and `ChargeWrittenOff`.
+events: lending follows `ChargePaid`, `ChargeFailed` (a refused payoff is withdrawn),
+`ContractInArrears`, `ArrearsCleared` and `ChargeWrittenOff`.
 
 Option 1 splits the plan across two modules: the cap and the payments counted would live in
 billing while lending answers "is this plan over?". Option 2 is eventually consistent where it
