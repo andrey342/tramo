@@ -33,14 +33,17 @@ export class AbandonStaleEmailsHandler implements ICommandHandler<AbandonStaleEm
     for (;;) {
       const ids = await this.notifications.findPendingIds(before, PAGE);
       for (const id of ids) {
-        await this.uow.run(async () => {
-          const notification = await this.notifications.findById(id);
-          if (notification?.isStale(now)) {
-            notification.abandon(now);
-            await this.notifications.save(notification);
-            abandoned += 1;
-          }
-        });
+        // One row that cannot be given up (a concurrent send) is left to the next sweep.
+        await this.uow
+          .run(async () => {
+            const notification = await this.notifications.findById(id);
+            if (notification?.isStale(now)) {
+              notification.abandon(now);
+              await this.notifications.save(notification);
+              abandoned += 1;
+            }
+          })
+          .catch(() => undefined);
       }
       if (ids.length < PAGE) {
         return abandoned;

@@ -27,6 +27,12 @@ export class Email extends ValueObject<{ value: string }> {
     return ok(new Email(value));
   }
 
+  // An address read back from storage, as it was accepted then: the rule may have tightened
+  // since (list characters), and a stored user must still sign in and be written to.
+  static reconstitute(stored: string): Email {
+    return new Email(stored);
+  }
+
   get value(): string {
     return this.props.value;
   }

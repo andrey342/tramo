@@ -53,6 +53,10 @@ describe('AggregateRoot', () => {
 });
 
 describe('Email', () => {
+  it('should load a stored address as it was stored, even one the rule refuses today', () => {
+    expect(Email.reconstitute('a,b@example.com').value).toBe('a,b@example.com');
+  });
+
   it('should normalise to lower case without surrounding spaces', () => {
     expect(unwrap(Email.create('  Ana.Garcia@Example.COM ')).value).toBe('ana.garcia@example.com');
   });
