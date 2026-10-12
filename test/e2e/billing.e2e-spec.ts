@@ -90,8 +90,9 @@ describe('Billing (e2e)', () => {
       .set('Idempotency-Key', uuidv7())
       .send({ iban: STUDENT_IBAN });
     const run = await api()
-      .post(`/api/v1/ops/billing/run?asOf=${firstDue.toString()}`)
-      .set(...bearer(opsToken));
+      .post(`/api/v1/ops/billing/run?asOf=${firstDue.toString()}&contractId=${contractId}`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7());
     const pending = await chargeOf(contractId, 'installment:1');
     const reference = pending?.currentAttempt?.key ?? '';
     const paid = await callback({
@@ -126,9 +127,13 @@ describe('Billing (e2e)', () => {
     });
     expect(JSON.stringify(mandate.body)).not.toContain(STUDENT_IBAN);
     expect(run.status).toBe(200);
-    // Other suites leave plans due the same day: the run bills them too.
-    expect(run.body.chargesCreated).toBeGreaterThanOrEqual(1);
-    expect(run.body.failedContractIds).toEqual([]);
+    expect(run.body).toMatchObject({
+      plansBilled: 1,
+      chargesCreated: 1,
+      collectionsSubmitted: 1,
+      failedContractIds: [],
+      failedChargeIds: [],
+    });
     expect(pending?.status).toBe('pending');
     expect(paid.status).toBe(200);
     expect(paid.body).toEqual({ id: pending?.id, status: 'paid' });
@@ -206,19 +211,31 @@ describe('Billing (e2e)', () => {
       .send({ iban: STUDENT_IBAN });
     const studentRun = await api()
       .post('/api/v1/ops/dunning/run')
-      .set(...bearer(token));
+      .set(...bearer(token))
+      .set('Idempotency-Key', uuidv7());
     const opsRun = await api()
-      .post('/api/v1/ops/dunning/run?asOf=2026-11-13')
-      .set(...bearer(opsToken));
+      .post(`/api/v1/ops/dunning/run?asOf=2026-11-13&contractId=${contractId}`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7());
     const badAsOf = await api()
       .post('/api/v1/ops/billing/run?asOf=tomorrow')
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7());
+    const noKey = await api()
+      .post('/api/v1/ops/billing/run')
       .set(...bearer(opsToken));
 
     expect(strangerCharges.status).toBe(404);
     expect(strangerMandate.status).toBe(404);
     expect(studentRun.status).toBe(403);
     expect(opsRun.status).toBe(200);
-    expect(opsRun.body).toMatchObject({ asOf: '2026-11-13', chargesReviewed: expect.any(Number) });
+    expect(opsRun.body).toEqual({
+      asOf: '2026-11-13',
+      chargesReviewed: 0,
+      retries: 0,
+      failedChargeIds: [],
+    });
     expect(badAsOf.status).toBe(400);
+    expect(noKey.status).toBe(400);
   });
 });

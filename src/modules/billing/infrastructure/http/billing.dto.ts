@@ -5,6 +5,7 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -42,6 +43,11 @@ export class AsOfQueryDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'asOf must be a date as YYYY-MM-DD' })
   asOf?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Run for this contract only' })
+  @IsOptional()
+  @IsUUID()
+  contractId?: string;
 }
 
 // What the payment service provider posts about a collection.
@@ -209,6 +215,9 @@ export class BillingRunResponse {
 
   @ApiProperty()
   collectionsSubmitted!: number;
+
+  @ApiProperty({ type: [String], description: 'Charges not submitted; run again to retry' })
+  failedChargeIds!: readonly string[];
 }
 
 export class DunningRunResponse {
@@ -220,6 +229,9 @@ export class DunningRunResponse {
 
   @ApiProperty()
   retries!: number;
+
+  @ApiProperty({ type: [String], description: 'Charges not dunned; run again to retry' })
+  failedChargeIds!: readonly string[];
 }
 
 export class PaymentCallbackResponse {

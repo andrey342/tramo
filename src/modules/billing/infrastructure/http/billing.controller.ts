@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -15,7 +16,13 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 import { type CursorPage, type Principal } from '@shared/application';
 import { CalendarDate, type Clock, CLOCK } from '@shared/domain';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, CursorPageQueryDto, Idempotent } from '@shared/infrastructure/http';
+import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
+import {
+  ApiProblems,
+  CursorPageQueryDto,
+  Idempotent,
+  ProblemException,
+} from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -57,6 +64,7 @@ export class BillingController {
     private readonly commands: CommandBus,
     private readonly queries: QueryBus,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   @Post('contracts/:contractId/mandate')
@@ -132,33 +140,49 @@ export class BillingController {
 
   @Post('ops/billing/run')
   @HttpCode(200)
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 422)
   @ApiOkResponse({ type: BillingRunResponse })
   @Roles('ops', 'admin')
+  @Idempotent()
   @Audited({ action: 'billing.run', resource: 'billing' })
   @ApiOperation({ summary: 'Run the billing cycle and collect what is due, as of a day' })
   runBilling(
     @CurrentPrincipal() actor: Principal,
     @Query() query: AsOfQueryDto,
   ): Promise<BillingRunDto> {
-    return this.commands.execute(new RunBillingNowCommand(actor, this.asOf(query)));
+    return this.commands.execute(
+      new RunBillingNowCommand(actor, this.asOf(query), query.contractId ?? null),
+    );
   }
 
   @Post('ops/dunning/run')
   @HttpCode(200)
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 422)
   @ApiOkResponse({ type: DunningRunResponse })
   @Roles('ops', 'admin')
+  @Idempotent()
   @Audited({ action: 'billing.dunning_run', resource: 'billing' })
   @ApiOperation({ summary: 'Run dunning (reminders, notices, retries, arrears) as of a day' })
   runDunning(
     @CurrentPrincipal() actor: Principal,
     @Query() query: AsOfQueryDto,
   ): Promise<DunningRunDto> {
-    return this.commands.execute(new RunDunningNowCommand(actor, this.asOf(query)));
+    return this.commands.execute(
+      new RunDunningNowCommand(actor, this.asOf(query), query.contractId ?? null),
+    );
   }
 
+  // A day still to come only where future runs are enabled (not in production by default).
   private asOf(query: AsOfQueryDto): CalendarDate {
-    return query.asOf ? CalendarDate.parse(query.asOf) : CalendarDate.fromInstant(this.clock.now());
+    const today = CalendarDate.fromInstant(this.clock.now());
+    const asOf = query.asOf ? CalendarDate.parse(query.asOf) : today;
+    if (asOf.isAfter(today) && !this.config.billing.futureRunsEnabled) {
+      throw new ProblemException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'as_of_in_future',
+        'Billing runs as of today or a past day.',
+      );
+    }
+    return asOf;
   }
 }

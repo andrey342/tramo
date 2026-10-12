@@ -57,10 +57,12 @@ export interface BillingRunDto {
   readonly chargesCreated: number;
   readonly failedContractIds: readonly string[];
   readonly collectionsSubmitted: number;
+  readonly failedChargeIds: readonly string[];
 }
 
 export interface DunningRunDto {
   readonly asOf: string;
   readonly chargesReviewed: number;
   readonly retries: number;
+  readonly failedChargeIds: readonly string[];
 }

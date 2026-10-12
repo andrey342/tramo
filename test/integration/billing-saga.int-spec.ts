@@ -119,12 +119,11 @@ describe('billing saga (integration)', () => {
   it('should bill and collect an instalment, mark it paid in the plan and on the statement', async () => {
     const { contractId, firstDue } = await repaying(true);
 
-    const run = await commands.execute(new RunBillingNowCommand(OPS, firstDue));
+    const run = await commands.execute(new RunBillingNowCommand(OPS, firstDue, contractId));
     const charge = await charges.findByReference(contractId, 'installment:1');
     await collect(charge, 'succeeded');
 
-    // Other suites leave plans due the same day: the run bills them too.
-    expect(run.chargesCreated).toBeGreaterThanOrEqual(1);
+    expect(run).toMatchObject({ plansBilled: 1, chargesCreated: 1, collectionsSubmitted: 1 });
     expect(charge?.attempts).toHaveLength(1);
     const plan = await until(
       () => plans.findByContractId(contractId),
@@ -144,16 +143,16 @@ describe('billing saga (integration)', () => {
 
   it('should put the contract in arrears at 30 days and default it at 90', async () => {
     const { contractId, firstDue } = await repaying(false);
-    await commands.execute(new RunBillingNowCommand(OPS, firstDue));
+    await commands.execute(new RunBillingNowCommand(OPS, firstDue, contractId));
 
-    await commands.execute(new RunDunningNowCommand(OPS, firstDue.addDays(30)));
+    await commands.execute(new RunDunningNowCommand(OPS, firstDue.addDays(30), contractId));
     await until(
       () => contracts.findById(contractId),
       (contract) => {
         expect(contract?.status).toBe('in_arrears');
       },
     );
-    await commands.execute(new RunDunningNowCommand(OPS, firstDue.addDays(90)));
+    await commands.execute(new RunDunningNowCommand(OPS, firstDue.addDays(90), contractId));
 
     await until(
       () => contracts.findById(contractId),

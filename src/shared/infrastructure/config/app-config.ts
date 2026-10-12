@@ -58,6 +58,8 @@ export interface AppConfig {
     readonly pspWebhookSecrets: readonly string[];
     readonly pspCallbackUrl: string;
     readonly simulatedPspDelayMs: number;
+    // Whether ops may run billing as of a day still to come (the demo walks the months).
+    readonly futureRunsEnabled: boolean;
   };
   readonly outbox: {
     readonly enabled: boolean;
@@ -194,6 +196,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       ),
       pspCallbackUrl: env.PSP_CALLBACK_URL,
       simulatedPspDelayMs: env.SIMULATED_PSP_DELAY_MS,
+      futureRunsEnabled: env.BILLING_FUTURE_RUNS_ENABLED ?? env.NODE_ENV !== 'production',
     },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,

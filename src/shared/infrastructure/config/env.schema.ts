@@ -81,6 +81,7 @@ export const envSchema = z.object({
   // how long.
   PSP_CALLBACK_URL: z.url().default('http://localhost:3000'),
   SIMULATED_PSP_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(2_000),
+  BILLING_FUTURE_RUNS_ENABLED: z.stringbool().optional(),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
