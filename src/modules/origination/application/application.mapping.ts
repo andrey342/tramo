@@ -1,4 +1,4 @@
-import { annualPercentageRate, annuityPayment } from '@shared/domain';
+import { annualPercentageRate, annuityPayment, incomeShareCap } from '@shared/domain';
 
 import {
   type FinancingApplication,
@@ -62,7 +62,7 @@ function offerTerms(program: ProgramSnapshot, product: RequestedProduct): OfferT
       incomeShareBasisPoints: isa.incomeShare.basisPoints,
       minMonthlyIncomeCents: isa.minMonthlyIncome.cents,
       maxPayments: isa.maxPayments,
-      capCents: program.price.multiply(isa.capMultiplierHundredths / 100).cents,
+      capCents: incomeShareCap(program.price, isa.capMultiplierHundredths).cents,
       graceMonths: isa.graceMonths,
     };
   }

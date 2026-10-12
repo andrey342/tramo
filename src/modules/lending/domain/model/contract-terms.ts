@@ -1,6 +1,10 @@
-import { Decimal } from 'decimal.js';
-
-import { annualPercentageRate, annuityPayment, type Money, type Percentage } from '@shared/domain';
+import {
+  annualPercentageRate,
+  annuityPayment,
+  incomeShareCap,
+  type Money,
+  type Percentage,
+} from '@shared/domain';
 
 import { InvalidContractTermsError } from '../errors/lending-errors';
 
@@ -73,7 +77,7 @@ export function disbursementAmount(terms: ContractTerms): Money {
 
 // The most an ISA student ever pays.
 export function isaCap(principal: Money, capMultiplierHundredths: number): Money {
-  return principal.multiply(new Decimal(capMultiplierHundredths).dividedBy(100));
+  return incomeShareCap(principal, capMultiplierHundredths);
 }
 
 export function monthlyInstallment(terms: ContractTerms): Money | null {

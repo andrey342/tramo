@@ -23,6 +23,7 @@ export { type DomainEvent, type EventPayload, type JsonValue } from './domain-ev
 export { Email } from './email';
 export { Entity } from './entity';
 export { Iban } from './iban';
+export { incomeShareCap } from './income-share';
 export { type Currency, Money, type Rounding } from './money';
 export { NationalId, type NationalIdKind } from './national-id';
 export { Percentage } from './percentage';
