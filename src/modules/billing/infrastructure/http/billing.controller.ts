@@ -87,6 +87,12 @@ export class BillingController {
   @ApiCreatedResponse({ type: IncomeDeclarationResponse })
   @Roles('student')
   @Idempotent()
+  // The income decides what is charged: audited, with the contract only (never the amount).
+  @Audited({
+    action: 'billing.declare_income',
+    resource: 'contract',
+    resourceIdParam: 'contractId',
+  })
   @ApiOperation({ summary: 'Declare the income of a month (income share agreements)' })
   declareIncome(
     @CurrentPrincipal() actor: Principal,
