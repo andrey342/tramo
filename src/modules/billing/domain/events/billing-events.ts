@@ -120,6 +120,8 @@ export type ChargeCancelledPayload = {
   readonly chargeId: string;
   readonly contractId: string;
   readonly amountCents: number;
+  // The plan ended before the charge fell due, or the bank refused a payoff.
+  readonly reason: 'plan_ended' | 'payoff_failed';
 };
 
 export type IncomeDeclaredPayload = {

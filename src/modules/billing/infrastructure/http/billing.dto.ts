@@ -61,8 +61,9 @@ export class PaymentCallbackRequest {
   paymentId!: string;
 
   @ApiProperty({ description: 'The idempotency key Tramo sent: <chargeId>.<attempt>' })
-  @IsString()
-  @MaxLength(100)
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d{1,4}$/, {
+    message: 'reference must be an attempt key as <chargeId>.<attempt>',
+  })
   reference!: string;
 
   @ApiPropertyOptional({ example: 'insufficient_funds' })

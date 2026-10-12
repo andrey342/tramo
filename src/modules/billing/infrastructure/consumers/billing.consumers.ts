@@ -142,14 +142,17 @@ export class LedgerOnChargeCancelled implements EventHandler<ChargeCancelledPayl
   constructor(private readonly ledger: LedgerWriter) {}
 
   async handle(event: IntegrationEvent<ChargeCancelledPayload>): Promise<void> {
-    const { chargeId, contractId, amountCents } = event.payload;
+    const { chargeId, contractId, amountCents, reason } = event.payload;
     await this.ledger.append({
       eventId: event.eventId,
       contractId,
       chargeId,
       type: 'cancellation',
       amountCents: -amountCents,
-      description: 'Cancelled: the plan ended',
+      description:
+        reason === 'payoff_failed'
+          ? 'Cancelled: the payoff was refused'
+          : 'Cancelled: the plan ended',
       occurredAt: new Date(event.occurredAt),
     });
   }

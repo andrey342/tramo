@@ -105,8 +105,14 @@ describe('billing saga (integration)', () => {
   async function collect(charge: Charge | null, outcome: 'succeeded' | 'failed'): Promise<void> {
     const key = charge?.currentAttempt?.key ?? '';
     await commands.execute(new ExecuteChargeCollectionCommand(charge?.id ?? '', key));
+    const accepted = await charges.findById(charge?.id ?? '');
     await commands.execute(
-      new RecordPaymentResultCommand({ reference: key, outcome, failureReason: null }),
+      new RecordPaymentResultCommand({
+        reference: key,
+        paymentId: accepted?.currentAttempt?.paymentId ?? '',
+        outcome,
+        failureReason: null,
+      }),
     );
   }
 

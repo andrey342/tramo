@@ -5,7 +5,7 @@ import {
   type Money,
 } from '@shared/domain';
 
-import { UnknownCollectionAttemptError } from '../errors/billing-errors';
+import { PaymentMismatchError, UnknownCollectionAttemptError } from '../errors/billing-errors';
 import { BillingEvents, type ChargeKind } from '../events/billing-events';
 import { ARREARS_STEP, dunningStepsDue } from '../services/dunning';
 
@@ -65,6 +65,9 @@ export interface ChargeProps {
 //   failed | overdue → pending                    (dunning's retries, or ops)
 //   scheduled | failed | overdue → written_off    (dunning, 90 days after the due date)
 //   scheduled → cancelled                         (the plan ended before it fell due)
+//
+// A payoff is not dunned: refused, it is cancelled (pending → cancelled) and lending withdraws
+// it; the plan is billed as before and the student may ask again.
 export class Charge extends AggregateRoot {
   private constructor(
     id: string,
@@ -233,11 +236,31 @@ export class Charge extends AggregateRoot {
     return key;
   }
 
-  // The provider took the request. Idempotent.
+  // A pending attempt asked of the provider again (the job was lost): same key, same request.
+  resubmit(now: Date): string {
+    const attempt = this.currentAttempt;
+    if (this.props.status !== 'pending' || !attempt) {
+      throw new InvalidStateTransitionError('Charge', this.props.status, 'pending');
+    }
+    this.record({
+      eventType: BillingEvents.ChargeSubmitted,
+      aggregateType: 'Charge',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { chargeId: this.id, contractId: this.props.contractId, attemptKey: attempt.key },
+    });
+    return attempt.key;
+  }
+
+  // The provider took the request, or its callback names the payment. Idempotent; another
+  // payment for the same attempt is refused.
   recordAccepted(key: string, paymentId: string): void {
     const attempt = this.attempt(key);
-    if (attempt.paymentId) {
+    if (attempt.paymentId === paymentId) {
       return;
+    }
+    if (attempt.paymentId) {
+      throw new PaymentMismatchError(key);
     }
     this.replaceAttempt({ ...attempt, paymentId });
   }
@@ -284,7 +307,7 @@ export class Charge extends AggregateRoot {
   }
 
   // The provider could not collect it. Idempotent. Failed on or before the due date, overdue
-  // after it.
+  // after it; a payoff is cancelled.
   recordFailed(key: string, reason: string, today: CalendarDate, now: Date): void {
     const attempt = this.attempt(key);
     if (attempt.outcome === 'failed') {
@@ -295,7 +318,9 @@ export class Charge extends AggregateRoot {
     }
     const failureReason = reason.trim().slice(0, MAX_REASON_LENGTH) || 'unspecified';
     this.replaceAttempt({ ...attempt, outcome: 'failed', failureReason, settledAt: now });
-    this.moveTo(today.isAfter(this.props.dueDate) ? 'overdue' : 'failed', now);
+    if (this.props.kind !== 'payoff') {
+      this.moveTo(today.isAfter(this.props.dueDate) ? 'overdue' : 'failed', now);
+    }
     this.record({
       eventType: BillingEvents.ChargeFailed,
       aggregateType: 'Charge',
@@ -310,13 +335,17 @@ export class Charge extends AggregateRoot {
         reason: failureReason,
       },
     });
+    if (this.props.kind === 'payoff') {
+      this.recordCancelled('payoff_failed', now);
+    }
   }
 
   // Applies the dunning steps due on `asOf` that were not applied yet (see DUNNING_STEPS) and
   // says whether collection is to be tried again. A paid, written off or cancelled charge has
-  // nothing to dun; one being collected waits for the provider's answer.
+  // nothing to dun; one being collected waits for the provider's answer. A payoff is never
+  // dunned: it is collected once, or cancelled.
   applyDunning(asOf: CalendarDate, now: Date): { readonly retry: boolean } {
-    if (this.isSettled || this.props.status === 'pending') {
+    if (this.isSettled || this.props.status === 'pending' || this.props.kind === 'payoff') {
       return { retry: false };
     }
     const steps = dunningStepsDue(this.props.dueDate, asOf, this.props.dunningStep);
@@ -370,6 +399,10 @@ export class Charge extends AggregateRoot {
     if (this.props.status !== 'scheduled') {
       throw new InvalidStateTransitionError('Charge', this.props.status, 'cancelled');
     }
+    this.recordCancelled('plan_ended', now);
+  }
+
+  private recordCancelled(reason: 'plan_ended' | 'payoff_failed', now: Date): void {
     this.moveTo('cancelled', now);
     this.record({
       eventType: BillingEvents.ChargeCancelled,
@@ -380,6 +413,7 @@ export class Charge extends AggregateRoot {
         chargeId: this.id,
         contractId: this.props.contractId,
         amountCents: this.props.amount.cents,
+        reason,
       },
     });
   }

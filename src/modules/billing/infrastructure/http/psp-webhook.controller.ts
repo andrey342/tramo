@@ -78,6 +78,7 @@ export class PspWebhookController {
     return this.commands.execute(
       new RecordPaymentResultCommand({
         reference: body.reference,
+        paymentId: body.paymentId,
         outcome: body.type === 'payment.succeeded' ? 'succeeded' : 'failed',
         failureReason: body.failureReason ?? null,
       }),

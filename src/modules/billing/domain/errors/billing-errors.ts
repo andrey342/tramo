@@ -55,6 +55,16 @@ export class UnknownCollectionAttemptError extends DomainError {
   }
 }
 
+// The provider reports a payment other than the one it accepted for the attempt.
+export class PaymentMismatchError extends DomainError {
+  readonly code = 'payment_mismatch';
+  readonly category = 'conflict';
+
+  constructor(reference: string) {
+    super('The payment does not match the one accepted for this attempt.', { reference });
+  }
+}
+
 export class MandateMissingError extends DomainError {
   readonly code = 'mandate_missing';
   readonly category = 'rule_violation';

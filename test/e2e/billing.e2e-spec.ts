@@ -154,12 +154,14 @@ describe('Billing (e2e)', () => {
     const unsigned = await api().post('/api/v1/webhooks/psp').send(body);
     const otherKey = await callback(body, 'another-secret-of-at-least-32-characters');
     const unknown = await callback(body);
+    const malformed = await callback({ ...body, reference: 'installment:1' });
 
     expect(unsigned.status).toBe(401);
     expect(otherKey.status).toBe(401);
     expect(otherKey.body.code).toBe('invalid_webhook_signature');
     expect(unknown.status).toBe(409);
     expect(unknown.body.code).toBe('unknown_collection_attempt');
+    expect(malformed.status).toBe(400);
   });
 
   it('should take income declarations for an ISA, once a month', async () => {

@@ -1,7 +1,7 @@
 import { InvalidStateTransitionError } from '@shared/domain';
 
 import { aCharge, day, LATER, NOW } from '../../../../../test/factories/billing';
-import { UnknownCollectionAttemptError } from '../errors/billing-errors';
+import { PaymentMismatchError, UnknownCollectionAttemptError } from '../errors/billing-errors';
 import { BillingEvents } from '../events/billing-events';
 
 import { Charge } from './charge';
@@ -54,12 +54,58 @@ describe('Charge', () => {
   });
 
   describe('collection', () => {
+    it('should ask the provider again for the attempt in collection, with the same key', () => {
+      const charge = fresh();
+      const key = charge.submitCollection(MANDATE_ID, NOW);
+      charge.pullEvents();
+
+      expect(charge.resubmit(LATER)).toBe(key);
+      expect(charge.attempts).toHaveLength(1);
+      expect(charge.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: BillingEvents.ChargeSubmitted,
+          payload: expect.objectContaining({ attemptKey: key }),
+        }),
+      ]);
+      expect(() => fresh().resubmit(LATER)).toThrow(InvalidStateTransitionError);
+    });
+
+    it('should cancel a payoff the provider refused, and never dun it', () => {
+      const charge = fresh({ kind: 'payoff', reference: 'payoff:1' });
+
+      charge.recordFailed(
+        charge.submitCollection(MANDATE_ID, NOW),
+        'insufficient_funds',
+        day('2026-11-20'),
+        NOW,
+      );
+
+      expect(charge.status).toBe('cancelled');
+      expect(charge.pullEvents()).toEqual([
+        expect.objectContaining({ eventType: BillingEvents.ChargeSubmitted }),
+        expect.objectContaining({
+          eventType: BillingEvents.ChargeFailed,
+          payload: expect.objectContaining({ kind: 'payoff' }),
+        }),
+        expect.objectContaining({
+          eventType: BillingEvents.ChargeCancelled,
+          payload: expect.objectContaining({ reason: 'payoff_failed' }),
+        }),
+      ]);
+      const unpaid = fresh({ kind: 'payoff', reference: 'payoff:2' });
+      expect(unpaid.applyDunning(day('2027-03-01'), NOW)).toEqual({ retry: false });
+      expect(unpaid).toMatchObject({ status: 'scheduled', dunningStep: 0 });
+    });
+
     it('should be paid through an attempt whose key the provider echoes, once', () => {
       const charge = fresh();
 
       const key = charge.submitCollection(MANDATE_ID, NOW);
       charge.recordAccepted(key, 'pay-1');
-      charge.recordAccepted(key, 'pay-2');
+      charge.recordAccepted(key, 'pay-1');
+      expect(() => {
+        charge.recordAccepted(key, 'pay-2');
+      }).toThrow(PaymentMismatchError);
       charge.recordSucceeded(key, LATER, false);
       charge.recordSucceeded(key, LATER, false);
 

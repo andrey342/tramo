@@ -27,6 +27,7 @@ import {
   IncomeAlreadyDeclaredError,
   MandateMissingError,
   NotAnIncomeShareError,
+  PaymentMismatchError,
   UnknownCollectionAttemptError,
 } from '../domain';
 
@@ -349,6 +350,7 @@ describe('billing use cases', () => {
       const ok = await t.result.execute(
         new RecordPaymentResultCommand({
           reference: `${paid.id}.1`,
+          paymentId: 'pay-1',
           outcome: 'succeeded',
           failureReason: null,
         }),
@@ -356,6 +358,7 @@ describe('billing use cases', () => {
       await t.result.execute(
         new RecordPaymentResultCommand({
           reference: `${paid.id}.1`,
+          paymentId: 'pay-1',
           outcome: 'succeeded',
           failureReason: null,
         }),
@@ -363,6 +366,7 @@ describe('billing use cases', () => {
       const ko = await t.result.execute(
         new RecordPaymentResultCommand({
           reference: `${refused.id}.1`,
+          paymentId: 'pay-2',
           outcome: 'failed',
           failureReason: 'insufficient_funds',
         }),
@@ -379,11 +383,23 @@ describe('billing use cases', () => {
         t.result.execute(
           new RecordPaymentResultCommand({
             reference: `${uuidv7()}.1`,
+            paymentId: 'pay-3',
             outcome: 'succeeded',
             failureReason: null,
           }),
         ),
       ).rejects.toThrow(UnknownCollectionAttemptError);
+      // A callback naming another payment for the attempt is not the one the provider accepted.
+      await expect(
+        t.result.execute(
+          new RecordPaymentResultCommand({
+            reference: `${refused.id}.1`,
+            paymentId: 'pay-forged',
+            outcome: 'succeeded',
+            failureReason: null,
+          }),
+        ),
+      ).rejects.toThrow(PaymentMismatchError);
     });
 
     it('should let only staff retry a charge, under the mandate in force', async () => {

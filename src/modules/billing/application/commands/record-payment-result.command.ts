@@ -15,6 +15,8 @@ import {
 export interface PaymentResult {
   // The attempt key Tramo sent: `<chargeId>.<attempt>`.
   readonly reference: string;
+  // The provider's id of the payment, which must be the one it accepted for the attempt.
+  readonly paymentId: string;
   readonly outcome: 'succeeded' | 'failed';
   readonly failureReason: string | null;
 }
@@ -41,7 +43,7 @@ export class RecordPaymentResultHandler implements ICommandHandler<RecordPayment
   async execute(
     command: RecordPaymentResultCommand,
   ): Promise<{ readonly id: string; readonly status: ChargeStatus }> {
-    const { reference, outcome, failureReason } = command.result;
+    const { reference, paymentId, outcome, failureReason } = command.result;
     const chargeId = reference.slice(0, reference.lastIndexOf('.'));
     return this.uow.run(async () => {
       const charge = chargeId ? await this.charges.findById(chargeId) : null;
@@ -50,13 +52,14 @@ export class RecordPaymentResultHandler implements ICommandHandler<RecordPayment
       }
       const before = charge.status;
       const now = this.clock.now();
+      charge.recordAccepted(reference, paymentId);
       if (outcome === 'succeeded') {
         const others = await this.charges.hasOtherChargesInArrears(charge.contractId, charge.id);
         charge.recordSucceeded(reference, now, others);
       } else {
         charge.recordFailed(reference, failureReason ?? '', CalendarDate.fromInstant(now), now);
       }
-      if (charge.hasPendingEvents) {
+      if (charge.hasPendingEvents || charge.status !== before) {
         await this.charges.save(charge);
         this.audit.describeChanges({ status: { before, after: charge.status } });
       }
