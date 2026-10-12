@@ -163,6 +163,38 @@ class ProductResponse {
   termMonths?: number;
 }
 
+class OfferTermsResponse {
+  @ApiProperty({ enum: ['installments', 'isa'] })
+  kind!: 'installments' | 'isa';
+
+  @ApiPropertyOptional({ example: 24 })
+  termMonths?: number;
+
+  @ApiPropertyOptional({ example: 900, description: 'TIN' })
+  annualRateBasisPoints?: number;
+
+  @ApiPropertyOptional({ example: 938, description: 'TAE: (1 + TIN/12)^12 − 1, no fees' })
+  aprBasisPoints?: number;
+
+  @ApiPropertyOptional({ example: 34_263 })
+  monthlyPaymentCents?: number;
+
+  @ApiPropertyOptional({ example: 1_000 })
+  incomeShareBasisPoints?: number;
+
+  @ApiPropertyOptional({ example: 150_000 })
+  minMonthlyIncomeCents?: number;
+
+  @ApiPropertyOptional({ example: 48 })
+  maxPayments?: number;
+
+  @ApiPropertyOptional({ example: 1_125_000, description: 'The most the student ever pays' })
+  capCents?: number;
+
+  @ApiPropertyOptional({ example: 3 })
+  graceMonths?: number;
+}
+
 class ProfileResponse {
   @ApiProperty({ nullable: true, type: String, example: '1998-05-20' })
   dateOfBirth!: string | null;
@@ -207,6 +239,9 @@ export class ApplicationResponse {
 
   @ApiProperty({ type: ProductResponse })
   product!: ProductResponse;
+
+  @ApiProperty({ type: OfferTermsResponse, description: 'The financing as offered' })
+  terms!: OfferTermsResponse;
 
   @ApiProperty({
     type: ProfileResponse,

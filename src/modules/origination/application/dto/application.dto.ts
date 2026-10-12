@@ -10,6 +10,25 @@ import {
 export type RequestedProductDto =
   { readonly kind: 'installments'; readonly termMonths: number } | { readonly kind: 'isa' };
 
+// The financing as offered, so the student knows what they accept: for instalments the monthly
+// payment and the TAE, for an ISA the share, the threshold and the cap.
+export type OfferTermsDto =
+  | {
+      readonly kind: 'installments';
+      readonly termMonths: number;
+      readonly annualRateBasisPoints: number;
+      readonly aprBasisPoints: number;
+      readonly monthlyPaymentCents: number;
+    }
+  | {
+      readonly kind: 'isa';
+      readonly incomeShareBasisPoints: number;
+      readonly minMonthlyIncomeCents: number;
+      readonly maxPayments: number;
+      readonly capCents: number;
+      readonly graceMonths: number;
+    };
+
 // Personal data: only the student and Tramo's staff see it, never the training center.
 export type ApplicantProfileDto = {
   readonly dateOfBirth: string | null;
@@ -29,6 +48,7 @@ export interface ApplicationDto {
   readonly amountCents: number;
   readonly currency: 'EUR';
   readonly product: RequestedProductDto;
+  readonly terms: OfferTermsDto;
   readonly profile: ApplicantProfileDto | null;
   readonly verificationsCompleted: readonly ('kyc' | 'employment' | 'bureau')[];
   readonly status: ApplicationStatus;

@@ -1,6 +1,14 @@
-import { type FinancingApplication, type RiskPolicy, VERIFICATION_TYPES } from '../domain';
+import { annualPercentageRate, annuityPayment } from '@shared/domain';
 
-import { type ApplicationDto, type DecisionDto } from './dto/application.dto';
+import {
+  type FinancingApplication,
+  type ProgramSnapshot,
+  type RequestedProduct,
+  type RiskPolicy,
+  VERIFICATION_TYPES,
+} from '../domain';
+
+import { type ApplicationDto, type DecisionDto, type OfferTermsDto } from './dto/application.dto';
 import { type RiskPolicyDto } from './dto/risk-policy.dto';
 
 export function toApplicationDto(
@@ -21,6 +29,7 @@ export function toApplicationDto(
       product.kind === 'isa'
         ? { kind: 'isa' }
         : { kind: 'installments', termMonths: product.termMonths },
+    terms: offerTerms(program, product),
     profile: withProfile
       ? {
           dateOfBirth: profile.dateOfBirth,
@@ -38,6 +47,36 @@ export function toApplicationDto(
     score: withProfile ? (application.decision?.score ?? null) : null,
     statusChangedAt: application.statusChangedAt,
     createdAt: application.createdAt,
+  };
+}
+
+// The snapshot always offers the product asked for: start and submit check it.
+function offerTerms(program: ProgramSnapshot, product: RequestedProduct): OfferTermsDto {
+  if (product.kind === 'isa') {
+    const isa = program.isa;
+    if (!isa) {
+      throw new Error('An ISA application whose program offers no ISA.');
+    }
+    return {
+      kind: 'isa',
+      incomeShareBasisPoints: isa.incomeShare.basisPoints,
+      minMonthlyIncomeCents: isa.minMonthlyIncome.cents,
+      maxPayments: isa.maxPayments,
+      capCents: program.price.multiply(isa.capMultiplierHundredths / 100).cents,
+      graceMonths: isa.graceMonths,
+    };
+  }
+  const installments = program.installments;
+  if (!installments) {
+    throw new Error('An instalment application whose program offers no instalments.');
+  }
+  return {
+    kind: 'installments',
+    termMonths: product.termMonths,
+    annualRateBasisPoints: installments.annualRate.basisPoints,
+    aprBasisPoints: annualPercentageRate(installments.annualRate).basisPoints,
+    monthlyPaymentCents: annuityPayment(program.price, installments.annualRate, product.termMonths)
+      .cents,
   };
 }
 

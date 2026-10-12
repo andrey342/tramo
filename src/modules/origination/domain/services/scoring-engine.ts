@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 
-import { Money } from '@shared/domain';
+import { annuityPayment, Money, Percentage } from '@shared/domain';
 
 import { ageInYears, type CompleteProfile } from '../model/applicant-profile';
 import {
@@ -108,15 +108,11 @@ export function estimatedMonthlyPayment(
       ? program.avgStartingSalary.multiply(share.asDecimal().dividedBy(12))
       : Money.zero();
   }
-  const principal = new Decimal(program.price.cents);
-  const monthlyRate = (program.installments?.annualRate.asDecimal() ?? new Decimal(0)).dividedBy(
-    12,
+  return annuityPayment(
+    program.price,
+    program.installments?.annualRate ?? Percentage.zero(),
+    product.termMonths,
   );
-  const term = product.termMonths;
-  const cents = monthlyRate.isZero()
-    ? principal.dividedBy(term)
-    : principal.times(monthlyRate).dividedBy(new Decimal(1).minus(monthlyRate.plus(1).pow(-term)));
-  return Money.fromCents(cents.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber());
 }
 
 // The declared income, capped by the income the employment record shows.
