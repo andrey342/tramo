@@ -139,13 +139,14 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module        | Responsibility                                                                                            | Main endpoints                                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `iam`         | Accounts, sessions, roles, center API keys                                                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
-| `catalog`     | Training centers, VAT verification, programs and their financing options                                  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
-| `origination` | Financing applications, verification saga, risk policies and scoring                                      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
-| `lending`     | Contracts, e-signature, disbursement to the center and the repayment plan                                 | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
-| `billing`     | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
+| Module          | Responsibility                                                                                            | Main endpoints                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `iam`           | Accounts, sessions, roles, center API keys                                                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
+| `catalog`       | Training centers, VAT verification, programs and their financing options                                  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
+| `origination`   | Financing applications, verification saga, risk policies and scoring                                      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
+| `lending`       | Contracts, e-signature, disbursement to the center and the repayment plan                                 | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
+| `billing`       | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
+| `notifications` | Emails to students and centers, signed webhooks to centers with retries and redelivery                    |                                                                                                                                       |
 
 ## API overview
 
