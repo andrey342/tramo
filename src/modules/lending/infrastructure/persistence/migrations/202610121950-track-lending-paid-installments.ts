@@ -20,8 +20,24 @@ export class TrackLendingPaidInstallments1791834600000 implements MigrationInter
     `);
   }
 
-  // Exact for plans paid in order, the only kind there was before this migration.
+  // Exact for plans paid in order, the only kind there was before this migration; refuses to
+  // turn a set with gaps into a count that would say otherwise.
   async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM lending.financing_plans
+           WHERE kind = 'installments'
+             AND terms -> 'paidInstallments' <> COALESCE(
+               (SELECT jsonb_agg(n ORDER BY n)
+                  FROM generate_series(1, jsonb_array_length(terms -> 'paidInstallments')) AS n),
+               '[]'::jsonb)
+        ) THEN
+          RAISE EXCEPTION 'A plan has instalments paid out of order; it cannot be counted.';
+        END IF;
+      END $$
+    `);
     await queryRunner.query(`
       UPDATE lending.financing_plans
          SET terms = (terms - 'paidInstallments') || jsonb_build_object(
