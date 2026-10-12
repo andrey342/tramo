@@ -70,6 +70,21 @@ describe('Charge', () => {
       expect(() => fresh().resubmit(LATER)).toThrow(InvalidStateTransitionError);
     });
 
+    it('should refuse at once a payoff that cannot be collected', () => {
+      const charge = fresh({ kind: 'payoff', reference: 'payoff:3' });
+
+      charge.refusePayoff('no_mandate', NOW);
+
+      expect(charge.status).toBe('cancelled');
+      expect(eventTypes(charge)).toEqual([
+        BillingEvents.ChargeFailed,
+        BillingEvents.ChargeCancelled,
+      ]);
+      expect(() => {
+        fresh().refusePayoff('no_mandate', NOW);
+      }).toThrow(InvalidStateTransitionError);
+    });
+
     it('should cancel a payoff the provider refused, and never dun it', () => {
       const charge = fresh({ kind: 'payoff', reference: 'payoff:1' });
 

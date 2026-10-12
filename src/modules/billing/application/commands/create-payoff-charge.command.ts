@@ -25,7 +25,8 @@ export interface PayoffRequest {
 }
 
 // The student asked to repay everything (lending's PayoffRequested): one charge for the quoted
-// amount, due that day and collected at once when there is a mandate. Once per request. While it
+// amount, due that day and collected at once; without a mandate it is refused at once and
+// lending withdraws it. Once per request. While it
 // is collected, nothing else of the contract is (it covers what is left); charges still
 // scheduled are cancelled when the plan is paid off, or collected as usual if the bank refuses.
 export class CreatePayoffChargeCommand extends Command<void> {
@@ -72,6 +73,8 @@ export class CreatePayoffChargeHandler implements ICommandHandler<CreatePayoffCh
       const mandate = await this.mandates.findActiveByContract(contract.id);
       if (mandate) {
         charge.submitCollection(mandate.id, now);
+      } else {
+        charge.refusePayoff('no_mandate', now);
       }
       await this.charges.save(charge);
     });

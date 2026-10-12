@@ -77,6 +77,7 @@ export type ChargeFailedPayload = {
   readonly studentId: string;
   // A payoff that fails is abandoned (lending withdraws it); other charges are dunned.
   readonly kind: ChargeKind;
+  // 0 when no attempt could be made (a payoff without a mandate).
   readonly attempt: number;
   readonly reason: string;
 };

@@ -250,6 +250,29 @@ export class Charge extends AggregateRoot {
     return this.submitCollection(mandateId, now);
   }
 
+  // A payoff that cannot be collected (the contract has no mandate) fails at once, as if the bank
+  // had refused it: lending withdraws it instead of the contract waiting on it.
+  refusePayoff(reason: string, now: Date): void {
+    if (this.props.kind !== 'payoff' || this.props.status !== 'scheduled') {
+      throw new InvalidStateTransitionError('Charge', this.props.status, 'cancelled');
+    }
+    this.record({
+      eventType: BillingEvents.ChargeFailed,
+      aggregateType: 'Charge',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        chargeId: this.id,
+        contractId: this.props.contractId,
+        studentId: this.props.studentId,
+        kind: this.props.kind,
+        attempt: 0,
+        reason,
+      },
+    });
+    this.recordCancelled('payoff_failed', now);
+  }
+
   // A pending attempt asked of the provider again (the job was lost): same key, same request.
   resubmit(now: Date): string {
     const attempt = this.currentAttempt;
