@@ -175,6 +175,17 @@ describe('payoffQuote', () => {
     });
   });
 
+  // Instalments 1 and 2 collected ahead, on 25 January: 6,000 − 981.41 − 988.77 = 4,029.82,
+  // and January's interest came with the first.
+  it('should take off the principal of instalments paid ahead of their date', () => {
+    expect(quote('2026-01-25', [1, 2])).toMatchObject({
+      overdueInstallments: 0,
+      outstandingPrincipal: eur('4029.82'),
+      accruedInterest: eur('0.00'),
+      total: eur('4029.82'),
+    });
+  });
+
   it('should include instalments already due and not paid', () => {
     expect(quote('2026-02-10', [])).toMatchObject({
       overdueInstallments: 1,
