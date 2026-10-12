@@ -6,10 +6,13 @@ import {
   type PlanCompletedPayload,
 } from '@modules/lending/domain/events/lending-events';
 import { type IntegrationEvent } from '@shared/application';
+import { CalendarDate } from '@shared/domain';
 
 import { CancelScheduledChargesCommand } from '../../application/commands/cancel-scheduled-charges.command';
+import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
+import { BillingEvents } from '../../domain';
 
-import { CancelChargesOnPlanCompleted } from './billing.consumers';
+import { CancelChargesOnPlanCompleted, CollectOnMandateSigned } from './billing.consumers';
 
 const completed = (
   contractId: string,
@@ -43,5 +46,37 @@ describe('CancelChargesOnPlanCompleted', () => {
     }
 
     expect(executed).toEqual([new CancelScheduledChargesCommand(paidOff)]);
+  });
+});
+
+describe('CollectOnMandateSigned', () => {
+  it('should collect the charges of the contract that were waiting for a mandate', async () => {
+    const executed: unknown[] = [];
+    const commands = {
+      execute: (command: unknown) => {
+        executed.push(command);
+        return Promise.resolve({ submitted: 0, failedChargeIds: [] });
+      },
+    } as unknown as CommandBus;
+    const contractId = uuidv7();
+
+    await new CollectOnMandateSigned(commands).handle({
+      eventId: uuidv7(),
+      eventType: BillingEvents.MandateSigned,
+      aggregateType: 'PaymentMandate',
+      aggregateId: uuidv7(),
+      occurredAt: '2026-11-20T10:00:00.000Z',
+      correlationId: null,
+      payload: {
+        mandateId: uuidv7(),
+        contractId,
+        studentId: uuidv7(),
+        mandateReference: 'TRAMO-1',
+      },
+    });
+
+    expect(executed).toEqual([
+      new CollectDueChargesCommand(CalendarDate.parse('2026-11-20'), contractId),
+    ]);
   });
 });

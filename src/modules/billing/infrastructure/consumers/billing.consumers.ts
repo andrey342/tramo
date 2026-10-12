@@ -11,6 +11,7 @@ import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shar
 import { CalendarDate } from '@shared/domain';
 
 import { CancelScheduledChargesCommand } from '../../application/commands/cancel-scheduled-charges.command';
+import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
 import {
   BillingEvents,
@@ -19,6 +20,7 @@ import {
   type ChargePaidPayload,
   type ChargeSubmittedPayload,
   type ChargeWrittenOffPayload,
+  type MandateSignedPayload,
 } from '../../domain';
 import { CollectionJobs } from '../jobs/billing-jobs';
 import { LedgerWriter } from '../persistence/typeorm-billing.queries';
@@ -31,6 +33,22 @@ export class CollectOnChargeSubmitted implements EventHandler<ChargeSubmittedPay
 
   async handle(event: IntegrationEvent<ChargeSubmittedPayload>): Promise<void> {
     await this.jobs.collect(event.payload.chargeId, event.payload.attemptKey, event.correlationId);
+  }
+}
+
+// Charges due while the contract had no mandate wait scheduled; the new one collects them.
+@Injectable()
+@EventSubscriber({ event: BillingEvents.MandateSigned, consumer: 'billing.collect-on-mandate' })
+export class CollectOnMandateSigned implements EventHandler<MandateSignedPayload> {
+  constructor(private readonly commands: CommandBus) {}
+
+  async handle(event: IntegrationEvent<MandateSignedPayload>): Promise<void> {
+    await this.commands.execute(
+      new CollectDueChargesCommand(
+        CalendarDate.fromInstant(new Date(event.occurredAt)),
+        event.payload.contractId,
+      ),
+    );
   }
 }
 
