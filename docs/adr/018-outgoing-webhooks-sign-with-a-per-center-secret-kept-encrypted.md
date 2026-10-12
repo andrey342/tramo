@@ -54,13 +54,15 @@ anything else, a timeout or a redirect (never followed) is a failed attempt.
 - Good: a secret read from a database dump is useless without the field encryption key.
 - Bad: the worker holds the decrypted secret while posting; a compromised worker can forge
   deliveries. It can also do everything else Tramo does, so it is not a new exposure.
-- Bad: the URL is the center's choice. Where `WEBHOOK_PRIVATE_TARGETS_ENABLED` is off (the
-  default in production) only https to public addresses is posted: the host is resolved before
-  each attempt and loopback, private, link-local (cloud metadata), carrier-grade NAT, multicast
-  and reserved ranges are refused, and redirects are not followed. The resolution is a check,
-  not a pin: a name that answers differently between the check and the connection (DNS
-  rebinding) can still reach a private address. Pinning the resolved address in the HTTP agent,
-  or an egress proxy, closes it.
+- Bad: the URL is the center's choice. Where `WEBHOOK_PRIVATE_TARGETS_ENABLED` is off (always
+  in production: it refuses to start with it on) only https to public addresses is posted: the
+  connection resolves the host itself and refuses it if any address is loopback, private,
+  link-local (cloud metadata), carrier-grade NAT, documentation, multicast, reserved, or an IPv6
+  form carrying an IPv4 address (NAT64, 6to4, Teredo); the address checked is the one connected
+  to, so a name that changes its answer (DNS rebinding) cannot slip in between. Redirects are
+  not followed, the answer's body is never read (only its status), and a center sees a category
+  of failure (`timeout`, `connection_failed`, `http_503`), never the error text, so the
+  webhook is not a probe of Tramo's network. An egress proxy would add a second line.
 - Bad: a center learns of an event only after its round of attempts; one whose endpoint is down
   for hours sees the delivery `failed` and has to redeliver (`POST
 /centers/:id/webhook-deliveries/:deliveryId/redeliver`).

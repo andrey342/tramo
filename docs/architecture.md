@@ -100,9 +100,9 @@ Known gaps, accepted for now:
   reveals which emails are registered. Answering the same way in both cases needs an email
   confirmation step, which comes with the notifications module; until then the auth rate limit
   slows enumeration down.
-- `StudentRegistered` and `CenterUserCreated` carry the email address, because the notifications
-  module sends to it. Their jobs (and Bull Board, behind its own credentials) therefore hold it
-  until completed jobs expire after seven days.
+- `StudentRegistered` and `CenterUserCreated` carry the email address (the first for the welcome
+  email, which is sent before anything else knows the user). Their jobs (and Bull Board, behind
+  its own credentials) therefore hold it until completed jobs expire after seven days.
 - An admin sets a new center administrator's first password. Production needs an invitation
   link, or a forced change on first sign-in, so the admin does not keep a working password.
 
@@ -423,11 +423,15 @@ an event of another module; it decides nothing.
   per event, template and recipient: a redelivered event writes nothing), with the template's
   values (ids, amounts, dates) and the id it is about as `reference`. `EmailRequested` has a job
   (`notifications.emails`, five attempts with backoff) render it from its handlebars template and
-  hand it to the SMTP server (Mailpit locally, `SMTP_*`); a sent email is not sent again, one
-  that runs out of attempts is `failed` and its job dead-lettered. Sending is at least once: an
+  hand it to the SMTP server (Mailpit locally, `SMTP_*`; encrypted in production, and whenever
+  credentials are sent); a sent email is not sent again, one that runs out of attempts is
+  `failed` and its job dead-lettered, and an hourly sweep gives up those still pending a day
+  later (their job was lost). Failures are recorded and published as categories (`smtp_550`,
+  `timeout`), never the server's text, which quotes the recipient. Sending is at least once: an
   answer lost after the server accepted the message sends it again. Recipients are looked up in
   iam when the email is written (`FindUserContactQuery`, `ListCenterContactsQuery`); the
-  welcome email goes to the address the registration carried.
+  welcome email goes to the address the registration carried, and never repeats it in its body.
+  An address is one mailbox: `Email` refuses list and display-name characters.
 
   | Event                      | Email                      | To                         |
   | -------------------------- | -------------------------- | -------------------------- |
@@ -450,16 +454,21 @@ an event of another module; it decides nothing.
   a delivery (one per center and event), posted by a job (`notifications.webhooks`) signed with
   `X-Tramo-Signature`, with `X-Tramo-Delivery-Id` and `X-Tramo-Event`; five attempts per round
   with exponential backoff from `WEBHOOK_RETRY_DELAY_MS`, then `failed` and dead-lettered. The
-  center sees them in `GET /centers/:id/webhook-deliveries` and asks for one again with
-  `POST .../webhook-deliveries/:deliveryId/redeliver` (a new round; ops can too). Removing the
-  webhook gives up the deliveries still pending. In production only https to public addresses
-  is posted (`WEBHOOK_PRIVATE_TARGETS_ENABLED`); the compose stack points centers at the
-  webhook sink.
+  center sees them in `GET /centers/:id/webhook-deliveries`, with the status or the category
+  of each failure, and asks for one again with `POST .../webhook-deliveries/:deliveryId/redeliver`
+  (a new round; ops can too). A round whose job was lost (no attempt for 15 minutes) can be
+  redelivered too, and a job that fails before posting on its last attempt closes its round.
+  Removing the webhook (idempotent) gives up the deliveries still pending. In production only
+  https to public addresses is posted, checked at configuration and on the address each
+  connection uses (ADR 018); the compose stack points centers at the webhook sink. The audit
+  entry of a configuration keeps the old and new URL, never the secret, and its answer is not
+  cached (`Cache-Control: no-store`).
 
 Known gaps, accepted for now:
 
-- The webhook target is resolved and checked before each attempt but not pinned: DNS rebinding
-  between the check and the connection is the residual risk (ADR 018).
+- Deliveries share the worker's slots: a center whose endpoint stalls for the whole timeout
+  slows the others down. A per-center concurrency cap, or a circuit breaker after several failed
+  rounds, would isolate it.
 - Emails are in English only, and a student who changes address after an email was written
   receives it at the old one.
 - `notification_log` keeps recipients' addresses indefinitely; a retention job would trim it.
