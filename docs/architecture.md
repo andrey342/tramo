@@ -458,7 +458,8 @@ an event of another module; it decides nothing.
   of each failure, and asks for one again with `POST .../webhook-deliveries/:deliveryId/redeliver`
   (a new round; ops can too). A round whose job was lost (no attempt for 15 minutes) can be
   redelivered too, and a job that fails before posting on its last attempt closes its round.
-  Removing the webhook (idempotent) gives up the deliveries still pending. In production only
+  Removing the webhook (idempotent) stops new deliveries; those still pending are given up when
+  their job next runs. In production only
   https to public addresses is posted, checked at configuration and on the address each
   connection uses (ADR 018); the compose stack points centers at the webhook sink. The audit
   entry of a configuration keeps the old and new URL, never the secret, and its answer is not

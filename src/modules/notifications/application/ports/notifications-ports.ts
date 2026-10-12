@@ -14,8 +14,8 @@ export const NOTIFICATIONS_QUERIES = Symbol('NOTIFICATIONS_QUERIES');
 export const WEBHOOK_TARGETS = Symbol('WEBHOOK_TARGETS');
 
 // A post that got no answer, or that was not made: `code` is a category the center may see
-// (`timeout`, `connection_failed`, `dns_failed`, `tls_failed`, `target_not_allowed`), never
-// the error text (which would name internal hosts).
+// (`timeout`, `connection_failed`, `tls_failed`, `target_unreachable` for a name refused or
+// unknown), never the error text (which would name internal hosts).
 export class WebhookPostFailedError extends Error {
   constructor(readonly code: string) {
     super(`Webhook post failed: ${code}`);

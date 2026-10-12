@@ -9,7 +9,7 @@ import { webhookSenderContract } from '../../../../../test/contracts/notificatio
 import { FakeWebhookSender } from '../../../../../test/fakes/notifications';
 import { WebhookPostFailedError } from '../../application/ports/notifications-ports';
 
-import { HttpWebhookSender, isPrivateAddress } from './http-webhook-sender';
+import { HttpWebhookSender, isPrivateAddress, publicLookupWith } from './http-webhook-sender';
 import { HttpWebhookTargets } from './http-webhook-targets';
 
 const NOW = new Date('2026-11-12T08:00:00Z');
@@ -128,7 +128,7 @@ describe('HttpWebhookSender', () => {
     ]) {
       const failure = await post(target);
       expect(failure).toBeInstanceOf(WebhookPostFailedError);
-      expect((failure as WebhookPostFailedError).code).toBe('target_not_allowed');
+      expect((failure as WebhookPostFailedError).code).toBe('target_unreachable');
     }
     expect(received).toEqual([]);
   });
@@ -141,6 +141,30 @@ describe('HttpWebhookSender', () => {
     expect(production.refusal('https://10.0.0.5/hooks')).toMatch(/public/);
     expect(production.refusal('https://center.example/hooks')).toBeNull();
     expect(development.refusal('http://webhook-sink:9099/x')).toBeNull();
+  });
+
+  // The connection uses the address the lookup checked; a private or unknown name fails alike.
+  it('should hand the connection the public address it checked', async () => {
+    const lookupOf = (answer: Error | { address: string; family: number }[]) =>
+      publicLookupWith((_host, _options, callback) => {
+        if (answer instanceof Error) callback(answer, []);
+        else callback(null, answer);
+      });
+    const one = (lookup: ReturnType<typeof lookupOf>) =>
+      new Promise<[Error | null, string]>((resolve) => {
+        lookup('center.example', { all: false }, (error, address) => {
+          resolve([error, typeof address === 'string' ? address : '']);
+        });
+      });
+
+    expect(await one(lookupOf([{ address: '93.184.215.14', family: 4 }]))).toEqual([
+      null,
+      '93.184.215.14',
+    ]);
+    const [privateError] = await one(lookupOf([{ address: '10.0.0.5', family: 4 }]));
+    const [unknownError] = await one(lookupOf(new Error('getaddrinfo ENOTFOUND')));
+    expect((privateError as WebhookPostFailedError).code).toBe('target_unreachable');
+    expect((unknownError as WebhookPostFailedError).code).toBe('target_unreachable');
   });
 
   it.each([
