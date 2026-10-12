@@ -87,13 +87,7 @@ export class BillingCycleProcessor extends QueueProcessor {
     const result = await this.commands.execute(
       new RunBillingCycleCommand(CalendarDate.fromInstant(this.clock.now())),
     );
-    if (result.failedContractIds.length > 0) {
-      this.logger.warn(
-        { contracts: result.failedContractIds },
-        'Plans not billed; the next run retries them',
-      );
-    }
-    return result;
+    return failIfAny(result, result.failedContractIds, 'plans not billed');
   }
 }
 
@@ -110,9 +104,10 @@ export class CollectionProcessor extends QueueProcessor<CollectionJob> {
       );
       return 'requested';
     }
-    return this.commands.execute(
+    const result = await this.commands.execute(
       new CollectDueChargesCommand(CalendarDate.fromInstant(this.clock.now())),
     );
+    return failIfAny(result, result.failedChargeIds, 'charges not submitted');
   }
 }
 
@@ -122,8 +117,11 @@ export class DunningProcessor extends QueueProcessor {
     super();
   }
 
-  protected handle(): Promise<unknown> {
-    return this.commands.execute(new RunDunningCommand(CalendarDate.fromInstant(this.clock.now())));
+  protected async handle(): Promise<unknown> {
+    const result = await this.commands.execute(
+      new RunDunningCommand(CalendarDate.fromInstant(this.clock.now())),
+    );
+    return failIfAny(result, result.failedChargeIds, 'charges not dunned');
   }
 }
 
@@ -138,4 +136,13 @@ export class DeclarationReminderProcessor extends QueueProcessor {
       new SendDeclarationRemindersCommand(CalendarDate.fromInstant(this.clock.now())),
     );
   }
+}
+
+// A run goes on past the items that fail (each rolled back on its own), then fails as a whole:
+// the job shows on the dashboard and is retried, and a retry skips what is done.
+function failIfAny<T>(result: T, failed: readonly string[], what: string): T {
+  if (failed.length > 0) {
+    throw new Error(`${String(failed.length)} ${what}: ${failed.join(', ')}`);
+  }
+  return result;
 }
