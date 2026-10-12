@@ -88,7 +88,7 @@ export function toScheduleDto(plan: FinancingPlan): ScheduleDto {
     return {
       ...common,
       kind: 'installments',
-      installmentsPaid: terms.installmentsPaid,
+      installmentsPaid: terms.paidInstallments.length,
       installments: terms.schedule.map((row) => ({
         number: row.number,
         dueDate: row.dueDate.toString(),
@@ -96,7 +96,7 @@ export function toScheduleDto(plan: FinancingPlan): ScheduleDto {
         interestCents: row.interest.cents,
         totalCents: row.total.cents,
         balanceAfterCents: row.balanceAfter.cents,
-        paid: row.number <= terms.installmentsPaid,
+        paid: terms.paidInstallments.includes(row.number),
       })),
       payoffRequested: terms.payoffRequest && {
         amountCents: terms.payoffRequest.amount.cents,

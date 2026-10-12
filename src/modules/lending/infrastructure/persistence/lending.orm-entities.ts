@@ -36,7 +36,7 @@ export type PlanTermsJson =
       readonly annualRateBps: number;
       readonly termMonths: number;
       readonly schedule: InstallmentRowJson[];
-      readonly installmentsPaid: number;
+      readonly paidInstallments: number[];
       readonly payoffRequest: {
         readonly amountCents: number;
         readonly asOf: string;

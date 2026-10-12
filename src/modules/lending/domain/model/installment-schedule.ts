@@ -80,13 +80,15 @@ export function payoffQuote(input: {
   principal: Money;
   annualRate: Percentage;
   startsOn: CalendarDate;
-  installmentsPaid: number;
+  paidInstallments: readonly number[];
   asOf: CalendarDate;
 }): PayoffQuote {
   const { schedule, asOf } = input;
+  const paid = new Set(input.paidInstallments);
   const due = schedule.filter((row) => !row.dueDate.isAfter(asOf)).length;
-  const overdue = schedule.slice(input.installmentsPaid, due);
-  const settled = Math.max(due, input.installmentsPaid);
+  const overdue = schedule.slice(0, due).filter((row) => !paid.has(row.number));
+  // Instalments are charged when they fall due, so the balance is the one after the last due.
+  const settled = due;
   const balance =
     settled === 0 ? input.principal : (schedule[settled - 1]?.balanceAfter ?? Money.zero());
   const next = schedule[settled];

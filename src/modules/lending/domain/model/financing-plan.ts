@@ -40,8 +40,9 @@ export interface InstallmentPlanTerms {
   readonly annualRate: Percentage;
   readonly termMonths: number;
   readonly schedule: readonly InstallmentRow[];
-  // Paid in order, as billing collects them.
-  readonly installmentsPaid: number;
+  // The numbers of the instalments billing has collected, in any order (a retried one may be
+  // collected after the next).
+  readonly paidInstallments: readonly number[];
   readonly payoffRequest: PayoffRequest | null;
 }
 
@@ -118,7 +119,7 @@ export class FinancingPlan extends AggregateRoot {
           termMonths: product.termMonths,
           firstDueDate: firstDueDate(activatedOn),
         }),
-        installmentsPaid: 0,
+        paidInstallments: [],
         payoffRequest: null,
       };
     } else {
@@ -207,19 +208,24 @@ export class FinancingPlan extends AggregateRoot {
       principal: this.props.principal,
       annualRate: terms.annualRate,
       startsOn: this.props.startsOn,
-      installmentsPaid: terms.installmentsPaid,
+      paidInstallments: terms.paidInstallments,
       asOf,
     });
   }
 
   // The student repays everything on `asOf`, for the amount they were quoted: if it has moved
   // (an instalment fell due, a day of interest accrued) they are told instead of charged another
-  // amount. Billing collects it and settlePayoff then ends the plan. One payoff at a time.
+  // amount. Billing collects it and settlePayoff then ends the plan. One payoff at a time, and
+  // none while an instalment that fell due is unpaid: billing is collecting it already, and the
+  // payoff would charge it twice.
   requestPayoff(asOf: CalendarDate, quotedAmount: Money, now: Date): PayoffQuote {
     const quote = this.payoffQuote(asOf);
     const terms = this.installmentTerms();
     if (terms.payoffRequest) {
       throw new PayoffAlreadyRequestedError();
+    }
+    if (quote.overdueInstallments > 0) {
+      throw new PayoffNotAvailableError('the instalments due are collected first');
     }
     if (!quote.total.equals(quotedAmount)) {
       throw new PayoffQuoteChangedError(quote.total.cents);
@@ -252,21 +258,19 @@ export class FinancingPlan extends AggregateRoot {
     this.complete('paid_off', now);
   }
 
-  // Instalments are paid in order; a repeated notice of one already counted changes nothing.
-  // The last one ends the plan.
+  // As billing collects them, in any order; a repeated notice of one already counted changes
+  // nothing. The plan ends when every instalment is paid.
   recordInstallmentPaid(number: number, now: Date): void {
     const terms = this.installmentTerms();
-    if (number <= terms.installmentsPaid) {
+    if (!Number.isInteger(number) || number < 1 || number > terms.termMonths) {
+      throw new InvalidValueError('installment', `The plan has no instalment ${String(number)}.`);
+    }
+    if (terms.paidInstallments.includes(number)) {
       return;
     }
-    if (number !== terms.installmentsPaid + 1) {
-      throw new InvalidValueError(
-        'installment',
-        `Instalment ${String(number)} cannot be paid before instalment ${String(terms.installmentsPaid + 1)}.`,
-      );
-    }
-    this.props = { ...this.props, terms: { ...terms, installmentsPaid: number } };
-    if (number === terms.termMonths) {
+    const paidInstallments = [...terms.paidInstallments, number].sort((a, b) => a - b);
+    this.props = { ...this.props, terms: { ...terms, paidInstallments } };
+    if (paidInstallments.length === terms.termMonths) {
       this.complete('repaid', now);
     }
   }

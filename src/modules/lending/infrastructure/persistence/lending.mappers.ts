@@ -241,7 +241,7 @@ function planTermsFromJson(json: PlanTermsJson): FinancingPlan['terms'] {
       annualRate: Percentage.fromBasisPoints(json.annualRateBps),
       termMonths: json.termMonths,
       schedule: json.schedule.map(rowFromJson),
-      installmentsPaid: json.installmentsPaid,
+      paidInstallments: json.paidInstallments,
       payoffRequest: json.payoffRequest && {
         amount: Money.fromCents(json.payoffRequest.amountCents),
         asOf: CalendarDate.parse(json.payoffRequest.asOf),
@@ -281,7 +281,7 @@ function planTermsToJson(plan: FinancingPlan): PlanTermsJson {
         totalCents: row.total.cents,
         balanceAfterCents: row.balanceAfter.cents,
       })),
-      installmentsPaid: terms.installmentsPaid,
+      paidInstallments: [...terms.paidInstallments],
       payoffRequest: terms.payoffRequest && {
         amountCents: terms.payoffRequest.amount.cents,
         asOf: terms.payoffRequest.asOf.toString(),
