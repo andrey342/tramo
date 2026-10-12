@@ -5,6 +5,7 @@ const validEnv = {
   REDIS_URL: 'redis://localhost:6379',
   JWT_ACCESS_SECRET: 'a'.repeat(32),
   FIELD_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+  ESIGN_WEBHOOK_SECRET: 'e'.repeat(32),
 };
 
 describe('parseConfig', () => {
@@ -65,6 +66,12 @@ describe('parseConfig', () => {
         FIELD_ENCRYPTION_KEY: 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
       }),
     ).toThrow(/FIELD_ENCRYPTION_KEY/);
+    expect(() =>
+      parseConfig({
+        ...production,
+        ESIGN_WEBHOOK_SECRET: 'local-esign-webhook-secret-change-me-0123456789',
+      }),
+    ).toThrow(/ESIGN_WEBHOOK_SECRET/);
     expect(
       parseConfig({
         ...validEnv,

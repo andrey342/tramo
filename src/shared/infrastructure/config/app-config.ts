@@ -47,6 +47,10 @@ export interface AppConfig {
     readonly providers: 'simulated';
     readonly simulatedLatency: { readonly minMs: number; readonly maxMs: number };
   };
+  readonly lending: {
+    readonly providers: 'simulated';
+    readonly esignWebhookSecret: string;
+  };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -93,6 +97,7 @@ const PUBLISHED_SECRETS = {
   JWT_ACCESS_SECRET: (value: string) => /change-me/i.test(value),
   BULL_BOARD_PASSWORD: (value: string | undefined) => value === 'tramo-queues',
   FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
+  ESIGN_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
 } as const;
 
 function assertProductionSettings(env: Env): void {
@@ -106,6 +111,9 @@ function assertProductionSettings(env: Env): void {
       : undefined,
     PUBLISHED_SECRETS.FIELD_ENCRYPTION_KEY(env.FIELD_ENCRYPTION_KEY)
       ? 'FIELD_ENCRYPTION_KEY'
+      : undefined,
+    PUBLISHED_SECRETS.ESIGN_WEBHOOK_SECRET(env.ESIGN_WEBHOOK_SECRET)
+      ? 'ESIGN_WEBHOOK_SECRET'
       : undefined,
   ].filter((name) => name !== undefined);
   const problems = published.map(
@@ -162,6 +170,10 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     verification: {
       providers: env.VERIFICATION_PROVIDERS,
       simulatedLatency: env.SIMULATED_PROVIDER_LATENCY_MS,
+    },
+    lending: {
+      providers: env.LENDING_PROVIDERS,
+      esignWebhookSecret: env.ESIGN_WEBHOOK_SECRET,
     },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
