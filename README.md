@@ -88,24 +88,25 @@ missing variable stops the process with a message naming it. A local `.env` is l
 but real environment variables always win. All variables and their defaults are in
 [`.env.example`](.env.example); the main ones:
 
-| Variable                                                                    | Purpose                                                                                                                                                                                                         |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                                              | Postgres connection string                                                                                                                                                                                      |
-| `REDIS_URL`                                                                 | Redis connection string                                                                                                                                                                                         |
-| `PORT`, `WORKER_HEALTH_PORT`                                                | HTTP ports of the api and of the worker health endpoint                                                                                                                                                         |
-| `LOG_LEVEL`, `LOG_PRETTY`                                                   | Pino level; pretty output for local runs only                                                                                                                                                                   |
-| `CORS_ORIGINS`                                                              | Comma-separated allowlist                                                                                                                                                                                       |
-| `SWAGGER_ENABLED`                                                           | Serve `/docs` (default on, off when `NODE_ENV=production`)                                                                                                                                                      |
-| `DATABASE_RUN_MIGRATIONS`                                                   | Apply pending migrations when the api starts                                                                                                                                                                    |
-| `JWT_ACCESS_SECRET`                                                         | HS256 key for access tokens (32+ characters, required). With `NODE_ENV=production` the published development value is refused                                                                                   |
-| `FIELD_ENCRYPTION_KEY`                                                      | AES-256 key (32 bytes, base64) for encrypted columns such as payout IBANs (ADR 014). The published development value is refused in production                                                                   |
-| `VERIFICATION_PROVIDERS`, `SIMULATED_PROVIDER_LATENCY_MS`                   | Applicant checks (KYC, employment history, credit bureau): only `simulated` exists, and a production process refuses to start with it; how long they take to answer, `min-max` ms                               |
-| `VIES_MODE`, `VIES_TIMEOUT_MS`                                              | VAT checks of training centers: `live` (VIES), `test` (its test service: only 100 valid and 200 invalid, any other number answers as an outage) or `fake` (same table, offline); production accepts only `live` |
-| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                          | Session lifetimes (15 minutes, 30 days)                                                                                                                                                                         |
-| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                        | Progressive lockout after failed sign-ins                                                                                                                                                                       |
-| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                 | Rate limits per client and proxy setting                                                                                                                                                                        |
-| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_ENQUEUE_TIMEOUT_MS` | Worker outbox publisher pacing                                                                                                                                                                                  |
-| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                                | Basic auth for `/admin/queues`; no password disables it                                                                                                                                                         |
+| Variable                                                                    | Purpose                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                              | Postgres connection string                                                                                                                                                                                                               |
+| `REDIS_URL`                                                                 | Redis connection string                                                                                                                                                                                                                  |
+| `PORT`, `WORKER_HEALTH_PORT`                                                | HTTP ports of the api and of the worker health endpoint                                                                                                                                                                                  |
+| `LOG_LEVEL`, `LOG_PRETTY`                                                   | Pino level; pretty output for local runs only                                                                                                                                                                                            |
+| `CORS_ORIGINS`                                                              | Comma-separated allowlist                                                                                                                                                                                                                |
+| `SWAGGER_ENABLED`                                                           | Serve `/docs` (default on, off when `NODE_ENV=production`)                                                                                                                                                                               |
+| `DATABASE_RUN_MIGRATIONS`                                                   | Apply pending migrations when the api starts                                                                                                                                                                                             |
+| `JWT_ACCESS_SECRET`                                                         | HS256 key for access tokens (32+ characters, required). With `NODE_ENV=production` the published development value is refused                                                                                                            |
+| `FIELD_ENCRYPTION_KEY`                                                      | AES-256 key (32 bytes, base64) for encrypted columns such as payout IBANs (ADR 014). The published development value is refused in production                                                                                            |
+| `VERIFICATION_PROVIDERS`, `SIMULATED_PROVIDER_LATENCY_MS`                   | Applicant checks (KYC, employment history, credit bureau): only `simulated` exists, and a production process refuses to start with it; how long they take to answer, `min-max` ms                                                        |
+| `LENDING_PROVIDERS`, `ESIGN_WEBHOOK_SECRET`                                 | E-signature provider and bank: only `simulated` exists (an IBAN ending in 0000 bounces), refused in production; HMAC key of the provider's callbacks to `/webhooks/esign` (32+ characters; the published value is refused in production) |
+| `VIES_MODE`, `VIES_TIMEOUT_MS`                                              | VAT checks of training centers: `live` (VIES), `test` (its test service: only 100 valid and 200 invalid, any other number answers as an outage) or `fake` (same table, offline); production accepts only `live`                          |
+| `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                          | Session lifetimes (15 minutes, 30 days)                                                                                                                                                                                                  |
+| `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                        | Progressive lockout after failed sign-ins                                                                                                                                                                                                |
+| `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                 | Rate limits per client and proxy setting                                                                                                                                                                                                 |
+| `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_ENQUEUE_TIMEOUT_MS` | Worker outbox publisher pacing                                                                                                                                                                                                           |
+| `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                                | Basic auth for `/admin/queues`; no password disables it                                                                                                                                                                                  |
 
 ## Testing
 
@@ -141,7 +142,7 @@ Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 | `iam`         | Accounts, sessions, roles, center API keys                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                     |
 | `catalog`     | Training centers, VAT verification, programs and their financing options  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                |
 | `origination` | Financing applications, verification saga, risk policies and scoring      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies` |
-| `lending`     | Contracts, e-signature, disbursement to the center and the repayment plan |                                                                                                                     |
+| `lending`     | Contracts, e-signature, disbursement to the center and the repayment plan | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements`, `/webhooks/esign`     |
 
 ## API overview
 
@@ -181,6 +182,23 @@ force and approved, sent to the ops review queue (`GET /ops/applications/review-
 rejected. The providers are simulated and answer deterministically from the national id: one
 ending in 9 fails identity verification, one ending in 7 is in a default registry. Applications
 nobody touches for 14 days expire, except those waiting for an analyst.
+
+An approved offer shows the monthly instalment and the TAE (`terms`). Accepting it hands it to
+lending, which draws up the contract and sends it for signature; then:
+
+```bash
+pnpm api:call POST '/applications/<id>/accept-offer' --as student
+pnpm api:call GET /contracts --as student
+pnpm esign:sign <contractId>
+pnpm api:call GET '/contracts/<contractId>/schedule' --as student
+pnpm api:call POST '/contracts/<contractId>/payoff-quote' '{}' --as student
+```
+
+`pnpm esign:sign` plays the student signing at the (simulated) provider: it posts the signed
+callback to `POST /webhooks/esign`. The worker then pays the center the price less its platform
+fee, and once the transfer settles the contract is active and its instalment table is drawn
+(ADR 016). A center whose IBAN ends in 0000 has its transfer bounced: ops see it in
+`GET /ops/disbursements?status=failed` and send it again with `POST /ops/disbursements/:id/retry`.
 
 Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
 progressively after five failed attempts.
@@ -225,7 +243,8 @@ docker compose exec postgres psql -U tramo -d tramo -f /docker-entrypoint-initdb
 
 ## Roadmap
 
-- Lending (contracts, disbursement, repayment plans), billing and dunning, notifications and
+- Billing (mandates, cycles, collection and dunning, ISA income declarations), notifications and
   reporting.
-- Real KYC, employment history and credit bureau providers behind the existing ports.
+- Real KYC, employment history, credit bureau, e-signature and bank providers behind the
+  existing ports.
 - Seed data, an end-to-end demo script and an API collection.

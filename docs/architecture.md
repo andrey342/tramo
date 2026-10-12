@@ -25,23 +25,24 @@ flowchart LR
 
 ## Decision records
 
-| ADR                                                                           | Title                                                          | Status   |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------- | -------- |
-| [001](adr/001-modular-monolith.md)                                            | Modular monolith with separate api and worker processes        | accepted |
-| [002](adr/002-hexagonal-ddd-cqrs.md)                                          | Hexagonal modules with tactical DDD and CQRS                   | accepted |
-| [003](adr/003-typeorm-data-mapper-and-unit-of-work.md)                        | TypeORM as a data mapper, unit of work through CLS             | accepted |
-| [004](adr/004-transactional-outbox-bullmq.md)                                 | Transactional outbox, BullMQ delivery, idempotent consumers    | accepted |
-| [005](adr/005-money-as-integer-cents.md)                                      | Money as integer cents, rates as basis points                  | accepted |
-| [006](adr/006-problem-details-errors.md)                                      | RFC 9457 Problem Details for every error response              | accepted |
-| [007](adr/007-testcontainers.md)                                              | Integration and e2e tests against real Postgres and Redis      | accepted |
-| [008](adr/008-schema-per-module.md)                                           | One Postgres schema per module, no foreign keys across schemas | accepted |
-| [009](adr/009-clock-port.md)                                                  | Time comes from an injectable Clock                            | accepted |
-| [010](adr/010-uri-versioning-cursor-pagination.md)                            | URI versioning and cursor pagination                           | accepted |
-| [011](adr/011-versioned-agent-tooling.md)                                     | Versioned coding-agent tooling                                 | accepted |
-| [012](adr/012-toolchain-nest12-commonjs-jest.md)                              | NestJS 12 on CommonJS, TypeScript 6 and Jest                   | accepted |
-| [013](adr/013-advisory-locks-for-session-families-and-startup-migrations.md)  | Advisory locks for session families and startup migrations     | accepted |
-| [014](adr/014-field-level-encryption-for-payout-ibans-and-webhook-secrets.md) | Field-level encryption for payout IBANs and webhook secrets    | accepted |
-| [015](adr/015-explainable-scoring-with-versioned-risk-policies.md)            | Explainable scoring with versioned risk policies               | accepted |
+| ADR                                                                                        | Title                                                                    | Status   |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | -------- |
+| [001](adr/001-modular-monolith.md)                                                         | Modular monolith with separate api and worker processes                  | accepted |
+| [002](adr/002-hexagonal-ddd-cqrs.md)                                                       | Hexagonal modules with tactical DDD and CQRS                             | accepted |
+| [003](adr/003-typeorm-data-mapper-and-unit-of-work.md)                                     | TypeORM as a data mapper, unit of work through CLS                       | accepted |
+| [004](adr/004-transactional-outbox-bullmq.md)                                              | Transactional outbox, BullMQ delivery, idempotent consumers              | accepted |
+| [005](adr/005-money-as-integer-cents.md)                                                   | Money as integer cents, rates as basis points                            | accepted |
+| [006](adr/006-problem-details-errors.md)                                                   | RFC 9457 Problem Details for every error response                        | accepted |
+| [007](adr/007-testcontainers.md)                                                           | Integration and e2e tests against real Postgres and Redis                | accepted |
+| [008](adr/008-schema-per-module.md)                                                        | One Postgres schema per module, no foreign keys across schemas           | accepted |
+| [009](adr/009-clock-port.md)                                                               | Time comes from an injectable Clock                                      | accepted |
+| [010](adr/010-uri-versioning-cursor-pagination.md)                                         | URI versioning and cursor pagination                                     | accepted |
+| [011](adr/011-versioned-agent-tooling.md)                                                  | Versioned coding-agent tooling                                           | accepted |
+| [012](adr/012-toolchain-nest12-commonjs-jest.md)                                           | NestJS 12 on CommonJS, TypeScript 6 and Jest                             | accepted |
+| [013](adr/013-advisory-locks-for-session-families-and-startup-migrations.md)               | Advisory locks for session families and startup migrations               | accepted |
+| [014](adr/014-field-level-encryption-for-payout-ibans-and-webhook-secrets.md)              | Field-level encryption for payout IBANs and webhook secrets              | accepted |
+| [015](adr/015-explainable-scoring-with-versioned-risk-policies.md)                         | Explainable scoring with versioned risk policies                         | accepted |
+| [016](adr/016-french-amortisation-with-per-row-rounding-and-calendar-month-isa-periods.md) | French amortisation with per-row rounding and calendar-month ISA periods | accepted |
 
 ## HTTP pipeline
 
@@ -233,4 +234,70 @@ sequenceDiagram
   Worker->>Outbox: third answer: scoring; consumer scores with the policy in force
   Worker->>Outbox: approved | needs_review | rejected + event
   Student->>Api: GET /applications/:id/decision
+```
+
+## Lending
+
+Contracts drawn up from accepted offers, their signature, the payment to the training center and
+the repayment plan.
+
+- **Contract.** `draft → sent_for_signature → signed → active → completed`; a contract not yet
+  signed is cancelled when the student declines or the envelope expires (`defaulted` comes with
+  billing's dunning). One per accepted offer (unique application id). Its terms are fixed when it
+  is drawn up: the principal (the program price), the center's platform fee at that moment, and
+  the product as accepted (term and TIN, or the ISA's share, threshold, payments, cap and grace).
+- **Signature.** `ContractCreated` → a job renders the contract text (`GET
+/contracts/:id/document`), hashes it (SHA-256) and sends the envelope to the e-signature
+  provider. The provider calls back on `POST /webhooks/esign`, authenticated by
+  `X-Esign-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<raw body>">` (`ESIGN_WEBHOOK_SECRET`),
+  checked in a guard before the body is parsed; a signature older than five minutes is refused,
+  so a captured callback cannot be replayed later. A completed envelope must carry the hash of the
+  document sent, or the signature is refused (`signature_mismatch`). Repeated callbacks change
+  nothing.
+- **Disbursement.** `ContractSigned` → one disbursement per contract of the principal less the
+  platform fee, `pending → sent → settled | failed`. A job reads the center's payout account
+  through catalog's public query at that moment (a corrected IBAN is used on a retry) and asks the
+  bank for the transfer outside any transaction, with the idempotency key
+  `<disbursementId>.<attempt>`: a repeated call never pays twice. `DisbursementSent` queues a check
+  of the settlement, retried with backoff for about three days while the bank says pending. A
+  bounced transfer, an inactive center or one without a payout account fails the disbursement;
+  ops see it in `GET /ops/disbursements?status=failed` and send it again with `POST
+/ops/disbursements/:id/retry` (audited), a new attempt with a new key.
+- **Activation and plan.** `DisbursementSettled` activates the contract on that day;
+  `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
+  the ISA terms with their running totals. `PlanCompleted` completes the contract.
+- **Payoff.** For instalments, `POST /contracts/:id/payoff-quote` gives what repaying everything
+  costs today or on a day in the coming month; `POST /contracts/:id/payoff` takes today's quote
+  (the amount must match, or `payoff_quote_changed`) and records it (`PayoffRequested`); billing
+  collects it and the plan ends as `paid_off`.
+- **Who sees what.** The student sees the contract, its document, schedule and payoff; the center
+  (its admins, or an API key with `portfolio:read`) sees the contract and what it is paid, not the
+  repayment; staff see everything. The student does not see the platform fee.
+- **Providers.** E-signature and bank are ports with simulated adapters: the envelope id derives
+  from the contract, and transfers to an IBAN ending in 0000 bounce (`account_closed`).
+  `pnpm esign:sign <contractId>` plays the student signing. A production process refuses to start
+  with them.
+
+Known gaps, accepted for now:
+
+- Nothing collects a payoff or an instalment yet: billing does, from its mandate and cycle.
+- An ISA cannot be paid off early; the cap is its limit.
+
+```mermaid
+sequenceDiagram
+  participant Student
+  participant Api as api
+  participant Worker as worker
+  participant ESign as e-signature provider
+  participant Bank as bank
+  Student->>Api: POST /applications/:id/accept-offer
+  Api->>Worker: OfferAccepted (outbox)
+  Worker->>Worker: draw up the contract; ContractCreated
+  Worker->>ESign: send envelope (document + SHA-256)
+  ESign->>Api: POST /webhooks/esign (signed callback)
+  Api->>Worker: ContractSigned (outbox)
+  Worker->>Bank: transfer principal − fee (key <disbursementId>.<attempt>)
+  Worker->>Bank: settled? (retried while pending)
+  Worker->>Worker: DisbursementSettled → contract active → plan opened
+  Student->>Api: GET /contracts/:id/schedule
 ```
