@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 
+import { EmailProcessor, WebhookDeliveryProcessor } from './infrastructure/jobs/notifications-jobs';
 import { NotificationsModule } from './notifications.module';
 
-// What only the worker runs for notifications: processors of the module's own queues.
+// What only the worker runs for notifications: the processors that send emails and post webhooks.
 @Module({
   imports: [NotificationsModule],
-  providers: [],
+  providers: [EmailProcessor, WebhookDeliveryProcessor],
 })
 export class NotificationsWorkerModule {}
