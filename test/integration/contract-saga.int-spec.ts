@@ -80,10 +80,17 @@ describe('contract saga (integration)', () => {
     await app.close();
   });
 
+  const INSTALLMENTS: OfferAcceptedPayload['product'] = {
+    kind: 'installments',
+    termMonths: 12,
+    annualRateBasisPoints: 900,
+  };
+
   // A center paid into `iban`, a 12 week program of it, and the OfferAccepted origination would
-  // leave in the outbox for 6,000 in 12 monthly instalments at 9 %.
+  // leave in the outbox for 6,000 (by default in 12 monthly instalments at 9 %).
   async function acceptOffer(
     iban: string,
+    product: OfferAcceptedPayload['product'] = INSTALLMENTS,
   ): Promise<{ applicationId: string; center: TrainingCenter }> {
     const center = anActiveTrainingCenter({ feePercent: 5 });
     center.changePayoutIban(unwrap(Iban.create(iban)), NOW);
@@ -97,7 +104,7 @@ describe('contract saga (integration)', () => {
       programId: program.id,
       programName: 'Full Stack Bootcamp',
       amountCents: 6_000_00,
-      product: { kind: 'installments', termMonths: 12, annualRateBasisPoints: 900 },
+      product,
     };
     await uow.run(async () => {
       await centers.save(center);
@@ -167,6 +174,32 @@ describe('contract saga (integration)', () => {
     expect(plan?.terms.kind).toBe('installments');
     const signatures = app.get<Queue>(getQueueToken(QueueNames.SIGNATURES));
     expect(await (await signatures.getJob(`${active!.id}.send`))?.isCompleted()).toBe(true);
+  }, 60_000);
+
+  it('should open the plan of an income share agreement as offered', async () => {
+    const { applicationId } = await acceptOffer(OPEN_IBAN, {
+      kind: 'isa',
+      incomeShareBasisPoints: 1_000,
+      minMonthlyIncomeCents: 1_500_00,
+      maxPayments: 36,
+      capMultiplierHundredths: 150,
+      graceMonths: 3,
+    });
+    const sent = await until(contractOf(applicationId), (contract) => {
+      expect(contract?.status).toBe('sent_for_signature');
+    });
+    await sign(sent!);
+
+    const plan = await until(
+      () => plans.findByContractId(sent!.id),
+      (found) => {
+        expect(found).not.toBeNull();
+      },
+    );
+
+    expect(sent?.terms.product).toMatchObject({ kind: 'isa', capMultiplierHundredths: 150 });
+    expect(plan?.terms).toMatchObject({ kind: 'isa', maxPayments: 36 });
+    expect(plan?.terms.kind === 'isa' && plan.terms.cap.cents).toBe(9_000_00);
   }, 60_000);
 
   it('should fail a transfer to a closed account and pay the corrected one on retry', async () => {

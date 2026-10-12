@@ -47,7 +47,8 @@ export class DrawUpContractOnOfferAccepted implements EventHandler<OfferAccepted
   }
 }
 
-function toOffer(payload: OfferAcceptedPayload): AcceptedOffer {
+// Exported for its spec: the one place an origination event becomes a lending input.
+export function toOffer(payload: OfferAcceptedPayload): AcceptedOffer {
   const { product } = payload;
   return {
     applicationId: payload.applicationId,
