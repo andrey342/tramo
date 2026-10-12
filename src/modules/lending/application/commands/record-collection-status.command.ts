@@ -1,0 +1,56 @@
+import { Inject } from '@nestjs/common';
+import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
+
+import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
+
+import { CONTRACT_REPOSITORY, type ContractRepository } from '../../domain';
+
+// What billing's dunning says about a contract: a charge 30 days overdue (ContractInArrears),
+// nothing in arrears after a payment (ArrearsCleared), or a charge written off after 90 days
+// (ChargeWrittenOff), which defaults the contract.
+export type CollectionStatus = 'in_arrears' | 'current' | 'defaulted';
+
+export class RecordCollectionStatusCommand extends Command<void> {
+  constructor(
+    readonly contractId: string,
+    readonly status: CollectionStatus,
+  ) {
+    super();
+  }
+}
+
+@CommandHandler(RecordCollectionStatusCommand)
+export class RecordCollectionStatusHandler implements ICommandHandler<RecordCollectionStatusCommand> {
+  constructor(
+    @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
+    @Inject(CONTRACT_REPOSITORY) private readonly contracts: ContractRepository,
+    @Inject(CLOCK) private readonly clock: Clock,
+  ) {}
+
+  async execute(command: RecordCollectionStatusCommand): Promise<void> {
+    await this.uow.run(async () => {
+      const contract = await this.contracts.findById(command.contractId);
+      if (!contract) {
+        throw new EntityNotFoundError('Contract', command.contractId);
+      }
+      const before = contract.status;
+      const now = this.clock.now();
+      switch (command.status) {
+        case 'in_arrears':
+          contract.markInArrears(now);
+          break;
+        case 'current':
+          contract.clearArrears(now);
+          break;
+        case 'defaulted':
+          contract.declareDefault(now);
+          break;
+      }
+      // Transitions are idempotent: a redelivery finds the status already set.
+      if (contract.status !== before) {
+        await this.contracts.save(contract);
+      }
+    });
+  }
+}

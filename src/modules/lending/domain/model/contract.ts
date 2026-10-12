@@ -277,16 +277,17 @@ export class Contract extends AggregateRoot {
   // A charge has been overdue for 30 days. Billing announces it (ContractInArrears) and owns the
   // dunning; the contract only reflects it, so it records no event of its own. Idempotent.
   markInArrears(now: Date): void {
-    if (this.props.status === 'in_arrears') {
+    if (this.props.status === 'in_arrears' || this.hasEnded) {
       return;
     }
     this.assertStatus('active', 'in_arrears');
     this.moveTo('in_arrears', now);
   }
 
-  // Nothing is overdue any more. Idempotent.
+  // Nothing is overdue any more. Idempotent. The arrears of a contract that has ended (completed
+  // with a charge still overdue, or defaulted) no longer change it.
   clearArrears(now: Date): void {
-    if (this.props.status === 'active') {
+    if (this.props.status === 'active' || this.hasEnded) {
       return;
     }
     this.assertStatus('in_arrears', 'active');
@@ -335,6 +336,10 @@ export class Contract extends AggregateRoot {
         centerId: this.props.centerId,
       },
     });
+  }
+
+  private get hasEnded(): boolean {
+    return this.props.status === 'completed' || this.props.status === 'defaulted';
   }
 
   private assertStatus(expected: ContractStatus, target: ContractStatus): void {

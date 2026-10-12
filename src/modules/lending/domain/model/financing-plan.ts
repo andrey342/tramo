@@ -250,7 +250,11 @@ export class FinancingPlan extends AggregateRoot {
     return quote;
   }
 
+  // Idempotent: a redelivered payment finds the plan paid off.
   settlePayoff(now: Date): void {
+    if (this.props.completionReason === 'paid_off') {
+      return;
+    }
     const terms = this.installmentTerms();
     if (!terms.payoffRequest) {
       throw new PayoffNotAvailableError('no payoff was requested');

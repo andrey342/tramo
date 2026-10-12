@@ -11,6 +11,8 @@ import { DrawUpContractHandler } from './application/commands/draw-up-contract.c
 import { ExecuteDisbursementHandler } from './application/commands/execute-disbursement.command';
 import { OpenFinancingPlanHandler } from './application/commands/open-financing-plan.command';
 import { ReconcileDisbursementHandler } from './application/commands/reconcile-disbursement.command';
+import { RecordCollectionStatusHandler } from './application/commands/record-collection-status.command';
+import { RecordRepaymentHandler } from './application/commands/record-repayment.command';
 import { RecordSignatureEventHandler } from './application/commands/record-signature-event.command';
 import { RequestDisbursementHandler } from './application/commands/request-disbursement.command';
 import { RequestPayoffHandler } from './application/commands/request-payoff.command';
@@ -34,6 +36,12 @@ import { CONTRACT_REPOSITORY, DISBURSEMENT_REPOSITORY, FINANCING_PLAN_REPOSITORY
 import { CatalogContractingDirectory } from './infrastructure/adapters/catalog-contracting-directory';
 import { SimulatedBankTransferProvider } from './infrastructure/adapters/simulated-bank-transfer-provider';
 import { SimulatedESignatureProvider } from './infrastructure/adapters/simulated-esignature-provider';
+import {
+  ClearArrearsOnArrearsCleared,
+  DefaultOnChargeWrittenOff,
+  MarkInArrearsOnContractInArrears,
+  RecordRepaymentOnChargePaid,
+} from './infrastructure/consumers/collection.consumers';
 import {
   ActivateOnDisbursementSettled,
   CheckSettlementOnDisbursementSent,
@@ -119,6 +127,8 @@ function simulated<T>(config: AppConfig, provider: T): T {
     FindContractHandler,
     ListBillablePlansHandler,
     AssessIsaPeriodHandler,
+    RecordRepaymentHandler,
+    RecordCollectionStatusHandler,
     LendingJobs,
     DrawUpContractOnOfferAccepted,
     SendForSignatureOnContractCreated,
@@ -129,6 +139,10 @@ function simulated<T>(config: AppConfig, provider: T): T {
     ActivateOnDisbursementSettled,
     OpenPlanOnContractActivated,
     CompleteContractOnPlanCompleted,
+    RecordRepaymentOnChargePaid,
+    MarkInArrearsOnContractInArrears,
+    ClearArrearsOnArrearsCleared,
+    DefaultOnChargeWrittenOff,
   ],
   exports: [CONTRACT_REPOSITORY, DISBURSEMENT_REPOSITORY, FINANCING_PLAN_REPOSITORY],
 })
