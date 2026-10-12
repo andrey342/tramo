@@ -66,7 +66,7 @@ export function billingRepositoriesContract(
 
       await expect(
         run(() => charges.save(aCharge({ contractId: charge.contractId }))),
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({ code: 'concurrent_charge' });
     });
 
     it('should find what collection, dunning and the end of a plan work on', async () => {
@@ -93,6 +93,15 @@ export function billingRepositoriesContract(
       expect((await run(() => charges.findScheduledIds(contractId))).sort()).toEqual(
         [due.id, later.id].sort(),
       );
+      expect(
+        await run(() => charges.findDueIds(day('2026-12-31'), 1_000, null, contractId)),
+      ).toEqual([due.id, later.id].sort());
+      expect(await run(() => charges.findDueIds(day('2026-12-31'), 1_000, null, uuidv7()))).toEqual(
+        [],
+      );
+      expect(await run(() => charges.findUnsettledIds(1_000, null, contractId))).toEqual(
+        [due.id, later.id, collecting.id].sort(),
+      );
       const page = await run(() => charges.findUnsettledIds(1, null));
       const next = await run(() => charges.findUnsettledIds(1, page[0] ?? null));
       expect(next[0]! > page[0]!).toBe(true);
@@ -113,6 +122,39 @@ export function billingRepositoriesContract(
       expect(await run(() => charges.hasOtherChargesInArrears(contractId, inArrears.id))).toBe(
         false,
       );
+    });
+
+    it('should tell whether a payoff of the contract is scheduled or being collected', async () => {
+      const { charges, run } = await create();
+      const [payingOff, refusedPayoff] = [uuidv7(), uuidv7()];
+      const payoff = aCharge({ contractId: payingOff, kind: 'payoff', reference: 'payoff:1' });
+      payoff.submitCollection(uuidv7(), NOW);
+      const refused = aCharge({ contractId: refusedPayoff, kind: 'payoff', reference: 'payoff:2' });
+      refused.recordFailed(
+        refused.submitCollection(uuidv7(), NOW),
+        'refused',
+        day('2026-11-12'),
+        NOW,
+      );
+      await run(async () => {
+        await charges.save(payoff);
+        await charges.save(refused);
+        await charges.save(aCharge({ contractId: refusedPayoff }));
+      });
+
+      expect(await run(() => charges.hasPayoffInCollection(payingOff))).toBe(true);
+      expect(await run(() => charges.hasPayoffInCollection(refusedPayoff))).toBe(false);
+      await run(() => charges.lockContract(payingOff));
+    });
+
+    it('should refuse a second mandate in force for a contract', async () => {
+      const { mandates, run } = await create();
+      const first = aMandate();
+      await run(() => mandates.save(first));
+
+      await expect(
+        run(() => mandates.save(aMandate({ contractId: first.contractId }))),
+      ).rejects.toMatchObject({ code: 'concurrent_modification' });
     });
 
     it('should store mandates and find the one in force', async () => {
@@ -151,7 +193,7 @@ export function billingRepositoriesContract(
             aDeclaration({ contractId: declaration.contractId, period: '2026-10' }),
           ),
         ),
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({ code: 'income_already_declared' });
     });
 
     it('should list the charges of a contract newest first, a page at a time', async () => {

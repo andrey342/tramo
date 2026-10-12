@@ -15,6 +15,7 @@ import {
 } from '../../src/modules/billing/application/ports/billing-ports';
 import {
   type Charge,
+  ConcurrentChargeError,
   type ChargeRepository,
   type IncomeDeclaration,
   IncomeAlreadyDeclaredError,
@@ -41,19 +42,51 @@ export class InMemoryChargeRepository
     );
   }
 
-  findDueIds(asOf: CalendarDate, limit: number, afterId: string | null): Promise<string[]> {
+  findDueIds(
+    asOf: CalendarDate,
+    limit: number,
+    afterId: string | null,
+    contractId: string | null = null,
+  ): Promise<string[]> {
     return Promise.resolve(
       this.ids(
-        (charge) => charge.status === 'scheduled' && !charge.dueDate.isAfter(asOf),
+        (charge) =>
+          charge.status === 'scheduled' &&
+          !charge.dueDate.isAfter(asOf) &&
+          (!contractId || charge.contractId === contractId),
         afterId,
       ).slice(0, limit),
     );
   }
 
-  findUnsettledIds(limit: number, afterId: string | null): Promise<string[]> {
+  findUnsettledIds(
+    limit: number,
+    afterId: string | null,
+    contractId: string | null = null,
+  ): Promise<string[]> {
     return Promise.resolve(
-      this.ids((charge) => !SETTLED.includes(charge.status), afterId).slice(0, limit),
+      this.ids(
+        (charge) =>
+          !SETTLED.includes(charge.status) && (!contractId || charge.contractId === contractId),
+        afterId,
+      ).slice(0, limit),
     );
+  }
+
+  hasPayoffInCollection(contractId: string): Promise<boolean> {
+    return Promise.resolve(
+      this.all().some(
+        (charge) =>
+          charge.contractId === contractId &&
+          charge.kind === 'payoff' &&
+          (charge.status === 'scheduled' || charge.status === 'pending'),
+      ),
+    );
+  }
+
+  // One test, one worker: nothing runs at the same time.
+  lockContract(): Promise<void> {
+    return Promise.resolve();
   }
 
   findScheduledIds(contractId: string): Promise<string[]> {
@@ -74,7 +107,7 @@ export class InMemoryChargeRepository
   override async save(charge: Charge): Promise<void> {
     const twin = await this.findByReference(charge.contractId, charge.reference);
     if (twin && twin.id !== charge.id) {
-      throw new ConcurrentModificationError('Charge', charge.id);
+      throw new ConcurrentChargeError(charge.reference);
     }
     await super.save(charge);
   }
@@ -98,6 +131,14 @@ export class InMemoryPaymentMandateRepository
         (mandate) => mandate.contractId === contractId && mandate.status === 'active',
       ) ?? null,
     );
+  }
+
+  override async save(mandate: PaymentMandate): Promise<void> {
+    const active = await this.findActiveByContract(mandate.contractId);
+    if (mandate.status === 'active' && active && active.id !== mandate.id) {
+      throw new ConcurrentModificationError('PaymentMandate', mandate.id);
+    }
+    await super.save(mandate);
   }
 }
 

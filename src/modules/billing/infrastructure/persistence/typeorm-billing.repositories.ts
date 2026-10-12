@@ -3,7 +3,7 @@ import { TransactionHost } from '@nestjs-cls/transactional';
 import { type TransactionalAdapterTypeOrm } from '@nestjs-cls/transactional-adapter-typeorm';
 import { In, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 
-import { type CalendarDate } from '@shared/domain';
+import { type CalendarDate, ConcurrentModificationError } from '@shared/domain';
 import {
   AggregatePersister,
   isUniqueViolation,
@@ -48,13 +48,19 @@ export class TypeOrmChargeRepository implements ChargeRepository {
   }
 
   // Served by ix_billing_charges_scheduled_due_date.
-  async findDueIds(asOf: CalendarDate, limit: number, afterId: string | null): Promise<string[]> {
+  async findDueIds(
+    asOf: CalendarDate,
+    limit: number,
+    afterId: string | null,
+    contractId: string | null = null,
+  ): Promise<string[]> {
     const rows = await this.txHost.tx.find(ChargeOrmEntity, {
       select: { id: true },
       where: {
         status: 'scheduled',
         dueDate: LessThanOrEqual(asOf.toString()),
         ...(afterId ? { id: MoreThan(afterId) } : {}),
+        ...(contractId ? { contractId } : {}),
       },
       order: { id: 'ASC' },
       take: limit,
@@ -63,12 +69,17 @@ export class TypeOrmChargeRepository implements ChargeRepository {
   }
 
   // Served by ix_billing_charges_unsettled.
-  async findUnsettledIds(limit: number, afterId: string | null): Promise<string[]> {
+  async findUnsettledIds(
+    limit: number,
+    afterId: string | null,
+    contractId: string | null = null,
+  ): Promise<string[]> {
     const rows = await this.txHost.tx.find(ChargeOrmEntity, {
       select: { id: true },
       where: {
         status: Not(In([...SETTLED])),
         ...(afterId ? { id: MoreThan(afterId) } : {}),
+        ...(contractId ? { contractId } : {}),
       },
       order: { id: 'ASC' },
       take: limit,
@@ -95,6 +106,19 @@ export class TypeOrmChargeRepository implements ChargeRepository {
         dunningStep: MoreThan(ARREARS_STEP),
       },
     });
+  }
+
+  async hasPayoffInCollection(contractId: string): Promise<boolean> {
+    return this.txHost.tx.exists(ChargeOrmEntity, {
+      where: { contractId, kind: 'payoff', status: In(['scheduled', 'pending']) },
+    });
+  }
+
+  // A transaction-scoped advisory lock on the contract id, released at commit or rollback.
+  async lockContract(contractId: string): Promise<void> {
+    await this.txHost.tx.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+      `billing.contract:${contractId}`,
+    ]);
   }
 
   async save(charge: Charge): Promise<void> {
@@ -130,13 +154,21 @@ export class TypeOrmPaymentMandateRepository implements PaymentMandateRepository
     return row ? this.mapper.toDomain(row) : null;
   }
 
+  // Two mandates signed at once for one contract: the second finds the first in force.
   async save(mandate: PaymentMandate): Promise<void> {
-    await this.persister.save(
-      PaymentMandateOrmEntity,
-      mandate,
-      this.mapper.toRow(mandate),
-      'PaymentMandate',
-    );
+    try {
+      await this.persister.save(
+        PaymentMandateOrmEntity,
+        mandate,
+        this.mapper.toRow(mandate),
+        'PaymentMandate',
+      );
+    } catch (error) {
+      if (isUniqueViolation(error, 'ux_billing_payment_mandates_active_contract_id')) {
+        throw new ConcurrentModificationError('PaymentMandate', mandate.id);
+      }
+      throw error;
+    }
   }
 }
 

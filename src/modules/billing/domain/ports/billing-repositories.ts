@@ -12,14 +12,30 @@ export interface ChargeRepository {
   findById(id: string): Promise<Charge | null>;
   // Charges are unique per contract and reference (`installment:3`, `isa:2026-07`).
   findByReference(contractId: string, reference: string): Promise<Charge | null>;
-  // Ids of scheduled charges due on or before `asOf`, to collect.
-  findDueIds(asOf: CalendarDate, limit: number, afterId: string | null): Promise<string[]>;
-  // Ids of charges dunning still acts on: not paid, written off or cancelled.
-  findUnsettledIds(limit: number, afterId: string | null): Promise<string[]>;
+  // Ids of scheduled charges due on or before `asOf`, to collect; of one contract when given.
+  findDueIds(
+    asOf: CalendarDate,
+    limit: number,
+    afterId: string | null,
+    contractId?: string | null,
+  ): Promise<string[]>;
+  // Ids of charges dunning still acts on: not paid, written off or cancelled; of one contract
+  // when given.
+  findUnsettledIds(
+    limit: number,
+    afterId: string | null,
+    contractId?: string | null,
+  ): Promise<string[]>;
   // Scheduled charges of a contract, cancelled when its plan ends.
   findScheduledIds(contractId: string): Promise<string[]>;
   // Whether a contract has charges in arrears other than `exceptChargeId`.
   hasOtherChargesInArrears(contractId: string, exceptChargeId: string): Promise<boolean>;
+  // Whether a payoff of the contract is scheduled or being collected: it covers what is left,
+  // so nothing else of the contract is collected meanwhile.
+  hasPayoffInCollection(contractId: string): Promise<boolean>;
+  // Serialises, until the end of the transaction, the work that decides whether a contract is in
+  // arrears: two payments of one contract cannot both see the other still unpaid.
+  lockContract(contractId: string): Promise<void>;
   save(charge: Charge): Promise<void>;
 }
 
