@@ -237,6 +237,28 @@ export function lendingRepositoriesContract(
       });
     });
 
+    // A payoff being collected covers what is left; the cycle bills nothing else meanwhile.
+    it('should leave out a plan whose payoff is being collected, and narrow to one contract', async () => {
+      const { contracts, plans, queries, run } = await create();
+      const [payingOff, other] = [anActiveContract(), anActiveContract()];
+      const plan = aPlan({ contractId: payingOff.id });
+      plan.recordInstallmentPaid(1, LATER);
+      const payoffDay = CalendarDate.parse('2026-11-20');
+      plan.requestPayoff(payoffDay, plan.payoffQuote(payoffDay).total, LATER);
+      await run(async () => {
+        await contracts.save(payingOff);
+        await contracts.save(other);
+        await plans.save(plan);
+        await plans.save(aPlan({ contractId: other.id }));
+      });
+
+      const narrowed = await run(() => queries.billablePlans(null, 50, payingOff.id));
+      const onlyOther = await run(() => queries.billablePlans(null, 50, other.id));
+
+      expect(narrowed).toEqual([]);
+      expect(onlyOther.map((billable) => billable.contractId)).toEqual([other.id]);
+    });
+
     it('should list disbursements by status', async () => {
       const { contracts, disbursements, queries, run } = await create();
       const [paid, bounced] = [anActiveContract(), anActiveContract()];

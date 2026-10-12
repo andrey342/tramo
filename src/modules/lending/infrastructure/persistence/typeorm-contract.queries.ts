@@ -81,6 +81,7 @@ export class TypeOrmContractQueries implements ContractQueries {
   async billablePlans(
     afterContractId: string | null,
     limit: number,
+    contractId: string | null = null,
   ): Promise<readonly BillablePlanDto[]> {
     const query = this.txHost.tx
       .getRepository(FinancingPlanOrmEntity)
@@ -89,10 +90,15 @@ export class TypeOrmContractQueries implements ContractQueries {
       .addSelect('contract.status', 'contract_status')
       .where(`plan.status = 'active'`)
       .andWhere(`contract.status IN ('active', 'in_arrears')`)
+      // A payoff being collected covers what is left: nothing more is billed meanwhile.
+      .andWhere(`COALESCE(plan.terms -> 'payoffRequest', 'null'::jsonb) = 'null'::jsonb`)
       .orderBy('plan.contract_id', 'ASC')
       .limit(limit);
     if (afterContractId) {
       query.andWhere('plan.contract_id > :afterContractId', { afterContractId });
+    }
+    if (contractId) {
+      query.andWhere('plan.contract_id = :contractId', { contractId });
     }
     const { entities, raw } = await query.getRawAndEntities<{
       contract_status: 'active' | 'in_arrears';

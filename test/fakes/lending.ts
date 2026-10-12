@@ -126,11 +126,14 @@ export class InMemoryContractQueries implements ContractQueries {
   async billablePlans(
     afterContractId: string | null,
     limit: number,
+    contractId: string | null = null,
   ): Promise<readonly BillablePlanDto[]> {
     const billable: BillablePlanDto[] = [];
     const plans = this.plans
       .all()
       .filter((plan) => plan.status === 'active')
+      .filter((plan) => !contractId || plan.contractId === contractId)
+      .filter((plan) => plan.terms.kind !== 'installments' || plan.terms.payoffRequest === null)
       .filter((plan) => !afterContractId || plan.contractId > afterContractId)
       .sort((a, b) => a.contractId.localeCompare(b.contractId));
     for (const plan of plans) {

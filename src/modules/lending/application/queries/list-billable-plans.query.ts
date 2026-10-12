@@ -9,6 +9,6 @@ export class ListBillablePlansHandler implements IQueryHandler<ListBillablePlans
   constructor(@Inject(CONTRACT_QUERIES) private readonly queries: ContractQueries) {}
 
   execute(query: ListBillablePlansQuery): Promise<readonly BillablePlanDto[]> {
-    return this.queries.billablePlans(query.afterContractId, query.limit);
+    return this.queries.billablePlans(query.afterContractId, query.limit, query.contractId);
   }
 }

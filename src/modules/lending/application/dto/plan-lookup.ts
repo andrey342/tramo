@@ -20,11 +20,13 @@ export interface BillablePlanDto {
 }
 
 // Part of the module's public surface: billing's monthly cycle walks the plans being repaid
-// (contract active or in arrears, plan not ended), a page at a time in contract id order.
+// (contract active or in arrears, plan not ended, no payoff being collected), a page at a time
+// in contract id order; `contractId` narrows it to one contract.
 export class ListBillablePlansQuery extends Query<readonly BillablePlanDto[]> {
   constructor(
     readonly afterContractId: string | null,
     readonly limit: number,
+    readonly contractId: string | null = null,
   ) {
     super();
   }

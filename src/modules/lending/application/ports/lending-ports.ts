@@ -72,6 +72,11 @@ export interface ContractQueries {
     filter: DisbursementFilter,
     page: PageRequest,
   ): Promise<CursorPage<DisbursementDto>>;
-  // Plans being repaid (plan active, contract active or in arrears), in contract id order.
-  billablePlans(afterContractId: string | null, limit: number): Promise<readonly BillablePlanDto[]>;
+  // Plans being repaid (plan active, contract active or in arrears, no payoff being collected),
+  // in contract id order; one contract only when given.
+  billablePlans(
+    afterContractId: string | null,
+    limit: number,
+    contractId?: string | null,
+  ): Promise<readonly BillablePlanDto[]>;
 }
