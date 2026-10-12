@@ -6,7 +6,7 @@ import { CLOCK, type Clock } from '@shared/domain';
 
 import { CHARGE_REPOSITORY, type ChargeRepository } from '../../domain';
 
-// A plan ended (paid off) or its contract defaulted: charges not yet in collection are no longer
+// A plan was paid off or its contract defaulted: charges not yet in collection are no longer
 // owed. Those being collected are left to the provider's answer.
 export class CancelScheduledChargesCommand extends Command<number> {
   constructor(readonly contractId: string) {

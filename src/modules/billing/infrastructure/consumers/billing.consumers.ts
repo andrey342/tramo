@@ -52,13 +52,17 @@ export class ChargeOnPayoffRequested implements EventHandler<PayoffRequestedPayl
   }
 }
 
+// Only a payoff makes the charges still scheduled unowed: a plan that ends on its last
+// instalment, its cap or its last ISA payment ends with that charge, which is still collected.
 @Injectable()
 @EventSubscriber({ event: LendingEvents.PlanCompleted, consumer: 'billing.close-plan' })
 export class CancelChargesOnPlanCompleted implements EventHandler<PlanCompletedPayload> {
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<PlanCompletedPayload>): Promise<void> {
-    await this.commands.execute(new CancelScheduledChargesCommand(event.payload.contractId));
+    if (event.payload.reason === 'paid_off') {
+      await this.commands.execute(new CancelScheduledChargesCommand(event.payload.contractId));
+    }
   }
 }
 
