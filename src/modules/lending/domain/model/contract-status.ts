@@ -3,6 +3,7 @@ export const CONTRACT_STATUSES = [
   'sent_for_signature',
   'signed',
   'active',
+  'in_arrears',
   'completed',
   'defaulted',
   'cancelled',

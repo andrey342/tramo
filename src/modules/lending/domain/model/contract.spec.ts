@@ -224,6 +224,48 @@ describe('Contract', () => {
       expect(eventTypes(contract)).toEqual([LendingEvents.ContractCompleted]);
     });
 
+    it('should go into arrears and out of them, idempotently and without events', () => {
+      const contract = anActiveContract();
+
+      contract.markInArrears(LATER);
+      contract.markInArrears(LATER);
+      expect(contract.status).toBe('in_arrears');
+      contract.clearArrears(LATER);
+      contract.clearArrears(LATER);
+
+      expect(contract.status).toBe('active');
+      expect(eventTypes(contract)).toEqual([]);
+      expect(() => {
+        aSignedContract().markInArrears(LATER);
+      }).toThrow(InvalidStateTransitionError);
+    });
+
+    it('should default from active or in arrears, once, and announce it', () => {
+      const contract = anActiveContract();
+      contract.markInArrears(LATER);
+
+      contract.declareDefault(LATER);
+      contract.declareDefault(LATER);
+
+      expect(contract.status).toBe('defaulted');
+      expect(eventTypes(contract)).toEqual([LendingEvents.ContractDefaulted]);
+      expect(() => {
+        aSignedContract().declareDefault(LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        contract.complete(LATER);
+      }).toThrow(InvalidStateTransitionError);
+    });
+
+    it('should be completed while in arrears when its plan ends', () => {
+      const contract = anActiveContract();
+      contract.markInArrears(LATER);
+
+      contract.complete(LATER);
+
+      expect(contract.status).toBe('completed');
+    });
+
     it('should not be activated before it is signed', () => {
       expect(() => {
         aContractSentForSignature().activate(NOW);

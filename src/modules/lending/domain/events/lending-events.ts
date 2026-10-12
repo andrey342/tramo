@@ -8,6 +8,7 @@ export const LendingEvents = {
   ContractCancelled: 'ContractCancelled',
   ContractActivated: 'ContractActivated',
   ContractCompleted: 'ContractCompleted',
+  ContractDefaulted: 'ContractDefaulted',
   DisbursementRequested: 'DisbursementRequested',
   DisbursementSent: 'DisbursementSent',
   DisbursementSettled: 'DisbursementSettled',
@@ -64,6 +65,13 @@ export type ContractActivatedPayload = {
 };
 
 export type ContractCompletedPayload = {
+  readonly contractId: string;
+  readonly studentId: string;
+  readonly centerId: string;
+};
+
+// Ops take over the debt.
+export type ContractDefaultedPayload = {
   readonly contractId: string;
   readonly studentId: string;
   readonly centerId: string;

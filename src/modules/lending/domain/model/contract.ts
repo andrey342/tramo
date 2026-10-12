@@ -52,7 +52,9 @@ export interface ContractProps {
 //
 //   draft → sent_for_signature → signed → active → completed
 //   draft | sent_for_signature → cancelled        (the student declined, or never signed)
-//   active → defaulted                            (billing, after dunning runs out)
+//   active ⇄ in_arrears                           (billing: a charge 30 days overdue, then paid)
+//   active | in_arrears → defaulted               (billing, after dunning runs out)
+//   in_arrears → completed                        (the plan ended while a charge was overdue)
 //
 // Signing starts the disbursement to the center; the contract is active once the center is paid.
 export class Contract extends AggregateRoot {
@@ -272,12 +274,55 @@ export class Contract extends AggregateRoot {
     });
   }
 
+  // A charge has been overdue for 30 days. Billing announces it (ContractInArrears) and owns the
+  // dunning; the contract only reflects it, so it records no event of its own. Idempotent.
+  markInArrears(now: Date): void {
+    if (this.props.status === 'in_arrears') {
+      return;
+    }
+    this.assertStatus('active', 'in_arrears');
+    this.moveTo('in_arrears', now);
+  }
+
+  // Nothing is overdue any more. Idempotent.
+  clearArrears(now: Date): void {
+    if (this.props.status === 'active') {
+      return;
+    }
+    this.assertStatus('in_arrears', 'active');
+    this.moveTo('active', now);
+  }
+
+  // Dunning ran out (90 days overdue): the debt goes to ops and collections. Idempotent.
+  declareDefault(now: Date): void {
+    if (this.props.status === 'defaulted') {
+      return;
+    }
+    if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {
+      throw new InvalidStateTransitionError('Contract', this.props.status, 'defaulted');
+    }
+    this.moveTo('defaulted', now);
+    this.record({
+      eventType: LendingEvents.ContractDefaulted,
+      aggregateType: 'Contract',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        contractId: this.id,
+        studentId: this.props.studentId,
+        centerId: this.props.centerId,
+      },
+    });
+  }
+
   // The plan has ended: repaid, paid off, or for an ISA its cap, payments or window reached.
   complete(now: Date): void {
     if (this.props.status === 'completed') {
       return;
     }
-    this.assertStatus('active', 'completed');
+    if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {
+      throw new InvalidStateTransitionError('Contract', this.props.status, 'completed');
+    }
     this.moveTo('completed', now);
     this.record({
       eventType: LendingEvents.ContractCompleted,
