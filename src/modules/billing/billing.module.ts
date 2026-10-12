@@ -5,6 +5,7 @@ import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import { CancelOpenChargesHandler } from './application/commands/cancel-open-charges.command';
 import { CollectDueChargesHandler } from './application/commands/collect-due-charges.command';
+import { CollectWaitingChargesHandler } from './application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeHandler } from './application/commands/create-payoff-charge.command';
 import { DeclareIncomeHandler } from './application/commands/declare-income.command';
 import { ExecuteChargeCollectionHandler } from './application/commands/execute-charge-collection.command';
@@ -110,6 +111,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     DeclareIncomeHandler,
     RunBillingCycleHandler,
     CollectDueChargesHandler,
+    CollectWaitingChargesHandler,
     ExecuteChargeCollectionHandler,
     RecordPaymentResultHandler,
     RunDunningHandler,

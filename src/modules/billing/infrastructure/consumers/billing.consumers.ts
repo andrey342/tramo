@@ -11,7 +11,7 @@ import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shar
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
-import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
+import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
 import {
   BillingEvents,
@@ -43,7 +43,8 @@ export class CollectOnChargeSubmitted implements EventHandler<ChargeSubmittedPay
   }
 }
 
-// Charges due while the contract had no mandate wait scheduled; the new one collects them.
+// Charges due while the contract had no mandate wait, scheduled or in dunning; the new one
+// collects them.
 @Injectable()
 @EventSubscriber({ event: BillingEvents.MandateSigned, consumer: 'billing.collect-on-mandate' })
 export class CollectOnMandateSigned implements EventHandler<MandateSignedPayload> {
@@ -51,9 +52,9 @@ export class CollectOnMandateSigned implements EventHandler<MandateSignedPayload
 
   async handle(event: IntegrationEvent<MandateSignedPayload>): Promise<void> {
     await this.commands.execute(
-      new CollectDueChargesCommand(
-        CalendarDate.fromInstant(new Date(event.occurredAt)),
+      new CollectWaitingChargesCommand(
         event.payload.contractId,
+        CalendarDate.fromInstant(new Date(event.occurredAt)),
       ),
     );
   }

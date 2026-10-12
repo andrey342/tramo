@@ -9,7 +9,7 @@ import { type IntegrationEvent } from '@shared/application';
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
-import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
+import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { BillingEvents } from '../../domain';
 
 import { CancelChargesOnPlanCompleted, CollectOnMandateSigned } from './billing.consumers';
@@ -55,7 +55,7 @@ describe('CollectOnMandateSigned', () => {
     const commands = {
       execute: (command: unknown) => {
         executed.push(command);
-        return Promise.resolve({ submitted: 0, failedChargeIds: [] });
+        return Promise.resolve(0);
       },
     } as unknown as CommandBus;
     const contractId = uuidv7();
@@ -76,7 +76,7 @@ describe('CollectOnMandateSigned', () => {
     });
 
     expect(executed).toEqual([
-      new CollectDueChargesCommand(CalendarDate.parse('2026-11-20'), contractId),
+      new CollectWaitingChargesCommand(contractId, CalendarDate.parse('2026-11-20')),
     ]);
   });
 });
