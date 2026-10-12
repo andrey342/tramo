@@ -36,7 +36,9 @@ void withConnections(async ({ db, redis, queues }) => {
   const entries: Entry[] = [];
   const events = await outboxEvents(db, entries);
   await queueJobs(redis, queues, events, entries);
-  await workJobs(redis, queues, entries);
+  // The jobs of the aggregate, and of the aggregates its events name (a contract's disbursement).
+  const related = new Set([id, ...events.map((event) => event.aggregate_id)]);
+  for (const subject of related) await workJobs(redis, queues, subject, entries);
   await processedMarks(db, events, entries);
   await auditEntries(db, entries);
   await emails(entries);
@@ -125,12 +127,19 @@ async function queueJobs(
 
 // Jobs of a module's own work queues are keyed by the aggregate itself: a center's VAT check
 // (`catalog.vat-checks:<centerId>`), an application's verifications
-// (`origination.verifications:<applicationId>.<provider>`), and their dead letters.
-async function workJobs(redis: Redis, queues: Map<string, Queue>, entries: Entry[]): Promise<void> {
+// (`origination.verifications:<applicationId>.<provider>`), a contract's signature
+// (`lending.signatures:<contractId>.send`), a disbursement's transfers and settlement checks
+// (`lending.disbursements:<disbursementId>.<attempt>.<step>`), and their dead letters.
+async function workJobs(
+  redis: Redis,
+  queues: Map<string, Queue>,
+  subject: string,
+  entries: Entry[],
+): Promise<void> {
   const keys = [
-    ...(await scan(redis, `${QUEUE_PREFIX}:*:${id}`)),
-    ...(await scan(redis, `${QUEUE_PREFIX}:*:${id}.*`)),
-    ...(await scan(redis, `${QUEUE_PREFIX}:dead-letter:*.${id}*`)),
+    ...(await scan(redis, `${QUEUE_PREFIX}:*:${subject}`)),
+    ...(await scan(redis, `${QUEUE_PREFIX}:*:${subject}.*`)),
+    ...(await scan(redis, `${QUEUE_PREFIX}:dead-letter:*.${subject}*`)),
   ];
   for (const key of new Set(keys)) {
     const match = /^[^:]+:([^:]+):([^:]+)$/.exec(key);
