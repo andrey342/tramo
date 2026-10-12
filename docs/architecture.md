@@ -43,6 +43,7 @@ flowchart LR
 | [014](adr/014-field-level-encryption-for-payout-ibans-and-webhook-secrets.md)              | Field-level encryption for payout IBANs and webhook secrets              | accepted |
 | [015](adr/015-explainable-scoring-with-versioned-risk-policies.md)                         | Explainable scoring with versioned risk policies                         | accepted |
 | [016](adr/016-french-amortisation-with-per-row-rounding-and-calendar-month-isa-periods.md) | French amortisation with per-row rounding and calendar-month ISA periods | accepted |
+| [017](adr/017-billing-applies-lendings-isa-rules-through-a-public-command.md)              | Billing applies lending's ISA rules through a public command             | accepted |
 
 ## HTTP pipeline
 
@@ -270,6 +271,11 @@ the repayment plan.
   a corrected IBAN is used). A disbursement whose jobs ran out stays `pending` or `sent`; ops
   reconcile it with `POST /ops/disbursements/:id/reconcile`, which sends a pending attempt again
   with its key or asks the bank about a sent one. Both are audited.
+- **Repayment.** Billing collects (see Billing) and lending follows it: `ChargePaid` marks an
+  instalment paid (in any order: a retried one may come after the next) or settles a payoff;
+  `ContractInArrears` and `ArrearsCleared` move the contract into and out of `in_arrears`;
+  `ChargeWrittenOff` defaults it (`ContractDefaulted`). A payoff is refused while an instalment
+  due is unpaid, since billing is already collecting it.
 - **Activation and plan.** `DisbursementSettled` activates the contract on that day;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
   the ISA terms with their running totals, assessed month by month without gaps. `PlanCompleted`
@@ -289,8 +295,6 @@ the repayment plan.
 
 Known gaps, accepted for now:
 
-- Nothing collects a payoff or an instalment yet: billing does, from its mandate and cycle, and
-  tells the plan what was paid.
 - An ISA cannot be paid off early; the cap is its limit.
 - The envelope request carries the student's id only; a real provider needs their name and email,
   read through a public query of iam when one is wired in. Cancelling a contract does not void the
@@ -316,4 +320,71 @@ sequenceDiagram
   Worker->>Bank: settled? (retried while pending)
   Worker->>Worker: DisbursementSettled → contract active → plan opened
   Student->>Api: GET /contracts/:id/schedule
+```
+
+## Billing
+
+Collection of what students owe: SEPA direct debit mandates, the monthly cycle, collection
+through a payment provider, dunning, ISA income declarations and the account statement.
+
+- **Mandate.** The student authorises the debit of a contract from an account
+  (`POST /contracts/:id/mandate`, from signature on); the IBAN is encrypted and bound to its row
+  (ADR 014) and shown masked. A new mandate revokes the one in force.
+- **Cycle.** `billing.cycle` on the 1st at 03:00 UTC, or `POST /ops/billing/run?asOf=` for a
+  demo or a catch-up: for every plan being repaid (`ListBillablePlansQuery` of lending), a
+  charge for each instalment falling due by the end of the month, and for an ISA each month of
+  income that has ended, assessed by the rules of lending on the income declared (ADR 017) and
+  due on the 5th of the next month. Charges are unique per contract and reference
+  (`installment:3`, `isa:2026-07`, `payoff:<plan>`): a second run creates nothing. One plan
+  per transaction; the run reports the plans it could not bill.
+- **Collection.** Every morning (`billing.collect`) the charges due are submitted under the
+  mandate in force: each attempt has its key, `<chargeId>.<attempt>`, and records the mandate
+  it uses, so a repeated provider call sends the same request and is never collected twice. The
+  provider accepts at once and answers later on `POST /webhooks/psp`, signed like the
+  e-signature callbacks (`PSP_WEBHOOK_SECRET`), echoing the key; the answer is audited and a
+  repeated one writes nothing. A charge without a mandate stays scheduled and dunning chases it.
+- **Dunning.** Every morning (`billing.dunning`), or `POST /ops/dunning/run?asOf=`, every
+  charge not settled moves through the steps it has reached, each applied once: a reminder three
+  days before (`ChargeDueSoon`), a notice the day after (`ChargeOverdue`, the charge
+  `overdue`), collection retried at 3 and 7 days, a second notice at 15, arrears at 30
+  (`ContractInArrears`, the contract `in_arrears` and its center told) and at 90 the charge
+  written off and the contract defaulted. A payment that leaves nothing of the contract in
+  arrears clears them (`ArrearsCleared`). A charge being collected waits for the answer. Ops
+  collect a charge again with `POST /charges/:id/retry`.
+- **ISA declarations.** `POST /contracts/:id/income-declarations`, one per month that has
+  started; the amount stays in billing (events say only that a month was declared). On the 25th
+  students who have not declared the month are reminded once (`IncomeDeclarationDue`).
+- **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once;
+  when it is paid the plan ends and the charges not yet in collection are cancelled. Those of a
+  defaulted contract are too.
+- **Statement.** `GET /contracts/:id/statement`: a projection of the charge events (charge,
+  payment, write-off, cancellation), one line per event, with the running balance; charges in
+  `GET /contracts/:id/charges`. The student and staff see them; centers see their portfolio in
+  aggregate.
+- **Provider.** Simulated: deterministic by key, it answers `SIMULATED_PSP_DELAY_MS` later
+  through a queue the worker posts from (`PSP_CALLBACK_URL`), refusing amounts that end in 13
+  cents (`insufficient_funds`). A production process refuses to start with it.
+
+Known gaps, accepted for now:
+
+- A charge whose provider never answers stays pending; dunning waits for it and ops look at it.
+- Income declarations come from the student only; the employment history provider could confirm
+  them (`source: employment_provider`).
+- A charge written off counts towards an ISA cap; it only happens with the default, after which
+  the plan is no longer billed.
+
+```mermaid
+sequenceDiagram
+  participant Ops as cycle (1st) / ops
+  participant Billing as billing (worker)
+  participant Lending as lending
+  participant PSP as payment provider
+  participant Api as api
+  Ops->>Billing: run the cycle as of a day
+  Billing->>Lending: ListBillablePlansQuery; AssessIsaPeriodCommand (same transaction)
+  Billing->>Billing: charges; collect what is due under the mandate (ChargeSubmitted)
+  Billing->>PSP: collect (key <chargeId>.<attempt>)
+  PSP->>Api: POST /webhooks/psp (signed, echoes the key)
+  Api->>Lending: ChargePaid (outbox): instalment paid, payoff settled
+  Ops->>Billing: dunning: notices, retries, arrears at 30 days, default at 90
 ```
