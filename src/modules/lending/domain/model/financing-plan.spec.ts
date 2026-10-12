@@ -102,6 +102,7 @@ describe('FinancingPlan', () => {
       plan.pullEvents();
 
       plan.settlePayoff(LATER);
+      plan.settlePayoff(LATER);
 
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'paid_off' });
       expect(eventTypes(plan)).toEqual([LendingEvents.PlanCompleted]);
