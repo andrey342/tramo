@@ -32,6 +32,11 @@ x-app: &app
     PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:-local-psp-webhook-secret-change-me-0123456789}
     # The worker reaches the api by its service name, whatever .env says for local runs.
     PSP_CALLBACK_URL: http://api:3000
+    # Emails to Mailpit (UI on :8025), and webhooks to the sink by its service name.
+    SMTP_HOST: mailpit
+    SMTP_PORT: 1025
+    EMAIL_FROM: ${EMAIL_FROM:-Tramo <no-reply@tramo.test>}
+    WEBHOOK_RETRY_DELAY_MS: ${WEBHOOK_RETRY_DELAY_MS:-30000}
     BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-ops}
     # Default only when unset; an empty value in .env disables the dashboard.
     BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD-tramo-queues}

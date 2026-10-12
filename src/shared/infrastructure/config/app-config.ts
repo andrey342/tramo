@@ -61,6 +61,21 @@ export interface AppConfig {
     // Whether ops may run billing as of a day still to come (the demo walks the months).
     readonly futureRunsEnabled: boolean;
   };
+  readonly notifications: {
+    readonly smtp: {
+      readonly host: string;
+      readonly port: number;
+      readonly secure: boolean;
+      readonly user: string | undefined;
+      readonly password: string | undefined;
+    };
+    readonly emailFrom: string;
+    readonly webhooks: {
+      readonly timeoutMs: number;
+      readonly retryDelayMs: number;
+      readonly privateTargetsEnabled: boolean;
+    };
+  };
   readonly outbox: {
     readonly enabled: boolean;
     readonly pollIntervalMs: number;
@@ -197,6 +212,21 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       pspCallbackUrl: env.PSP_CALLBACK_URL,
       simulatedPspDelayMs: env.SIMULATED_PSP_DELAY_MS,
       futureRunsEnabled: env.BILLING_FUTURE_RUNS_ENABLED ?? env.NODE_ENV !== 'production',
+    },
+    notifications: {
+      smtp: {
+        host: env.SMTP_HOST,
+        port: env.SMTP_PORT,
+        secure: env.SMTP_SECURE,
+        user: env.SMTP_USER,
+        password: env.SMTP_PASSWORD,
+      },
+      emailFrom: env.EMAIL_FROM,
+      webhooks: {
+        timeoutMs: env.WEBHOOK_TIMEOUT_MS,
+        retryDelayMs: env.WEBHOOK_RETRY_DELAY_MS,
+        privateTargetsEnabled: env.WEBHOOK_PRIVATE_TARGETS_ENABLED ?? env.NODE_ENV !== 'production',
+      },
     },
     outbox: {
       enabled: env.OUTBOX_PUBLISHER_ENABLED,
