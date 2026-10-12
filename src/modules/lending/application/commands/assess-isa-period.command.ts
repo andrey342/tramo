@@ -30,9 +30,10 @@ export class AssessIsaPeriodHandler implements ICommandHandler<AssessIsaPeriodCo
       if (assessment.outcome !== 'not_started') {
         await this.plans.save(plan);
       }
+      const planEnded = plan.status !== 'active';
       return assessment.outcome === 'charge'
-        ? { outcome: 'charge', amountCents: assessment.amount.cents }
-        : assessment;
+        ? { outcome: 'charge', amountCents: assessment.amount.cents, planEnded }
+        : { ...assessment, planEnded };
     });
   }
 }

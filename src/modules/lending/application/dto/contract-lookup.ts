@@ -8,6 +8,9 @@ export interface ContractLookupDto {
   readonly centerId: string;
   readonly product: 'installments' | 'isa';
   readonly status: ContractStatus;
+  // ISA only: the first month of income not assessed yet, as YYYY-MM; a declaration for an
+  // earlier month comes too late.
+  readonly nextIsaPeriod: string | null;
 }
 
 // Part of the module's public surface: billing checks whose contract a mandate or an income

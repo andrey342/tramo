@@ -30,11 +30,14 @@ export class ListBillablePlansQuery extends Query<readonly BillablePlanDto[]> {
   }
 }
 
-export type IsaAssessmentDto =
+// `planEnded`: the month assessed ended the plan (its cap, its last payment or its window);
+// there is nothing more to assess.
+export type IsaAssessmentDto = (
   | { readonly outcome: 'charge'; readonly amountCents: number }
   | { readonly outcome: 'paused'; readonly reason: 'no_declaration' | 'below_threshold' }
   | { readonly outcome: 'not_started' }
-  | { readonly outcome: 'ended' };
+  | { readonly outcome: 'ended' }
+) & { readonly planEnded: boolean };
 
 // Part of the module's public surface: billing hands lending the income declared for one month
 // of an ISA (null when none was) and charges what lending's rules make of it. Run inside

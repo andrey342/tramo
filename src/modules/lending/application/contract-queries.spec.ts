@@ -247,7 +247,7 @@ describe('lending queries', () => {
       const t = setup();
       const contract = anActiveContract();
       await t.contracts.save(contract);
-      const handler = new FindContractHandler(t.contracts);
+      const handler = new FindContractHandler(t.contracts, t.plans);
 
       expect(await handler.execute(new FindContractQuery(contract.id))).toEqual({
         id: contract.id,
@@ -255,8 +255,42 @@ describe('lending queries', () => {
         centerId: contract.centerId,
         product: 'installments',
         status: 'active',
+        nextIsaPeriod: null,
       });
       expect(await handler.execute(new FindContractQuery(uuidv7()))).toBeNull();
+    });
+
+    it('should tell billing the next month of income an ISA has not assessed', async () => {
+      const t = setup();
+      const contract = anActiveContract({ terms: { product: anIsa() } });
+      await t.contracts.save(contract);
+      await t.plans.save(
+        aPlan({ contractId: contract.id, product: anIsa(), activatedOn: '2026-01-05' }),
+      );
+      const assess = new AssessIsaPeriodHandler(new InlineUnitOfWork(), t.plans, t.clock);
+      await assess.execute(new AssessIsaPeriodCommand(contract.id, '2026-07', 2_000_00));
+
+      const found = await new FindContractHandler(t.contracts, t.plans).execute(
+        new FindContractQuery(contract.id),
+      );
+
+      expect(found?.nextIsaPeriod).toBe('2026-08');
+    });
+
+    // The only payment the ISA allows: July ends the plan, and billing stops walking its months.
+    it('should tell billing when the month assessed ends the plan', async () => {
+      const t = setup();
+      const product = anIsa({ maxPayments: 1 });
+      const contract = anActiveContract({ terms: { product } });
+      await t.contracts.save(contract);
+      await t.plans.save(aPlan({ contractId: contract.id, product, activatedOn: '2026-01-05' }));
+      const handler = new AssessIsaPeriodHandler(new InlineUnitOfWork(), t.plans, t.clock);
+
+      const july = await handler.execute(
+        new AssessIsaPeriodCommand(contract.id, '2026-07', 2_000_00),
+      );
+
+      expect(july).toEqual({ outcome: 'charge', amountCents: 200_00, planEnded: true });
     });
 
     // 10 % of the 2,000 declared for July 2026, the first month of the plan.
@@ -279,9 +313,9 @@ describe('lending queries', () => {
         new AssessIsaPeriodCommand(contract.id, '2026-08', null),
       );
 
-      expect(before).toEqual({ outcome: 'not_started' });
-      expect(july).toEqual({ outcome: 'charge', amountCents: 200_00 });
-      expect(august).toEqual({ outcome: 'paused', reason: 'no_declaration' });
+      expect(before).toEqual({ outcome: 'not_started', planEnded: false });
+      expect(july).toEqual({ outcome: 'charge', amountCents: 200_00, planEnded: false });
+      expect(august).toEqual({ outcome: 'paused', reason: 'no_declaration', planEnded: false });
       const plan = await t.plans.findByContractId(contract.id);
       expect(plan?.terms.kind === 'isa' && plan.terms.paymentsMade).toBe(1);
       await expect(
