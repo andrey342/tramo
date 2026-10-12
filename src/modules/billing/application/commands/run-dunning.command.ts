@@ -22,9 +22,9 @@ export interface DunningResult {
 
 // The daily dunning run, as of a day (for one contract, when given): every charge not settled
 // moves through the steps of the timeline it has reached (Charge.applyDunning), and the retries
-// it calls for are submitted when the contract has a mandate and no payoff in collection. Each
-// charge in its own transaction, under the contract's lock; steps already applied are not
-// applied again, so the run can repeat.
+// it calls for are submitted when the contract has a mandate. A contract paying off is not
+// dunned: the payoff covers its charges. Each charge in its own transaction, under the
+// contract's lock; steps already applied are not applied again, so the run can repeat.
 export class RunDunningCommand extends Command<DunningResult> {
   constructor(
     readonly asOf: CalendarDate,
@@ -77,13 +77,13 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
       // Arrears are decided under the contract's lock, then on the charge as it is now.
       await this.charges.lockContract(found.contractId);
       const charge = (await this.charges.findById(chargeId)) ?? found;
+      if (charge.kind !== 'payoff' && (await this.charges.hasPayoff(charge.contractId))) {
+        return false;
+      }
       const now = this.clock.now();
       const step = charge.dunningStep;
       const { retry } = charge.applyDunning(asOf, now);
-      const mandate =
-        retry && !(await this.charges.hasPayoffInCollection(charge.contractId))
-          ? await this.mandates.findActiveByContract(charge.contractId)
-          : null;
+      const mandate = retry ? await this.mandates.findActiveByContract(charge.contractId) : null;
       if (mandate) {
         charge.submitCollection(mandate.id, now);
       }

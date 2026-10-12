@@ -66,6 +66,7 @@ export interface ChargeProps {
 //   failed | overdue → pending                    (dunning's retries, or ops)
 //   scheduled | failed | overdue → written_off    (dunning, 90 days after the due date)
 //   scheduled → cancelled                         (the plan ended before it fell due)
+//   failed | overdue → cancelled                  (the plan was paid off)
 //
 // A payoff is not dunned: refused, it is cancelled (pending → cancelled) and lending withdraws
 // it; the plan is billed as before and the student may ask again.
@@ -404,12 +405,13 @@ export class Charge extends AggregateRoot {
     return { retry: retry && this.collectible };
   }
 
-  // The plan ended before this charge fell due (paid off, defaulted). Idempotent.
+  // No longer owed: the plan ended before it fell due (paid off, defaulted), or a payoff covered
+  // it after it failed. A charge being collected waits for its answer. Idempotent.
   cancel(now: Date): void {
     if (this.props.status === 'cancelled') {
       return;
     }
-    if (this.props.status !== 'scheduled') {
+    if (!['scheduled', 'failed', 'overdue'].includes(this.props.status)) {
       throw new InvalidStateTransitionError('Charge', this.props.status, 'cancelled');
     }
     this.recordCancelled('plan_ended', now);

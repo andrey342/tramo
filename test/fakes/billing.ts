@@ -74,13 +74,13 @@ export class InMemoryChargeRepository
     );
   }
 
-  hasPayoffInCollection(contractId: string): Promise<boolean> {
+  hasPayoff(contractId: string): Promise<boolean> {
     return Promise.resolve(
       this.all().some(
         (charge) =>
           charge.contractId === contractId &&
           charge.kind === 'payoff' &&
-          (charge.status === 'scheduled' || charge.status === 'pending'),
+          ['scheduled', 'pending', 'paid'].includes(charge.status),
       ),
     );
   }
@@ -90,9 +90,14 @@ export class InMemoryChargeRepository
     return Promise.resolve();
   }
 
-  findScheduledIds(contractId: string): Promise<string[]> {
+  findOpenIds(contractId: string): Promise<string[]> {
     return Promise.resolve(
-      this.ids((charge) => charge.contractId === contractId && charge.status === 'scheduled', null),
+      this.ids(
+        (charge) =>
+          charge.contractId === contractId &&
+          ['scheduled', 'failed', 'overdue'].includes(charge.status),
+        null,
+      ),
     );
   }
 

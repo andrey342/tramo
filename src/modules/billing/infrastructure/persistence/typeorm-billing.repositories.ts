@@ -87,10 +87,10 @@ export class TypeOrmChargeRepository implements ChargeRepository {
     return rows.map((row) => row.id);
   }
 
-  async findScheduledIds(contractId: string): Promise<string[]> {
+  async findOpenIds(contractId: string): Promise<string[]> {
     const rows = await this.txHost.tx.find(ChargeOrmEntity, {
       select: { id: true },
-      where: { contractId, status: 'scheduled' },
+      where: { contractId, status: In(['scheduled', 'failed', 'overdue']) },
       order: { id: 'ASC' },
     });
     return rows.map((row) => row.id);
@@ -108,9 +108,9 @@ export class TypeOrmChargeRepository implements ChargeRepository {
     });
   }
 
-  async hasPayoffInCollection(contractId: string): Promise<boolean> {
+  async hasPayoff(contractId: string): Promise<boolean> {
     return this.txHost.tx.exists(ChargeOrmEntity, {
-      where: { contractId, kind: 'payoff', status: In(['scheduled', 'pending']) },
+      where: { contractId, kind: 'payoff', status: In(['scheduled', 'pending', 'paid']) },
     });
   }
 

@@ -90,7 +90,7 @@ export function billingRepositoriesContract(
       expect(ours(await run(() => charges.findUnsettledIds(10_000, null)))).toEqual(
         [due.id, later.id, collecting.id].sort(),
       );
-      expect((await run(() => charges.findScheduledIds(contractId))).sort()).toEqual(
+      expect((await run(() => charges.findOpenIds(contractId))).sort()).toEqual(
         [due.id, later.id].sort(),
       );
       expect(
@@ -124,11 +124,15 @@ export function billingRepositoriesContract(
       );
     });
 
-    it('should tell whether a payoff of the contract is scheduled or being collected', async () => {
+    it('should tell whether a payoff of the contract is scheduled, being collected or paid', async () => {
       const { charges, run } = await create();
-      const [payingOff, refusedPayoff] = [uuidv7(), uuidv7()];
+      const [payingOff, refusedPayoff, paidOff] = [uuidv7(), uuidv7(), uuidv7()];
       const payoff = aCharge({ contractId: payingOff, kind: 'payoff', reference: 'payoff:1' });
       payoff.submitCollection(uuidv7(), NOW);
+      const paid = aCharge({ contractId: paidOff, kind: 'payoff', reference: 'payoff:3' });
+      paid.recordSucceeded(paid.submitCollection(uuidv7(), NOW), NOW, false);
+      const overdue = aCharge({ contractId: paidOff, reference: 'installment:2' });
+      overdue.applyDunning(day('2026-11-13'), NOW);
       const refused = aCharge({ contractId: refusedPayoff, kind: 'payoff', reference: 'payoff:2' });
       refused.recordFailed(
         refused.submitCollection(uuidv7(), NOW),
@@ -140,10 +144,14 @@ export function billingRepositoriesContract(
         await charges.save(payoff);
         await charges.save(refused);
         await charges.save(aCharge({ contractId: refusedPayoff }));
+        await charges.save(paid);
+        await charges.save(overdue);
       });
 
-      expect(await run(() => charges.hasPayoffInCollection(payingOff))).toBe(true);
-      expect(await run(() => charges.hasPayoffInCollection(refusedPayoff))).toBe(false);
+      expect(await run(() => charges.hasPayoff(payingOff))).toBe(true);
+      expect(await run(() => charges.hasPayoff(paidOff))).toBe(true);
+      expect(await run(() => charges.hasPayoff(refusedPayoff))).toBe(false);
+      expect(await run(() => charges.findOpenIds(paidOff))).toEqual([overdue.id]);
       await run(() => charges.lockContract(payingOff));
     });
 

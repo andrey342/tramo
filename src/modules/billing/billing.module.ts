@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
-import { CancelScheduledChargesHandler } from './application/commands/cancel-scheduled-charges.command';
+import { CancelOpenChargesHandler } from './application/commands/cancel-open-charges.command';
 import { CollectDueChargesHandler } from './application/commands/collect-due-charges.command';
 import { CreatePayoffChargeHandler } from './application/commands/create-payoff-charge.command';
 import { DeclareIncomeHandler } from './application/commands/declare-income.command';
@@ -115,7 +115,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     RunDunningHandler,
     RetryChargeHandler,
     CreatePayoffChargeHandler,
-    CancelScheduledChargesHandler,
+    CancelOpenChargesHandler,
     SendDeclarationRemindersHandler,
     RunBillingNowHandler,
     RunDunningNowHandler,

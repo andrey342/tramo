@@ -26,13 +26,14 @@ export interface ChargeRepository {
     afterId: string | null,
     contractId?: string | null,
   ): Promise<string[]>;
-  // Scheduled charges of a contract, cancelled when its plan ends.
-  findScheduledIds(contractId: string): Promise<string[]>;
+  // Charges of a contract not collected and not being collected (scheduled, failed, overdue):
+  // what a payoff makes unowed.
+  findOpenIds(contractId: string): Promise<string[]>;
   // Whether a contract has charges in arrears other than `exceptChargeId`.
   hasOtherChargesInArrears(contractId: string, exceptChargeId: string): Promise<boolean>;
-  // Whether a payoff of the contract is scheduled or being collected: it covers what is left,
-  // so nothing else of the contract is collected meanwhile.
-  hasPayoffInCollection(contractId: string): Promise<boolean>;
+  // Whether a payoff of the contract is scheduled, being collected or paid: it covers what is
+  // left, so nothing else of the contract is collected or dunned meanwhile, nor after.
+  hasPayoff(contractId: string): Promise<boolean>;
   // Serialises, until the end of the transaction, the work that decides whether a contract is in
   // arrears: two payments of one contract cannot both see the other still unpaid.
   lockContract(contractId: string): Promise<void>;

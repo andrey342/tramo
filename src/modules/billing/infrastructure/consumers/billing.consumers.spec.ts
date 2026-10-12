@@ -8,7 +8,7 @@ import {
 import { type IntegrationEvent } from '@shared/application';
 import { CalendarDate } from '@shared/domain';
 
-import { CancelScheduledChargesCommand } from '../../application/commands/cancel-scheduled-charges.command';
+import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
 import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { BillingEvents } from '../../domain';
 
@@ -45,7 +45,7 @@ describe('CancelChargesOnPlanCompleted', () => {
       await consumer.handle(completed(capped, reason));
     }
 
-    expect(executed).toEqual([new CancelScheduledChargesCommand(paidOff)]);
+    expect(executed).toEqual([new CancelOpenChargesCommand(paidOff, 'all')]);
   });
 });
 

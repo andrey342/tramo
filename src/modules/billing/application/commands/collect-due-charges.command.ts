@@ -21,7 +21,7 @@ export interface CollectionRunResult {
 
 // Starts the collection of every scheduled charge due by `asOf` (of one contract, when given). A
 // charge without a mandate is left scheduled: dunning reminds the student and chases it. While a
-// payoff of the contract is being collected, its other charges wait.
+// payoff of the contract is being collected, its other charges wait (cancelled once it is paid).
 export class CollectDueChargesCommand extends Command<CollectionRunResult> {
   constructor(
     readonly asOf: CalendarDate,
@@ -69,10 +69,7 @@ export class CollectDueChargesHandler implements ICommandHandler<CollectDueCharg
       if (charge?.status !== 'scheduled') {
         return false;
       }
-      if (
-        charge.kind !== 'payoff' &&
-        (await this.charges.hasPayoffInCollection(charge.contractId))
-      ) {
+      if (charge.kind !== 'payoff' && (await this.charges.hasPayoff(charge.contractId))) {
         return false;
       }
       const mandate = await this.mandates.findActiveByContract(charge.contractId);

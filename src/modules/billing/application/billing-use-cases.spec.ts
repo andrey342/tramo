@@ -33,9 +33,9 @@ import {
 } from '../domain';
 
 import {
-  CancelScheduledChargesCommand,
-  CancelScheduledChargesHandler,
-} from './commands/cancel-scheduled-charges.command';
+  CancelOpenChargesCommand,
+  CancelOpenChargesHandler,
+} from './commands/cancel-open-charges.command';
 import {
   CollectDueChargesCommand,
   CollectDueChargesHandler,
@@ -132,7 +132,7 @@ function setup() {
     dunning: new RunDunningHandler(uow, charges, mandates, clock),
     retry: new RetryChargeHandler(uow, charges, mandates, plans, clock),
     payoff: new CreatePayoffChargeHandler(uow, charges, mandates, plans, clock),
-    cancel: new CancelScheduledChargesHandler(uow, charges, clock),
+    cancel: new CancelOpenChargesHandler(uow, charges, clock),
     remind: new SendDeclarationRemindersHandler(uow, plans, declarations, reminders, events, clock),
     list: new ListChargesHandler(plans, queries),
     statement: new GetStatementHandler(plans, queries),
@@ -621,9 +621,41 @@ describe('billing use cases', () => {
         dueDate: '2026-11-30',
       });
 
-      expect(await t.cancel.execute(new CancelScheduledChargesCommand(contractId))).toBe(1);
+      expect(await t.cancel.execute(new CancelOpenChargesCommand(contractId, 'scheduled'))).toBe(1);
       expect((await t.charges.findById(later.id))?.status).toBe('cancelled');
       expect((await t.charges.findById(collecting.id))?.status).toBe('pending');
+    });
+
+    // Instalment 3 falls due while the payoff is collected: it is not dunned meanwhile, and the
+    // payoff, once paid, cancels it even though it is overdue; a defaulted contract keeps it.
+    it('should not dun what a payoff covers, and cancel it once the payoff is paid', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const overdue = aCharge({ contractId, reference: 'installment:2', dueDate: '2026-10-20' });
+      overdue.applyDunning(day('2026-10-21'), NOW);
+      await t.charges.save(overdue);
+      const held = await t.charge({
+        contractId,
+        reference: 'installment:3',
+        dueDate: '2026-11-20',
+      });
+      await t.payoff.execute(
+        new CreatePayoffChargeCommand({
+          requestId: uuidv7(),
+          planId: uuidv7(),
+          contractId,
+          amountCents: 6_000_00,
+          asOf: day('2026-11-18'),
+        }),
+      );
+
+      const dunned = await t.dunning.execute(new RunDunningCommand(day('2026-11-23'), contractId));
+
+      expect(dunned.retries).toBe(0);
+      expect((await t.charges.findById(held.id))?.status).toBe('scheduled');
+      expect(await t.cancel.execute(new CancelOpenChargesCommand(contractId, 'all'))).toBe(2);
+      expect((await t.charges.findById(overdue.id))?.status).toBe('cancelled');
     });
   });
 

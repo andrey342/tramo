@@ -10,7 +10,7 @@ import {
 import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shared/application';
 import { CalendarDate } from '@shared/domain';
 
-import { CancelScheduledChargesCommand } from '../../application/commands/cancel-scheduled-charges.command';
+import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
 import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
 import {
@@ -71,8 +71,8 @@ export class ChargeOnPayoffRequested implements EventHandler<PayoffRequestedPayl
   }
 }
 
-// Only a payoff makes the charges still scheduled unowed: a plan that ends on its last
-// instalment, its cap or its last ISA payment ends with that charge, which is still collected.
+// Only a payoff makes the open charges unowed: a plan that ends on its last instalment, its cap
+// or its last ISA payment ends with that charge, which is still collected.
 @Injectable()
 @EventSubscriber({ event: LendingEvents.PlanCompleted, consumer: 'billing.close-plan' })
 export class CancelChargesOnPlanCompleted implements EventHandler<PlanCompletedPayload> {
@@ -80,7 +80,7 @@ export class CancelChargesOnPlanCompleted implements EventHandler<PlanCompletedP
 
   async handle(event: IntegrationEvent<PlanCompletedPayload>): Promise<void> {
     if (event.payload.reason === 'paid_off') {
-      await this.commands.execute(new CancelScheduledChargesCommand(event.payload.contractId));
+      await this.commands.execute(new CancelOpenChargesCommand(event.payload.contractId, 'all'));
     }
   }
 }
@@ -91,7 +91,9 @@ export class CancelChargesOnContractDefaulted implements EventHandler<ContractDe
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<ContractDefaultedPayload>): Promise<void> {
-    await this.commands.execute(new CancelScheduledChargesCommand(event.payload.contractId));
+    await this.commands.execute(
+      new CancelOpenChargesCommand(event.payload.contractId, 'scheduled'),
+    );
   }
 }
 
