@@ -10,6 +10,7 @@ import {
   type ApplicationFilter,
   type ApplicationSummaryDto,
 } from '../../application/dto/application.dto';
+import { type ProgramScoresDto } from '../../application/dto/program-scores';
 import { type ApplicationQueries } from '../../application/ports/origination-ports';
 
 import { FinancingApplicationOrmEntity } from './financing-application.orm-entity';
@@ -55,6 +56,17 @@ export class TypeOrmApplicationQueries implements ApplicationQueries {
       idOf: (row) => row.id,
     });
     return { data: result.data.map(toSummary), nextCursor: result.nextCursor };
+  }
+
+  async programScores(programId: string): Promise<ProgramScoresDto> {
+    const row = await this.txHost.tx
+      .getRepository(FinancingApplicationOrmEntity)
+      .createQueryBuilder('application')
+      .select('COUNT(application.score)::int', 'scored')
+      .addSelect('ROUND(AVG(application.score))::int', 'average')
+      .where('application.program_id = :programId', { programId })
+      .getRawOne<{ scored: number; average: number | null }>();
+    return { scoredApplications: row?.scored ?? 0, averageScore: row?.average ?? null };
   }
 
   private summaries(): SelectQueryBuilder<FinancingApplicationOrmEntity> {

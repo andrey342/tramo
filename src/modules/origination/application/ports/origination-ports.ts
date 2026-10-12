@@ -8,6 +8,7 @@ import {
   type ProgramSnapshot,
 } from '../../domain';
 import { type ApplicationFilter, type ApplicationSummaryDto } from '../dto/application.dto';
+import { type ProgramScoresDto } from '../dto/program-scores';
 
 export const KYC_PROVIDER = Symbol('KYC_PROVIDER');
 export const EMPLOYMENT_HISTORY_PROVIDER = Symbol('EMPLOYMENT_HISTORY_PROVIDER');
@@ -51,4 +52,6 @@ export interface ApplicationQueries {
   list(filter: ApplicationFilter, page: PageRequest): Promise<CursorPage<ApplicationSummaryDto>>;
   // Applications waiting for an analyst, oldest first.
   reviewQueue(page: PageRequest): Promise<CursorPage<ApplicationSummaryDto>>;
+  // How the applications of a program were scored, as an aggregate only.
+  programScores(programId: string): Promise<ProgramScoresDto>;
 }
