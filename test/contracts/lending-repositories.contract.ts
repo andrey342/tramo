@@ -9,6 +9,7 @@ import {
 } from '../../src/modules/lending/domain';
 import { CalendarDate, Money } from '../../src/shared/domain';
 import {
+  A_CREDITOR,
   aContract,
   aContractSentForSignature,
   aDisbursement,
@@ -97,6 +98,7 @@ export function lendingRepositoriesContract(
         await contracts.save(contract);
         await disbursements.save(disbursement);
       });
+      disbursement.startTransfer(A_CREDITOR);
       disbursement.markSent('tr-1', LATER);
       disbursement.fail('account_closed', LATER);
       await run(() => disbursements.save(disbursement));
@@ -180,6 +182,7 @@ export function lendingRepositoriesContract(
       const { contracts, disbursements, queries, run } = await create();
       const [paid, bounced] = [anActiveContract(), anActiveContract()];
       const settled = aDisbursement({ contractId: paid.id });
+      settled.startTransfer(A_CREDITOR);
       settled.markSent('tr-1', NOW);
       settled.settle(NOW);
       const failed = aDisbursement({ contractId: bounced.id });

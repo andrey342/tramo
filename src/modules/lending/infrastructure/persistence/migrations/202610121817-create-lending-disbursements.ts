@@ -13,6 +13,9 @@ export class CreateLendingDisbursements1791829020000 implements MigrationInterfa
         amount_cents integer NOT NULL
           CONSTRAINT ck_lending_disbursements_amount_cents CHECK (amount_cents > 0),
         attempt integer NOT NULL CONSTRAINT ck_lending_disbursements_attempt CHECK (attempt > 0),
+        -- Who the current attempt pays, once its transfer started; the IBAN encrypted (ADR 014).
+        creditor_iban_encrypted text NULL,
+        creditor_name text NULL,
         transfer_id text NULL,
         failure_reason text NULL CONSTRAINT ck_lending_disbursements_failure_reason
           CHECK (length(failure_reason) BETWEEN 1 AND 200),
@@ -26,10 +29,14 @@ export class CreateLendingDisbursements1791829020000 implements MigrationInterfa
         CONSTRAINT pk_lending_disbursements PRIMARY KEY (id),
         CONSTRAINT fk_lending_disbursements_contract_id FOREIGN KEY (contract_id)
           REFERENCES lending.contracts (id),
-        -- Mirrors the domain: a sent or settled transfer has the bank's id, only a settled one a
-        -- settlement time, only a failed one a reason.
+        CONSTRAINT ck_lending_disbursements_creditor CHECK (
+          num_nulls(creditor_iban_encrypted, creditor_name) IN (0, 2)
+        ),
+        -- Mirrors the domain: a sent or settled transfer has the bank's id and its creditor, only
+        -- a settled one a settlement time, only a failed one a reason.
         CONSTRAINT ck_lending_disbursements_state CHECK (
-          (status NOT IN ('sent', 'settled') OR transfer_id IS NOT NULL)
+          (status NOT IN ('sent', 'settled')
+           OR (transfer_id IS NOT NULL AND creditor_iban_encrypted IS NOT NULL))
           AND ((status = 'settled') = (settled_at IS NOT NULL))
           AND ((status = 'failed') = (failure_reason IS NOT NULL))
         )

@@ -17,6 +17,7 @@ export {
   monthlyInstallment,
 } from './model/contract-terms';
 export {
+  type Creditor,
   Disbursement,
   type DisbursementProps,
   DISBURSEMENT_STATUSES,

@@ -1,4 +1,4 @@
-import { AggregateRoot, InvalidStateTransitionError, type Money } from '@shared/domain';
+import { AggregateRoot, type Iban, InvalidStateTransitionError, type Money } from '@shared/domain';
 
 import { LendingEvents } from '../events/lending-events';
 
@@ -7,12 +7,22 @@ export type DisbursementStatus = (typeof DISBURSEMENT_STATUSES)[number];
 
 const MAX_REASON_LENGTH = 200;
 
+// Who an attempt pays, fixed before the bank is called.
+export interface Creditor {
+  readonly iban: Iban;
+  readonly holderName: string;
+}
+
 export interface DisbursementProps {
   readonly contractId: string;
   readonly centerId: string;
   readonly amount: Money;
   // 1 for the first transfer; each retry by ops is a new attempt with its own idempotency key.
   readonly attempt: number;
+  // Set before the bank is first called for this attempt: from then on the attempt may have paid,
+  // so it is only ever sent again with the same key to the same account, and only the bank's
+  // answer can fail it.
+  readonly creditor: Creditor | null;
   // The bank's id for the transfer of the current attempt.
   readonly transferId: string | null;
   readonly failureReason: string | null;
@@ -26,7 +36,7 @@ export interface DisbursementProps {
 // One per contract.
 //
 //   pending → sent → settled
-//   pending | sent → failed → pending   (ops retries, as a new attempt)
+//   pending (transfer not started) | sent → failed → pending   (ops retries, as a new attempt)
 export class Disbursement extends AggregateRoot {
   private constructor(
     id: string,
@@ -47,6 +57,7 @@ export class Disbursement extends AggregateRoot {
       centerId: input.centerId,
       amount: input.amount,
       attempt: 1,
+      creditor: null,
       transferId: null,
       failureReason: null,
       status: 'pending',
@@ -89,6 +100,14 @@ export class Disbursement extends AggregateRoot {
     return this.props.attempt;
   }
 
+  get creditor(): Creditor | null {
+    return this.props.creditor;
+  }
+
+  get transferStarted(): boolean {
+    return this.props.creditor !== null;
+  }
+
   get transferId(): string | null {
     return this.props.transferId;
   }
@@ -119,8 +138,21 @@ export class Disbursement extends AggregateRoot {
     return `${this.id}.${String(this.props.attempt)}`;
   }
 
+  // Recorded (and saved) before the bank is called. Idempotent: a repeated run of the attempt keeps
+  // the creditor it started with.
+  startTransfer(creditor: Creditor): Creditor {
+    this.assertStatus(['pending'], 'pending');
+    if (!this.props.creditor) {
+      this.props = { ...this.props, creditor };
+    }
+    return this.props.creditor ?? creditor;
+  }
+
   markSent(transferId: string, now: Date): void {
     this.assertStatus(['pending'], 'sent');
+    if (!this.props.creditor) {
+      throw new InvalidStateTransitionError('Disbursement', 'not started', 'sent');
+    }
     this.props = { ...this.props, transferId };
     this.moveTo('sent', now);
     this.record({
@@ -154,8 +186,13 @@ export class Disbursement extends AggregateRoot {
     });
   }
 
+  // A pending attempt fails only before its transfer started; after that, money may be out and
+  // only the bank's answer (on a sent transfer) decides.
   fail(reason: string, now: Date): void {
     this.assertStatus(['pending', 'sent'], 'failed');
+    if (this.props.status === 'pending' && this.props.creditor) {
+      throw new InvalidStateTransitionError('Disbursement', 'transfer started', 'failed');
+    }
     const failureReason = reason.slice(0, MAX_REASON_LENGTH);
     this.props = { ...this.props, failureReason };
     this.moveTo('failed', now);
@@ -179,6 +216,7 @@ export class Disbursement extends AggregateRoot {
     this.props = {
       ...this.props,
       attempt: this.props.attempt + 1,
+      creditor: null,
       transferId: null,
       failureReason: null,
     };

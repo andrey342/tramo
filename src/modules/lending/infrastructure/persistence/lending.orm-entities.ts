@@ -150,6 +150,13 @@ export class DisbursementOrmEntity {
   @Column('integer')
   attempt: number;
 
+  // Who the current attempt pays, once its transfer started. Encrypted, bound to the row (ADR 014).
+  @Column('text', { name: 'creditor_iban_encrypted', nullable: true })
+  creditorIbanEncrypted: string | null;
+
+  @Column('text', { name: 'creditor_name', nullable: true })
+  creditorName: string | null;
+
   @Column('text', { name: 'transfer_id', nullable: true })
   transferId: string | null;
 

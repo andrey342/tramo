@@ -1,6 +1,6 @@
 import { InvalidStateTransitionError } from '@shared/domain';
 
-import { aDisbursement, LATER } from '../../../../../test/factories/lending';
+import { A_CREDITOR, aDisbursement, LATER } from '../../../../../test/factories/lending';
 import { LendingEvents } from '../events/lending-events';
 
 import { type Disbursement } from './disbursement';
@@ -20,6 +20,8 @@ describe('Disbursement', () => {
   it('should be settled after the transfer is sent, announcing the amount paid', () => {
     const disbursement = aDisbursement();
     disbursement.pullEvents();
+
+    disbursement.startTransfer(A_CREDITOR);
 
     disbursement.markSent('tr_1', LATER);
     disbursement.settle(LATER);
@@ -43,14 +45,42 @@ describe('Disbursement', () => {
     expect(() => {
       disbursement.settle(LATER);
     }).toThrow(InvalidStateTransitionError);
+    disbursement.startTransfer(A_CREDITOR);
     disbursement.markSent('tr_1', LATER);
     expect(() => {
       disbursement.markSent('tr_2', LATER);
     }).toThrow(InvalidStateTransitionError);
   });
 
+  it('should keep the creditor an attempt started with, and not be sent before it starts', () => {
+    const disbursement = aDisbursement();
+
+    expect(() => {
+      disbursement.markSent('tr_1', LATER);
+    }).toThrow(InvalidStateTransitionError);
+    const first = disbursement.startTransfer(A_CREDITOR);
+    const again = disbursement.startTransfer({ ...A_CREDITOR, holderName: 'Someone else' });
+
+    expect(first).toBe(A_CREDITOR);
+    expect(again).toBe(A_CREDITOR);
+    expect(disbursement.transferStarted).toBe(true);
+  });
+
+  // Once the bank may have taken the transfer, only its answer can fail the attempt; otherwise a
+  // retry by ops, a new key, would pay twice.
+  it('should not fail a pending attempt whose transfer started', () => {
+    const disbursement = aDisbursement();
+    disbursement.startTransfer(A_CREDITOR);
+
+    expect(() => {
+      disbursement.fail('center_not_active', LATER);
+    }).toThrow(InvalidStateTransitionError);
+    expect(disbursement.status).toBe('pending');
+  });
+
   it('should fail with a reason, and be retried as a new attempt with a new key', () => {
     const disbursement = aDisbursement();
+    disbursement.startTransfer(A_CREDITOR);
     disbursement.markSent('tr_1', LATER);
     disbursement.pullEvents();
 
@@ -64,6 +94,7 @@ describe('Disbursement', () => {
     expect(disbursement).toMatchObject({
       status: 'pending',
       attempt: 2,
+      creditor: null,
       transferId: null,
       failureReason: null,
     });

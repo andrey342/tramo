@@ -4,6 +4,7 @@ import { type Principal } from '@shared/application';
 import { CalendarDate, EntityNotFoundError, FixedClock, InvalidValueError } from '@shared/domain';
 
 import {
+  A_CREDITOR,
   aContract,
   aContractSentForSignature,
   aDisbursement,
@@ -87,6 +88,7 @@ function setup() {
 async function anActiveContractWithPlan(t: ReturnType<typeof setup>): Promise<Contract> {
   const contract = anActiveContract();
   const disbursement = aDisbursement({ contractId: contract.id, centerId: contract.centerId });
+  disbursement.startTransfer(A_CREDITOR);
   disbursement.markSent('tr-1', NOW);
   disbursement.settle(NOW);
   await t.contracts.save(contract);

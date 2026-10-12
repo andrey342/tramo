@@ -2,9 +2,14 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock } from '@shared/domain';
+import { CLOCK, type Clock, Iban, unwrap } from '@shared/domain';
 
-import { DISBURSEMENT_REPOSITORY, type DisbursementRepository } from '../../domain';
+import {
+  type Creditor,
+  type Disbursement,
+  DISBURSEMENT_REPOSITORY,
+  type DisbursementRepository,
+} from '../../domain';
 import {
   BANK_TRANSFER_PROVIDER,
   type BankTransferProvider,
@@ -13,7 +18,7 @@ import {
 } from '../ports/lending-ports';
 
 // Makes the bank transfer of a pending disbursement. Run by a job, after DisbursementRequested
-// or DisbursementRetried.
+// or DisbursementRetried, and by ops reconciling a stuck one.
 export class ExecuteDisbursementCommand extends Command<void> {
   constructor(readonly disbursementId: string) {
     super();
@@ -37,22 +42,17 @@ export class ExecuteDisbursementHandler implements ICommandHandler<ExecuteDisbur
       return;
     }
     const attempt = disbursement.attempt;
-    // Read now, not when the contract was signed: a center that corrected its IBAN after a
-    // bounced transfer is paid into the new one on the retry.
-    const account = await this.catalog.payoutAccount(disbursement.centerId);
-    if (!account?.centerActive) {
-      await this.update(command.disbursementId, attempt, (fresh, now) => {
-        fresh.fail(account ? 'center_not_active' : 'no_payout_account', now);
-      });
+    const creditor = disbursement.creditor ?? (await this.start(disbursement));
+    if (!creditor) {
       return;
     }
-    // Outside any transaction. Idempotent by key: if saving below fails, the job's retry asks
-    // again and the bank answers with the same transfer.
+    // Outside any transaction. A repeated run of the attempt (the bank timed out, saving failed)
+    // sends the same key to the same account, so the bank answers with the transfer it made.
     const { transferId } = await this.bank.transfer({
       idempotencyKey: disbursement.idempotencyKey,
       amount: disbursement.amount,
-      creditorIban: account.iban,
-      creditorName: account.holderName,
+      creditorIban: creditor.iban.value,
+      creditorName: creditor.holderName,
       reference: `Tramo disbursement ${disbursement.contractId}`,
     });
     await this.update(command.disbursementId, attempt, (fresh, now) => {
@@ -60,14 +60,30 @@ export class ExecuteDisbursementHandler implements ICommandHandler<ExecuteDisbur
     });
   }
 
-  // On the fresh version, and only for the attempt this job was made for.
+  // Reads the payout account now, not when the contract was signed (a center that corrected its
+  // IBAN after a bounce is paid into the new one), and records it before the bank is called.
+  // An inactive center, or one without an account, fails the attempt: nothing was sent.
+  private async start(disbursement: Disbursement): Promise<Creditor | null> {
+    const account = await this.catalog.payoutAccount(disbursement.centerId);
+    let creditor: Creditor | null = null;
+    await this.update(disbursement.id, disbursement.attempt, (fresh, now) => {
+      if (!account?.centerActive) {
+        fresh.fail(account ? 'center_not_active' : 'no_payout_account', now);
+        return;
+      }
+      creditor = fresh.startTransfer({
+        iban: unwrap(Iban.create(account.iban)),
+        holderName: account.holderName,
+      });
+    });
+    return creditor;
+  }
+
+  // On the fresh version, and only for the attempt this run was made for.
   private async update(
     disbursementId: string,
     attempt: number,
-    change: (
-      disbursement: NonNullable<Awaited<ReturnType<DisbursementRepository['findById']>>>,
-      now: Date,
-    ) => void,
+    change: (disbursement: Disbursement, now: Date) => void,
   ): Promise<void> {
     await this.uow.run(async () => {
       const fresh = await this.disbursements.findById(disbursementId);

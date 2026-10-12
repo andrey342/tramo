@@ -423,6 +423,31 @@ describe('lending use cases', () => {
       expect((await t.disbursementOf(contractId)).status).toBe('pending');
     });
 
+    // The bank took the transfer but the answer was lost; meanwhile the center was suspended and
+    // changed its IBAN. The repeated run must not fail the attempt (an ops retry would then pay a
+    // second time) nor pay another account: it sends the same key to the account it started with.
+    it('should send a started attempt again to the same account, whatever changed since', async () => {
+      const t = setup();
+      const contractId = await t.signed();
+      const { id } = await t.disbursementOf(contractId);
+      const transfer = t.bank.transfer.bind(t.bank);
+      t.bank.transfer = async (request) => {
+        await transfer(request);
+        throw new Error('timeout reading the answer');
+      };
+      await expect(t.execute.execute(new ExecuteDisbursementCommand(id))).rejects.toThrow(
+        'timeout',
+      );
+      t.bank.transfer = transfer;
+      t.catalog.addCenter(t.centerId, { active: false, iban: CLOSED_IBAN });
+
+      await t.execute.execute(new ExecuteDisbursementCommand(id));
+
+      expect(t.bank.transfers.size).toBe(1);
+      expect(t.bank.transfers.get(`${id}.1`)?.creditorIban).toBe(OPEN_IBAN);
+      expect((await t.disbursementOf(contractId)).status).toBe('sent');
+    });
+
     it('should have nothing to check for a disbursement not sent', async () => {
       const t = setup();
       const contractId = await t.signed();

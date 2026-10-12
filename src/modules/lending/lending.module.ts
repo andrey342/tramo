@@ -42,6 +42,7 @@ import {
   TransferOnDisbursementRetried,
 } from './infrastructure/consumers/contract-saga.consumers';
 import { LendingJobs } from './infrastructure/jobs/lending-jobs';
+import { DisbursementMapper } from './infrastructure/persistence/lending.mappers';
 import {
   ContractOrmEntity,
   DisbursementOrmEntity,
@@ -74,6 +75,7 @@ function simulated<T>(config: AppConfig, provider: T): T {
     TypeOrmModule.forFeature([ContractOrmEntity, DisbursementOrmEntity, FinancingPlanOrmEntity]),
   ],
   providers: [
+    DisbursementMapper,
     { provide: CONTRACT_REPOSITORY, useClass: TypeOrmContractRepository },
     { provide: DISBURSEMENT_REPOSITORY, useClass: TypeOrmDisbursementRepository },
     { provide: FINANCING_PLAN_REPOSITORY, useClass: TypeOrmFinancingPlanRepository },

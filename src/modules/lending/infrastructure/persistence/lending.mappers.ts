@@ -1,4 +1,7 @@
-import { CalendarDate, Money, Percentage } from '@shared/domain';
+import { Injectable } from '@nestjs/common';
+
+import { CalendarDate, Iban, Money, Percentage, unwrap } from '@shared/domain';
+import { FieldCipher } from '@shared/infrastructure/crypto';
 
 import {
   Contract,
@@ -82,13 +85,33 @@ export const ContractMapper = {
   },
 };
 
-export const DisbursementMapper = {
+// Binds the ciphertext to its row: copied into another disbursement, it no longer decrypts
+// (ADR 014).
+const creditorIbanContext = (disbursementId: string): string =>
+  `lending.disbursements.creditor_iban:${disbursementId}`;
+
+// A class: it needs the cipher for the creditor's IBAN.
+@Injectable()
+export class DisbursementMapper {
+  constructor(private readonly cipher: FieldCipher) {}
+
   toDomain(row: DisbursementOrmEntity): Disbursement {
     const disbursement = Disbursement.reconstitute(row.id, {
       contractId: row.contractId,
       centerId: row.centerId,
       amount: Money.fromCents(row.amountCents),
       attempt: row.attempt,
+      creditor:
+        row.creditorIbanEncrypted && row.creditorName
+          ? {
+              iban: unwrap(
+                Iban.create(
+                  this.cipher.decrypt(row.creditorIbanEncrypted, creditorIbanContext(row.id)),
+                ),
+              ),
+              holderName: row.creditorName,
+            }
+          : null,
       transferId: row.transferId,
       failureReason: row.failureReason,
       status: row.status,
@@ -98,15 +121,20 @@ export const DisbursementMapper = {
     });
     disbursement.markPersisted(row.version);
     return disbursement;
-  },
+  }
 
   toRow(disbursement: Disbursement): Omit<DisbursementOrmEntity, 'version' | 'updatedAt'> {
+    const { creditor } = disbursement;
     return {
       id: disbursement.id,
       contractId: disbursement.contractId,
       centerId: disbursement.centerId,
       amountCents: disbursement.amount.cents,
       attempt: disbursement.attempt,
+      creditorIbanEncrypted: creditor
+        ? this.cipher.encrypt(creditor.iban.value, creditorIbanContext(disbursement.id))
+        : null,
+      creditorName: creditor?.holderName ?? null,
       transferId: disbursement.transferId,
       failureReason: disbursement.failureReason,
       status: disbursement.status,
@@ -114,8 +142,8 @@ export const DisbursementMapper = {
       settledAt: disbursement.settledAt,
       createdAt: disbursement.createdAt,
     };
-  },
-};
+  }
+}
 
 export const FinancingPlanMapper = {
   toDomain(row: FinancingPlanOrmEntity): FinancingPlan {

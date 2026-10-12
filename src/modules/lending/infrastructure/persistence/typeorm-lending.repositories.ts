@@ -68,16 +68,17 @@ export class TypeOrmDisbursementRepository implements DisbursementRepository {
   constructor(
     private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>,
     private readonly persister: AggregatePersister,
+    private readonly mapper: DisbursementMapper,
   ) {}
 
   async findById(id: string): Promise<Disbursement | null> {
     const row = await this.txHost.tx.findOneBy(DisbursementOrmEntity, { id });
-    return row ? DisbursementMapper.toDomain(row) : null;
+    return row ? this.mapper.toDomain(row) : null;
   }
 
   async findByContractId(contractId: string): Promise<Disbursement | null> {
     const row = await this.txHost.tx.findOneBy(DisbursementOrmEntity, { contractId });
-    return row ? DisbursementMapper.toDomain(row) : null;
+    return row ? this.mapper.toDomain(row) : null;
   }
 
   async save(disbursement: Disbursement): Promise<void> {
@@ -85,7 +86,7 @@ export class TypeOrmDisbursementRepository implements DisbursementRepository {
       await this.persister.save(
         DisbursementOrmEntity,
         disbursement,
-        DisbursementMapper.toRow(disbursement),
+        this.mapper.toRow(disbursement),
         'Disbursement',
       );
     } catch (error) {

@@ -7,7 +7,7 @@ import {
   Disbursement,
   FinancingPlan,
 } from '../../src/modules/lending/domain';
-import { CalendarDate, Money, Percentage } from '../../src/shared/domain';
+import { CalendarDate, Iban, Money, Percentage, unwrap } from '../../src/shared/domain';
 
 export const NOW = new Date('2026-10-12T10:00:00Z');
 export const LATER = new Date('2026-10-12T10:05:00Z');
@@ -88,6 +88,12 @@ export function anActiveContract(overrides: Parameters<typeof aContract>[0] = {}
   contract.pullEvents();
   return contract;
 }
+
+// The payout account a started transfer pays.
+export const A_CREDITOR = {
+  iban: unwrap(Iban.create('ES9121000418450200051332')),
+  holderName: 'Codeworks Madrid',
+};
 
 export function aDisbursement(
   overrides: { contractId?: string; centerId?: string } = {},
