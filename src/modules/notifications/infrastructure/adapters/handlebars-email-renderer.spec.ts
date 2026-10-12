@@ -54,9 +54,10 @@ describe('HandlebarsEmailRenderer', () => {
   });
 
   it('should escape values in the HTML version only', () => {
-    const email = renderer.render('welcome', { email: '<b>x</b>@example.com' }, 'u-1');
+    const email = renderer.render('contract_ready_to_sign', { envelopeId: '<b>env</b>' }, 'c-1');
 
-    expect(email.html).toContain('&lt;b&gt;x&lt;/b&gt;@example.com');
-    expect(email.text).toContain('<b>x</b>@example.com');
+    expect(email.html).toContain('&lt;b&gt;env&lt;/b&gt;');
+    expect(email.text).toContain('<b>env</b>');
+    expect(renderer.render('welcome', {}, 'u-1').text).not.toContain('@');
   });
 });

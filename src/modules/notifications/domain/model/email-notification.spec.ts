@@ -42,10 +42,22 @@ describe('EmailNotification', () => {
     email.markSent(LATER);
 
     expect(email.status).toBe('failed');
-    expect(email.lastError).toHaveLength(300);
+    expect(email.lastError).toHaveLength(100);
     expect(email.pullEvents()).toEqual([
       expect.objectContaining({ eventType: NotificationsEvents.EmailFailed }),
     ]);
+  });
+
+  it('should be abandoned only when still pending a day after it was written', () => {
+    const email = anEmail();
+    const dayLater = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+
+    email.abandon(LATER);
+    expect(email.status).toBe('pending');
+    email.abandon(dayLater);
+
+    expect(email).toMatchObject({ status: 'failed', lastError: 'abandoned' });
+    expect(email.isStale(dayLater)).toBe(false);
   });
 
   it('should be reconstituted as saved, without events', () => {

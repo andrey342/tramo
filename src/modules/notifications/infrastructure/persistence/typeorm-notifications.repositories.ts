@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import { type TransactionalAdapterTypeOrm } from '@nestjs-cls/transactional-adapter-typeorm';
+import { LessThan } from 'typeorm';
 
 import { ConcurrentModificationError } from '@shared/domain';
 import {
@@ -130,6 +131,17 @@ export class TypeOrmEmailNotificationRepository implements EmailNotificationRepo
     return this.txHost.tx.exists(EmailNotificationOrmEntity, {
       where: { eventId, template, recipient },
     });
+  }
+
+  // Served by ix_notifications_notification_log_pending_created_at.
+  async findPendingIds(before: Date, limit: number): Promise<string[]> {
+    const rows = await this.txHost.tx.find(EmailNotificationOrmEntity, {
+      select: { id: true },
+      where: { status: 'pending', createdAt: LessThan(before) },
+      order: { createdAt: 'ASC', id: 'ASC' },
+      take: limit,
+    });
+    return rows.map((row) => row.id);
   }
 
   save(notification: EmailNotification): Promise<void> {

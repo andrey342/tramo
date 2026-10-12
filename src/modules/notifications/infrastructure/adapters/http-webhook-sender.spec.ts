@@ -5,11 +5,12 @@ import { FixedClock } from '@shared/domain';
 import { parseConfig } from '@shared/infrastructure/config/app-config';
 import { verifyWebhook } from '@shared/infrastructure/http';
 
-import {
-  HttpWebhookSender,
-  isPrivateAddress,
-  WebhookTargetRefusedError,
-} from './http-webhook-sender';
+import { webhookSenderContract } from '../../../../../test/contracts/notifications-ports.contract';
+import { FakeWebhookSender } from '../../../../../test/fakes/notifications';
+import { WebhookPostFailedError } from '../../application/ports/notifications-ports';
+
+import { HttpWebhookSender, isPrivateAddress } from './http-webhook-sender';
+import { HttpWebhookTargets } from './http-webhook-targets';
 
 const NOW = new Date('2026-11-12T08:00:00Z');
 const SECRET = 'whsec_test_secret_of_enough_length_0123456789';
@@ -23,11 +24,10 @@ const ENV = {
   WEBHOOK_TIMEOUT_MS: '2000',
 };
 
+const config = (privateTargets: boolean) =>
+  parseConfig({ ...ENV, WEBHOOK_PRIVATE_TARGETS_ENABLED: String(privateTargets) });
 const sender = (privateTargets: boolean) =>
-  new HttpWebhookSender(
-    parseConfig({ ...ENV, WEBHOOK_PRIVATE_TARGETS_ENABLED: String(privateTargets) }),
-    new FixedClock(NOW),
-  );
+  new HttpWebhookSender(config(privateTargets), new FixedClock(NOW));
 
 interface Received {
   readonly headers: IncomingMessage['headers'];
@@ -36,25 +36,29 @@ interface Received {
 
 describe('HttpWebhookSender', () => {
   let server: Server;
-  let url: string;
+  let base: string;
   const received: Received[] = [];
-  let answer = 200;
 
   beforeAll(async () => {
+    // Answers the status in the path (/hooks/503), and for /huge streams a large body.
     server = createServer((request, response) => {
       const chunks: Buffer[] = [];
       request.on('data', (chunk: Buffer) => chunks.push(chunk));
       request.on('end', () => {
         received.push({ headers: request.headers, body: Buffer.concat(chunks).toString('utf8') });
-        if (answer === 302) {
-          response.writeHead(302, { location: 'http://169.254.169.254/latest' }).end();
+        if (request.url === '/huge') {
+          response.writeHead(200);
+          response.end(Buffer.alloc(8 * 1024 * 1024, 1));
           return;
         }
-        response.writeHead(answer).end('{}');
+        const status = Number(request.url?.split('/').at(-1)) || 200;
+        response
+          .writeHead(status, status === 302 ? { location: 'http://169.254.169.254/latest' } : {})
+          .end('{}');
       });
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-    url = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}/hooks`;
+    base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
   });
 
   afterAll(async () => {
@@ -63,14 +67,13 @@ describe('HttpWebhookSender', () => {
 
   beforeEach(() => {
     received.length = 0;
-    answer = 200;
   });
 
   it('should post the body signed with the secret, with the delivery and the event', async () => {
     const body = JSON.stringify({ id: 'event-1', event: 'contract.signed', data: {} });
 
     const result = await sender(true).post({
-      url,
+      url: `${base}/hooks/200`,
       secret: SECRET,
       deliveryId: 'delivery-1',
       event: 'contract.signed',
@@ -81,6 +84,7 @@ describe('HttpWebhookSender', () => {
     const [request] = received;
     expect(request?.body).toBe(body);
     expect(request?.headers['content-type']).toBe('application/json');
+    expect(request?.headers['accept-encoding']).toBe('identity');
     expect(request?.headers['x-tramo-delivery-id']).toBe('delivery-1');
     expect(request?.headers['x-tramo-event']).toBe('contract.signed');
     const signature = request?.headers['x-tramo-signature'];
@@ -94,26 +98,49 @@ describe('HttpWebhookSender', () => {
     ).toEqual({ valid: true });
   });
 
-  it('should report the status of any answer, and not follow a redirect', async () => {
-    const post = (status: number) => {
-      answer = status;
-      return sender(true).post({ url, secret: SECRET, deliveryId: 'd', event: 'e', body: '{}' });
-    };
+  it('should not follow a redirect, nor read the answer it does not need', async () => {
+    const post = (path: string) =>
+      sender(true).post({
+        url: `${base}${path}`,
+        secret: SECRET,
+        deliveryId: 'd',
+        event: 'e',
+        body: '{}',
+      });
 
-    expect(await post(503)).toEqual({ statusCode: 503 });
-    expect(await post(302)).toEqual({ statusCode: 302 });
+    expect(await post('/hooks/302')).toEqual({ statusCode: 302 });
+    expect(await post('/huge')).toEqual({ statusCode: 200 });
     expect(received).toHaveLength(2);
   });
 
   it('should refuse plain http and private addresses where private targets are off', async () => {
     const post = (target: string) =>
-      sender(false).post({ url: target, secret: SECRET, deliveryId: 'd', event: 'e', body: '{}' });
+      sender(false)
+        .post({ url: target, secret: SECRET, deliveryId: 'd', event: 'e', body: '{}' })
+        .catch((error: unknown) => error);
 
-    await expect(post(url)).rejects.toThrow(WebhookTargetRefusedError);
-    await expect(post('https://127.0.0.1/hooks')).rejects.toThrow('not a public address');
-    await expect(post('https://[::1]/hooks')).rejects.toThrow('not a public address');
-    await expect(post('https://localhost/hooks')).rejects.toThrow('not a public address');
+    for (const target of [
+      `${base}/hooks/200`,
+      'https://127.0.0.1/hooks',
+      'https://[::1]/hooks',
+      'https://[64:ff9b::a00:5]/hooks',
+      'https://localhost/hooks',
+    ]) {
+      const failure = await post(target);
+      expect(failure).toBeInstanceOf(WebhookPostFailedError);
+      expect((failure as WebhookPostFailedError).code).toBe('target_not_allowed');
+    }
     expect(received).toEqual([]);
+  });
+
+  it('should tell a center at configuration that only https to public addresses is posted', () => {
+    const production = new HttpWebhookTargets(config(false));
+    const development = new HttpWebhookTargets(config(true));
+
+    expect(production.refusal('http://center.example/hooks')).toMatch(/https/);
+    expect(production.refusal('https://10.0.0.5/hooks')).toMatch(/public/);
+    expect(production.refusal('https://center.example/hooks')).toBeNull();
+    expect(development.refusal('http://webhook-sink:9099/x')).toBeNull();
   });
 
   it.each([
@@ -123,10 +150,14 @@ describe('HttpWebhookSender', () => {
     ['192.168.1.10', true],
     ['169.254.169.254', true],
     ['100.64.0.1', true],
+    ['203.0.113.7', true],
     ['::1', true],
     ['fd00::1', true],
     ['fe80::1', true],
     ['::ffff:10.0.0.1', true],
+    ['64:ff9b::a00:5', true],
+    ['2002:a00:5::1', true],
+    ['::a00:5', true],
     ['not-an-ip', true],
     ['8.8.8.8', false],
     ['2001:4860:4860::8888', false],
@@ -134,4 +165,25 @@ describe('HttpWebhookSender', () => {
   ])('should take %s as private: %s', (address, expected) => {
     expect(isPrivateAddress(address)).toBe(expected);
   });
+
+  webhookSenderContract('HttpWebhookSender', () => ({
+    sender: sender(true),
+    answering: (status) => `${base}/hooks/${String(status)}`,
+    unreachable: 'http://127.0.0.1:9/hooks',
+  }));
+});
+
+webhookSenderContract('FakeWebhookSender', () => {
+  const fake = new FakeWebhookSender();
+  return {
+    sender: {
+      post: (request) => {
+        const status = Number(request.url.split('/').at(-1));
+        fake.answers.push(Number.isNaN(status) ? 'connection_failed' : status);
+        return fake.post(request);
+      },
+    },
+    answering: (status) => `https://center.example/hooks/${String(status)}`,
+    unreachable: 'https://unreachable.example/hooks/none',
+  };
 });

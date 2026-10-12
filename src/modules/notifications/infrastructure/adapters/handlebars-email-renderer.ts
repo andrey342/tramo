@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import Handlebars from 'handlebars';
 
-import { type JsonValue } from '@shared/domain';
+import { type JsonValue, Money } from '@shared/domain';
 
 import {
   type EmailRenderer,
@@ -21,7 +21,7 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
   welcome: {
     subject: 'Welcome to Tramo',
     body: [
-      'Your account {{email}} is ready.',
+      'Your account is ready.',
       'With Tramo you can finance a course at a partner training center, by instalments or with an income share agreement, and the center is paid from day one.',
     ],
   },
@@ -72,7 +72,7 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
   contract_in_arrears: {
     subject: 'Your contract is in arrears',
     body: [
-      'A payment of your contract is {{daysOverdue}} days overdue, so the contract is now in arrears and your training center has been told.',
+      'A payment of your contract is {{daysOverdue}} days overdue, so the contract is now in arrears.',
       'Paying what is overdue brings it back to normal. If you are in difficulty, contact us: we can look at your options.',
     ],
   },
@@ -95,11 +95,10 @@ const LAYOUT = Handlebars.compile(
 </html>`,
 );
 
-// Integer cents to "1234.56 EUR": no floating point between the event and the email.
+// Integer cents to "1234.56 EUR", through Money: no floating point between the event and the
+// email, and a value that is not whole cents is refused rather than rounded.
 export function formatMoney(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const absolute = Math.abs(Math.trunc(cents));
-  return `${sign}${String(Math.trunc(absolute / 100))}.${String(absolute % 100).padStart(2, '0')} EUR`;
+  return Money.fromCents(cents).toString();
 }
 
 const PRODUCT_NAMES: Readonly<Record<string, string>> = {

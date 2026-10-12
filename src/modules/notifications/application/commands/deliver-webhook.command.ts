@@ -5,15 +5,19 @@ import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
 import {
+  type AttemptOutcome,
+  type AttemptResult,
   WEBHOOK_DELIVERY_REPOSITORY,
   WEBHOOK_SUBSCRIPTION_REPOSITORY,
   type WebhookDelivery,
   type WebhookDeliveryRepository,
   type WebhookSubscriptionRepository,
 } from '../../domain';
-import { WEBHOOK_SENDER, type WebhookSender } from '../ports/notifications-ports';
-
-export type DeliveryOutcome = 'delivered' | 'skipped' | 'cancelled';
+import {
+  WEBHOOK_SENDER,
+  WebhookPostFailedError,
+  type WebhookSender,
+} from '../ports/notifications-ports';
 
 // The attempt failed and the job is to retry it (or, on its last attempt, the round is over).
 export class WebhookAttemptFailedError extends Error {
@@ -27,9 +31,11 @@ export class WebhookAttemptFailedError extends Error {
 }
 
 // One attempt of a round of a delivery, made by its job: the body is the event as the center
-// receives it, signed with the center's current secret. A 2xx delivers it; anything else is
-// recorded and thrown, so the job retries with backoff, and the last attempt ends the round.
-export class DeliverWebhookCommand extends Command<DeliveryOutcome> {
+// receives it, signed with the center's current secret. The delivery decides what the answer
+// means (WebhookDelivery.recordAttempt); a failed attempt is thrown so the job retries it with
+// backoff. When the job's last attempt fails before anything was recorded (the database, the
+// secret), the round is closed anyway, so the delivery can be redelivered.
+export class DeliverWebhookCommand extends Command<AttemptOutcome | 'cancelled'> {
   constructor(
     readonly deliveryId: string,
     readonly round: number,
@@ -50,7 +56,20 @@ export class DeliverWebhookHandler implements ICommandHandler<DeliverWebhookComm
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async execute(command: DeliverWebhookCommand): Promise<DeliveryOutcome> {
+  async execute(command: DeliverWebhookCommand): Promise<AttemptOutcome | 'cancelled'> {
+    let outcome: AttemptOutcome | 'cancelled';
+    try {
+      outcome = await this.attempt(command);
+    } catch (error) {
+      if (command.lastAttempt && !(error instanceof WebhookAttemptFailedError)) {
+        await this.closeRound(command).catch(() => undefined);
+      }
+      throw error;
+    }
+    return outcome;
+  }
+
+  private async attempt(command: DeliverWebhookCommand): Promise<AttemptOutcome | 'cancelled'> {
     const { round } = command;
     const target = await this.uow.run(async () => {
       const delivery = await this.deliveries.findById(command.deliveryId);
@@ -66,56 +85,54 @@ export class DeliverWebhookHandler implements ICommandHandler<DeliverWebhookComm
       return { delivery, url: subscription.url, secret: subscription.secret };
     });
     if (target === null) {
-      return 'skipped';
+      return 'ignored';
     }
     if (target === 'cancelled') {
       return 'cancelled';
     }
     // The call happens outside any transaction: a slow endpoint holds no connection.
     const { delivery } = target;
-    let statusCode: number | null = null;
-    let error: string | null = null;
+    let result: AttemptResult;
     try {
-      ({ statusCode } = await this.sender.post({
+      const { statusCode } = await this.sender.post({
         url: target.url,
         secret: target.secret,
         deliveryId: delivery.id,
         event: delivery.event,
         body: body(delivery),
-      }));
-      if (statusCode < 200 || statusCode >= 300) {
-        error = `HTTP ${String(statusCode)}`;
-      }
+      });
+      result = { statusCode };
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause);
+      result = {
+        statusCode: null,
+        error: cause instanceof WebhookPostFailedError ? cause.code : 'network_failed',
+      };
     }
-    await this.record(command, statusCode, error);
-    if (error !== null) {
-      throw new WebhookAttemptFailedError(delivery.id, error);
+    const outcome = await this.uow.run(async () => {
+      const current = await this.deliveries.findById(command.deliveryId);
+      if (!current) {
+        return 'ignored';
+      }
+      const recorded = current.recordAttempt(round, result, command.lastAttempt, this.clock.now());
+      await this.deliveries.save(current);
+      return recorded;
+    });
+    if (outcome === 'retry' || outcome === 'failed') {
+      throw new WebhookAttemptFailedError(
+        delivery.id,
+        result.statusCode === null ? result.error : `http_${String(result.statusCode)}`,
+      );
     }
-    return 'delivered';
+    return outcome;
   }
 
-  private async record(
-    command: DeliverWebhookCommand,
-    statusCode: number | null,
-    error: string | null,
-  ): Promise<void> {
+  private async closeRound(command: DeliverWebhookCommand): Promise<void> {
     await this.uow.run(async () => {
       const delivery = await this.deliveries.findById(command.deliveryId);
-      if (!delivery) {
-        return;
+      if (delivery) {
+        delivery.giveUp(command.round, 'internal_error', this.clock.now());
+        await this.deliveries.save(delivery);
       }
-      const now = this.clock.now();
-      if (error === null && statusCode !== null) {
-        delivery.recordDelivered(command.round, statusCode, now);
-      } else {
-        delivery.recordFailedAttempt(command.round, statusCode, error ?? 'unknown', now);
-        if (command.lastAttempt) {
-          delivery.giveUp(command.round, now);
-        }
-      }
-      await this.deliveries.save(delivery);
     });
   }
 }

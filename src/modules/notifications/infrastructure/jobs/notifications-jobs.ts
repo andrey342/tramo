@@ -1,11 +1,12 @@
 import { InjectQueue, Processor } from '@nestjs/bullmq';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationBootstrap } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { type Job, type Queue } from 'bullmq';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 import { type CorrelatedJobData, QueueNames, QueueProcessor } from '@shared/infrastructure/queues';
 
+import { AbandonStaleEmailsCommand } from '../../application/commands/abandon-stale-emails.command';
 import { DeliverWebhookCommand } from '../../application/commands/deliver-webhook.command';
 import { SendEmailCommand } from '../../application/commands/send-email.command';
 
@@ -26,7 +27,9 @@ const EMAIL_BACKOFF_MS = 20_000;
 // about 7.5 minutes for the round), then the delivery fails and the job is dead-lettered.
 export const WEBHOOK_ATTEMPTS = 5;
 
-const lastAttempt = (job: Job): boolean => job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+// BullMQ counts in attemptsMade the attempts that failed before this one.
+export const lastAttempt = (job: Pick<Job, 'attemptsMade' | 'opts'>): boolean =>
+  job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
 
 // One job per notification: a redelivered EmailRequested queues nothing new.
 @Injectable()
@@ -67,6 +70,23 @@ export class WebhookJobs {
   }
 }
 
+const SWEEP = 'emails.sweep';
+
+// Every hour, emails whose job was lost are given up (AbandonStaleEmailsCommand). Upserted by
+// name on every worker start: one schedule.
+@Injectable()
+export class NotificationSchedules implements OnApplicationBootstrap {
+  constructor(@InjectQueue(QueueNames.EMAILS) private readonly queue: Queue) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    await this.queue.upsertJobScheduler(
+      SWEEP,
+      { pattern: '15 * * * *', tz: 'UTC' },
+      { name: SWEEP },
+    );
+  }
+}
+
 @Processor(QueueNames.EMAILS, { concurrency: 5 })
 export class EmailProcessor extends QueueProcessor<EmailJob> {
   constructor(private readonly commands: CommandBus) {
@@ -74,6 +94,9 @@ export class EmailProcessor extends QueueProcessor<EmailJob> {
   }
 
   protected handle(job: Job<EmailJob>): Promise<unknown> {
+    if (job.name === SWEEP) {
+      return this.commands.execute(new AbandonStaleEmailsCommand());
+    }
     return this.commands.execute(new SendEmailCommand(job.data.notificationId, lastAttempt(job)));
   }
 }

@@ -51,7 +51,7 @@ describe('notifications consumers', () => {
       template: 'welcome',
       to: { address: 'new@example.com' },
       reference: 'u-1',
-      data: { email: 'new@example.com' },
+      data: {},
     });
   });
 

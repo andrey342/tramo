@@ -1,6 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal } from '@shared/application';
+import { type AuditChanges, type Principal } from '@shared/application';
 import { EntityNotFoundError, FixedClock } from '@shared/domain';
 
 import { NOW } from '../../../../test/factories/notifications';
@@ -10,6 +10,7 @@ import {
   FakeEmailSender,
   FakeRecipients,
   FakeWebhookSender,
+  FakeWebhookTargets,
   InMemoryEmailNotificationRepository,
   InMemoryNotificationsQueries,
   InMemoryWebhookDeliveryRepository,
@@ -26,6 +27,7 @@ import {
   WebhookNotConfiguredError,
 } from '../domain';
 
+import { AbandonStaleEmailsHandler } from './commands/abandon-stale-emails.command';
 import {
   ConfigureWebhookCommand,
   ConfigureWebhookHandler,
@@ -75,11 +77,16 @@ function setup() {
     roles: ['center_admin'],
     centerId,
   };
+  const targets = new FakeWebhookTargets();
+  const audited: AuditChanges[] = [];
+  const audit = { describeChanges: (changes: AuditChanges) => audited.push(changes) };
   const configure = new ConfigureWebhookHandler(
     uow,
     subscriptions,
     centers,
     new SequentialWebhookSecrets(),
+    targets,
+    audit,
     clock,
   );
   const publish = new PublishWebhookHandler(uow, subscriptions, deliveries, clock);
@@ -97,7 +104,10 @@ function setup() {
     admin,
     configure,
     publish,
-    remove: new RemoveWebhookHandler(uow, subscriptions, clock),
+    targets,
+    audited,
+    sweep: new AbandonStaleEmailsHandler(uow, emails, clock),
+    remove: new RemoveWebhookHandler(uow, subscriptions, audit, clock),
     get: new GetWebhookHandler(subscriptions),
     deliver: new DeliverWebhookHandler(uow, deliveries, subscriptions, webhookSender, clock),
     redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, clock),
@@ -177,18 +187,55 @@ describe('notifications use cases', () => {
       ).rejects.toThrow(InvalidWebhookUrlError);
     });
 
-    it('should remove the webhook, after which there is none to read or remove', async () => {
+    it('should remove the webhook once, after which there is none to read', async () => {
       const t = setup();
       await t.subscribed();
 
+      await t.remove.execute(new RemoveWebhookCommand(t.admin, t.centerId));
       await t.remove.execute(new RemoveWebhookCommand(t.admin, t.centerId));
 
       await expect(t.get.execute(new GetWebhookQuery(OPS, t.centerId))).rejects.toThrow(
         WebhookNotConfiguredError,
       );
-      await expect(t.remove.execute(new RemoveWebhookCommand(t.admin, t.centerId))).rejects.toThrow(
-        WebhookNotConfiguredError,
+      expect(t.events.ofType(NotificationsEvents.WebhookUnsubscribed)).toHaveLength(1);
+      expect(t.audited.at(-1)).toEqual({
+        status: { before: 'active', after: 'removed' },
+        url: { before: 'https://center.example/hooks', after: null },
+      });
+      const other = { ...t.admin, centerId: uuidv7() } as Principal;
+      await expect(
+        t.remove.execute(
+          new RemoveWebhookCommand(other, other.kind === 'user' ? (other.centerId ?? '') : ''),
+        ),
+      ).rejects.toThrow(WebhookNotConfiguredError);
+    });
+
+    // Production posts only to https: a center learns it when configuring, not from failures.
+    it('should refuse a URL Tramo would not post to, and audit the URL it changes', async () => {
+      const t = setup();
+      t.targets.refused.push('http://');
+
+      await expect(
+        t.configure.execute(
+          new ConfigureWebhookCommand(t.admin, t.centerId, 'http://center.example/h'),
+        ),
+      ).rejects.toThrow(InvalidWebhookUrlError);
+      await t.subscribed();
+      await t.configure.execute(
+        new ConfigureWebhookCommand(t.admin, t.centerId, 'https://center.example/v2'),
       );
+
+      expect(t.audited).toEqual([
+        {
+          url: { before: null, after: 'https://center.example/hooks' },
+          secret: { before: null, after: 'issued' },
+        },
+        {
+          url: { before: 'https://center.example/hooks', after: 'https://center.example/v2' },
+          secret: { before: 'replaced', after: 'issued' },
+        },
+      ]);
+      expect(JSON.stringify(t.audited)).not.toContain('whsec_');
     });
   });
 
@@ -221,7 +268,7 @@ describe('notifications use cases', () => {
       const outcome = await t.deliver.execute(new DeliverWebhookCommand(delivery.id, 1, false));
       const again = await t.deliver.execute(new DeliverWebhookCommand(delivery.id, 1, false));
 
-      expect([outcome, again]).toEqual(['delivered', 'skipped']);
+      expect([outcome, again]).toEqual(['delivered', 'ignored']);
       expect(t.webhookSender.posts).toHaveLength(1);
       expect(t.webhookSender.posts[0]).toMatchObject({
         url: 'https://center.example/hooks',
@@ -242,19 +289,43 @@ describe('notifications use cases', () => {
       const t = setup();
       await t.subscribed();
       const delivery = await t.published();
-      t.webhookSender.answers.push(503, new Error('connect ECONNREFUSED'));
+      t.webhookSender.answers.push(503, 'connection_failed');
 
       await expect(
         t.deliver.execute(new DeliverWebhookCommand(delivery.id, 1, false)),
       ).rejects.toThrow(WebhookAttemptFailedError);
       await expect(
         t.deliver.execute(new DeliverWebhookCommand(delivery.id, 1, true)),
-      ).rejects.toThrow('ECONNREFUSED');
+      ).rejects.toThrow('connection_failed');
 
       const failed = await t.deliveries.findById(delivery.id);
       expect(failed).toMatchObject({ status: 'failed' });
-      expect(failed?.attempts.map((attempt) => attempt.statusCode)).toEqual([503, null]);
+      expect(failed?.attempts.map((attempt) => attempt.error)).toEqual([
+        'http_503',
+        'connection_failed',
+      ]);
       expect(t.events.ofType(NotificationsEvents.WebhookDeliveryFailed)).toHaveLength(1);
+    });
+
+    // The database failed on the job's last attempt, before anything was posted: the round is
+    // closed anyway, so the delivery can be redelivered.
+    it('should close the round when the last attempt fails before posting', async () => {
+      const t = setup();
+      await t.subscribed();
+      const delivery = await t.published();
+      const findByCenter = t.subscriptions.findByCenter.bind(t.subscriptions);
+      t.subscriptions.findByCenter = () => Promise.reject(new Error('pool exhausted'));
+
+      await expect(
+        t.deliver.execute(new DeliverWebhookCommand(delivery.id, 1, true)),
+      ).rejects.toThrow('pool exhausted');
+      t.subscriptions.findByCenter = findByCenter;
+      const redelivered = await t.redeliver.execute(
+        new RedeliverWebhookCommand(t.admin, t.centerId, delivery.id),
+      );
+
+      expect(redelivered).toMatchObject({ round: 2, status: 'pending' });
+      expect(t.webhookSender.posts).toEqual([]);
     });
 
     it('should give up a delivery whose center removed its webhook', async () => {
@@ -376,7 +447,7 @@ describe('notifications use cases', () => {
         }),
       );
       const failing = t.emails.all().find((item) => item.reference === 'user-2');
-      t.emailSender.failures.push('421 try later', '421 try later');
+      t.emailSender.failures.push('smtp_421', 'smtp_421');
       await expect(t.send.execute(new SendEmailCommand(failing?.id ?? '', false))).rejects.toThrow(
         EmailNotSentError,
       );
@@ -386,9 +457,34 @@ describe('notifications use cases', () => {
       expect(await t.emails.findById(failing?.id ?? '')).toMatchObject({
         status: 'failed',
         attempts: 2,
-        lastError: '421 try later',
+        lastError: 'smtp_421',
       });
       expect(t.events.ofType(NotificationsEvents.EmailFailed)).toHaveLength(1);
+    });
+
+    // An email still pending a day after it was written lost its job: given up, not sent late.
+    it('should give up the emails whose job was lost a day ago', async () => {
+      const t = setup();
+      await t.request.execute(
+        new RequestEmailCommand({
+          eventId: uuidv7(),
+          template: 'installment_reminder',
+          to: { address: 'late@example.com' },
+          reference: 'contract-1',
+          data: {},
+        }),
+      );
+      const [email] = t.emails.all();
+
+      const early = await t.sweep.execute();
+      t.clock.advanceBy(24 * 60 * 60 * 1000 + 1);
+      const late = await t.sweep.execute();
+
+      expect([early, late]).toEqual([0, 1]);
+      expect(await t.emails.findById(email?.id ?? '')).toMatchObject({
+        status: 'failed',
+        lastError: 'abandoned',
+      });
     });
   });
 });

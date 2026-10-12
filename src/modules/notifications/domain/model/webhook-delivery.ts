@@ -7,15 +7,26 @@ import { type WebhookEvent } from './webhook-subscription';
 
 export type DeliveryStatus = 'pending' | 'delivered' | 'failed';
 
-const MAX_ERROR_LENGTH = 300;
+const MAX_ERROR_LENGTH = 100;
+// A round with no attempt for this long has lost its job (dead-lettered after an outage, removed
+// by hand): it may be redelivered although it never ended. A job of the old round that still
+// runs posts nothing once the round has moved on.
+export const STALE_ROUND_MS = 15 * 60 * 1000;
 
-// One POST to the center's endpoint.
+// One POST to the center's endpoint. `error` is a category (`http_503`, `timeout`,
+// `connection_failed`...), never the text of the failure.
 export interface DeliveryAttempt {
   readonly round: number;
   readonly at: Date;
   readonly statusCode: number | null;
   readonly error: string | null;
 }
+
+// What an attempt got: the status of the answer, or why there was none.
+export type AttemptResult =
+  { readonly statusCode: number } | { readonly statusCode: null; readonly error: string };
+
+export type AttemptOutcome = 'delivered' | 'retry' | 'failed' | 'ignored';
 
 export interface WebhookDeliveryProps {
   readonly centerId: string;
@@ -27,16 +38,17 @@ export interface WebhookDeliveryProps {
   readonly status: DeliveryStatus;
   // 1 for the first delivery, +1 for each redelivery.
   readonly round: number;
+  readonly roundStartedAt: Date;
   readonly attempts: readonly DeliveryAttempt[];
   readonly deliveredAt: Date | null;
   readonly createdAt: Date;
 }
 
 // An event told to a training center by webhook: posted, retried with backoff by its job, and
-// redelivered on request once a round has ended.
+// redelivered on request once a round has ended (or lost its job).
 //
-//   pending → delivered (a 2xx) | failed (every attempt of the round failed)
-//   delivered | failed → pending (redelivery, a new round)
+//   pending → delivered (a 2xx) | failed (the last attempt of the round failed)
+//   delivered | failed | pending, stale → pending (redelivery, a new round)
 export class WebhookDelivery extends AggregateRoot {
   private constructor(
     id: string,
@@ -62,6 +74,7 @@ export class WebhookDelivery extends AggregateRoot {
       occurredAt: input.occurredAt,
       status: 'pending',
       round: 1,
+      roundStartedAt: input.now,
       attempts: [],
       deliveredAt: null,
       createdAt: input.now,
@@ -102,6 +115,10 @@ export class WebhookDelivery extends AggregateRoot {
     return this.props.round;
   }
 
+  get roundStartedAt(): Date {
+    return this.props.roundStartedAt;
+  }
+
   get attempts(): readonly DeliveryAttempt[] {
     return this.props.attempts;
   }
@@ -124,28 +141,49 @@ export class WebhookDelivery extends AggregateRoot {
     return this.props.status === 'pending' && this.props.round === round;
   }
 
-  // The endpoint answered 2xx. Idempotent.
-  recordDelivered(round: number, statusCode: number, now: Date): void {
+  // The result of one attempt of `round`: a 2xx delivers it; anything else is retried, and on the
+  // round's last attempt fails it. Ignored when the round is over. Idempotent.
+  recordAttempt(
+    round: number,
+    result: AttemptResult,
+    lastAttempt: boolean,
+    now: Date,
+  ): AttemptOutcome {
     if (!this.awaits(round)) {
-      return;
+      return 'ignored';
     }
+    const { statusCode } = result;
+    const delivered = statusCode !== null && statusCode >= 200 && statusCode < 300;
+    const error = delivered
+      ? null
+      : statusCode === null
+        ? result.error.slice(0, MAX_ERROR_LENGTH)
+        : `http_${String(statusCode)}`;
     this.props = {
       ...this.props,
-      status: 'delivered',
-      deliveredAt: now,
-      attempts: [...this.props.attempts, { round, at: now, statusCode, error: null }],
+      attempts: [...this.props.attempts, { round, at: now, statusCode, error }],
     };
-    this.record({
-      eventType: NotificationsEvents.WebhookDelivered,
-      aggregateType: 'WebhookDelivery',
-      aggregateId: this.id,
-      occurredAt: now,
-      payload: this.reference(),
-    });
+    if (delivered) {
+      this.props = { ...this.props, status: 'delivered', deliveredAt: now };
+      this.record({
+        eventType: NotificationsEvents.WebhookDelivered,
+        aggregateType: 'WebhookDelivery',
+        aggregateId: this.id,
+        occurredAt: now,
+        payload: this.reference(),
+      });
+      return 'delivered';
+    }
+    if (lastAttempt) {
+      this.fail(now);
+      return 'failed';
+    }
+    return 'retry';
   }
 
-  // An attempt failed (a non-2xx answer, a timeout, a refused connection); the job retries it.
-  recordFailedAttempt(round: number, statusCode: number | null, error: string, now: Date): void {
+  // The round's job ran out of attempts without one being recorded (it failed before posting).
+  // Idempotent.
+  giveUp(round: number, error: string, now: Date): void {
     if (!this.awaits(round)) {
       return;
     }
@@ -153,33 +191,25 @@ export class WebhookDelivery extends AggregateRoot {
       ...this.props,
       attempts: [
         ...this.props.attempts,
-        { round, at: now, statusCode, error: error.slice(0, MAX_ERROR_LENGTH) },
+        { round, at: now, statusCode: null, error: error.slice(0, MAX_ERROR_LENGTH) },
       ],
     };
+    this.fail(now);
   }
 
-  // The last attempt of the round failed. Idempotent.
-  giveUp(round: number, now: Date): void {
-    if (!this.awaits(round)) {
-      return;
-    }
-    this.props = { ...this.props, status: 'failed' };
-    this.record({
-      eventType: NotificationsEvents.WebhookDeliveryFailed,
-      aggregateType: 'WebhookDelivery',
-      aggregateId: this.id,
-      occurredAt: now,
-      payload: { ...this.reference(), lastError: this.lastAttempt?.error ?? 'unknown' },
-    });
-  }
-
-  // Posted again, as a new round: after a failure (the endpoint is back), or after a delivery the
-  // center lost.
+  // Posted again, as a new round: after a failure (the endpoint is back), after a delivery the
+  // center lost, or for a round whose job was lost (no attempt for STALE_ROUND_MS).
   redeliver(now: Date): number {
-    if (this.props.status === 'pending') {
+    if (this.props.status === 'pending' && !this.isStale(now)) {
       throw new WebhookDeliveryInProgressError(this.id);
     }
-    this.props = { ...this.props, status: 'pending', round: this.props.round + 1 };
+    this.props = {
+      ...this.props,
+      status: 'pending',
+      round: this.props.round + 1,
+      roundStartedAt: now,
+      deliveredAt: null,
+    };
     this.recordRequested(now);
     return this.props.round;
   }
@@ -189,14 +219,26 @@ export class WebhookDelivery extends AggregateRoot {
     if (this.props.status !== 'pending') {
       throw new InvalidStateTransitionError('WebhookDelivery', this.props.status, 'failed');
     }
-    this.props = {
-      ...this.props,
-      attempts: [
-        ...this.props.attempts,
-        { round: this.props.round, at: now, statusCode: null, error: 'webhook removed' },
-      ],
-    };
-    this.giveUp(this.props.round, now);
+    this.giveUp(this.props.round, 'webhook_removed', now);
+  }
+
+  private isStale(now: Date): boolean {
+    const lastActivity = Math.max(
+      this.props.roundStartedAt.getTime(),
+      this.lastAttempt?.at.getTime() ?? 0,
+    );
+    return now.getTime() - lastActivity >= STALE_ROUND_MS;
+  }
+
+  private fail(now: Date): void {
+    this.props = { ...this.props, status: 'failed' };
+    this.record({
+      eventType: NotificationsEvents.WebhookDeliveryFailed,
+      aggregateType: 'WebhookDelivery',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { ...this.reference(), lastError: this.lastAttempt?.error ?? 'unknown' },
+    });
   }
 
   private reference(): WebhookDeliveredPayload {

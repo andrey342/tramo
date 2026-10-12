@@ -4,16 +4,22 @@ import { aDelivery, LATER, NOW } from '../../../../../test/factories/notificatio
 import { WebhookDeliveryInProgressError } from '../errors/notifications-errors';
 import { NotificationsEvents } from '../events/notifications-events';
 
-import { WebhookDelivery } from './webhook-delivery';
+import { STALE_ROUND_MS, WebhookDelivery } from './webhook-delivery';
 
 const eventTypes = (delivery: WebhookDelivery): string[] =>
   delivery.pullEvents().map((event) => event.eventType);
+const after = (ms: number): Date => new Date(NOW.getTime() + ms);
 
 describe('WebhookDelivery', () => {
   it('should be requested pending, in its first round', () => {
     const delivery = aDelivery();
 
-    expect(delivery).toMatchObject({ status: 'pending', round: 1, attempts: [] });
+    expect(delivery).toMatchObject({
+      status: 'pending',
+      round: 1,
+      attempts: [],
+      roundStartedAt: NOW,
+    });
     expect(delivery.awaits(1)).toBe(true);
     expect(delivery.pullEvents()).toEqual([
       expect.objectContaining({
@@ -28,39 +34,45 @@ describe('WebhookDelivery', () => {
     ]);
   });
 
-  it('should be delivered on a 2xx after failed attempts, once', () => {
+  it('should retry what is not a 2xx, and be delivered by a 2xx, once', () => {
     const delivery = aDelivery();
     delivery.pullEvents();
 
-    delivery.recordFailedAttempt(1, 503, 'Service Unavailable', NOW);
-    delivery.recordFailedAttempt(1, null, 'x'.repeat(500), NOW);
-    delivery.recordDelivered(1, 200, LATER);
-    delivery.recordDelivered(1, 200, LATER);
-    delivery.recordFailedAttempt(1, 500, 'late', LATER);
+    const outcomes = [
+      delivery.recordAttempt(1, { statusCode: 503 }, false, NOW),
+      delivery.recordAttempt(1, { statusCode: 302 }, false, NOW),
+      delivery.recordAttempt(1, { statusCode: null, error: 'x'.repeat(200) }, false, NOW),
+      delivery.recordAttempt(1, { statusCode: 204 }, false, LATER),
+      delivery.recordAttempt(1, { statusCode: 200 }, false, LATER),
+    ];
 
+    expect(outcomes).toEqual(['retry', 'retry', 'retry', 'delivered', 'ignored']);
     expect(delivery).toMatchObject({ status: 'delivered', deliveredAt: LATER });
-    expect(delivery.attempts.map((attempt) => attempt.statusCode)).toEqual([503, null, 200]);
-    expect(delivery.attempts[1]?.error).toHaveLength(300);
+    expect(delivery.attempts.map((attempt) => attempt.error)).toEqual([
+      'http_503',
+      'http_302',
+      'x'.repeat(100),
+      null,
+    ]);
     expect(eventTypes(delivery)).toEqual([NotificationsEvents.WebhookDelivered]);
   });
 
-  it('should fail when the round runs out, and be redelivered as a new round', () => {
+  it('should fail on the last attempt of the round, and be redelivered as a new round', () => {
     const delivery = aDelivery();
     delivery.pullEvents();
-    delivery.recordFailedAttempt(1, 500, 'Internal Server Error', NOW);
 
-    delivery.giveUp(1, NOW);
-    delivery.giveUp(1, NOW);
+    const last = delivery.recordAttempt(1, { statusCode: 500 }, true, NOW);
+    delivery.giveUp(1, 'internal_error', NOW);
     const round = delivery.redeliver(LATER);
-    delivery.recordDelivered(1, 200, LATER);
+    const stale = delivery.recordAttempt(1, { statusCode: 200 }, false, LATER);
 
+    expect([last, stale]).toEqual(['failed', 'ignored']);
     expect(round).toBe(2);
-    expect(delivery).toMatchObject({ status: 'pending', round: 2 });
-    expect(delivery.awaits(1)).toBe(false);
+    expect(delivery).toMatchObject({ status: 'pending', round: 2, roundStartedAt: LATER });
     expect(delivery.pullEvents()).toEqual([
       expect.objectContaining({
         eventType: NotificationsEvents.WebhookDeliveryFailed,
-        payload: expect.objectContaining({ lastError: 'Internal Server Error', round: 1 }),
+        payload: expect.objectContaining({ lastError: 'http_500', round: 1 }),
       }),
       expect.objectContaining({
         eventType: NotificationsEvents.WebhookDeliveryRequested,
@@ -69,8 +81,33 @@ describe('WebhookDelivery', () => {
     ]);
   });
 
-  it('should not be redelivered while a round is in progress', () => {
-    expect(() => aDelivery().redeliver(NOW)).toThrow(WebhookDeliveryInProgressError);
+  it('should close a round whose job failed before posting', () => {
+    const delivery = aDelivery();
+    delivery.pullEvents();
+
+    delivery.giveUp(1, 'internal_error', NOW);
+
+    expect(delivery.status).toBe('failed');
+    expect(delivery.lastAttempt).toMatchObject({ statusCode: null, error: 'internal_error' });
+    expect(eventTypes(delivery)).toEqual([NotificationsEvents.WebhookDeliveryFailed]);
+  });
+
+  it('should not be redelivered while its round is alive, but only once it went quiet', () => {
+    const delivery = aDelivery();
+    delivery.recordAttempt(1, { statusCode: 503 }, false, after(60_000));
+
+    expect(() => delivery.redeliver(after(STALE_ROUND_MS))).toThrow(WebhookDeliveryInProgressError);
+    expect(delivery.redeliver(after(60_000 + STALE_ROUND_MS))).toBe(2);
+  });
+
+  it('should forget the earlier delivery time when redelivered', () => {
+    const delivery = aDelivery();
+    delivery.recordAttempt(1, { statusCode: 200 }, false, NOW);
+
+    delivery.redeliver(LATER);
+    delivery.recordAttempt(2, { statusCode: 500 }, true, LATER);
+
+    expect(delivery).toMatchObject({ status: 'failed', deliveredAt: null });
   });
 
   it('should be given up when its center removed the webhook', () => {
@@ -80,7 +117,7 @@ describe('WebhookDelivery', () => {
     delivery.cancel(NOW);
 
     expect(delivery.status).toBe('failed');
-    expect(delivery.lastAttempt?.error).toBe('webhook removed');
+    expect(delivery.lastAttempt?.error).toBe('webhook_removed');
     expect(eventTypes(delivery)).toEqual([NotificationsEvents.WebhookDeliveryFailed]);
     expect(() => {
       delivery.cancel(NOW);
@@ -98,6 +135,7 @@ describe('WebhookDelivery', () => {
       occurredAt: saved.occurredAt,
       status: 'delivered',
       round: 3,
+      roundStartedAt: LATER,
       attempts: [{ round: 3, at: LATER, statusCode: 204, error: null }],
       deliveredAt: LATER,
       createdAt: saved.createdAt,

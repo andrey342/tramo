@@ -18,7 +18,10 @@ export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 
 export type EmailStatus = 'pending' | 'sent' | 'failed';
 
-const MAX_ERROR_LENGTH = 300;
+const MAX_ERROR_LENGTH = 100;
+// A pending email whose job never finished (dead-lettered after an outage, lost) is given up
+// after this long rather than sent a day late.
+export const STALE_EMAIL_MS = 24 * 60 * 60 * 1000;
 
 export interface EmailNotificationProps {
   // The event that caused it: one email per event, template and recipient.
@@ -32,6 +35,8 @@ export interface EmailNotificationProps {
   readonly data: Readonly<Record<string, JsonValue>>;
   readonly status: EmailStatus;
   readonly attempts: number;
+  // A category (`smtp_550`, `timeout`, `connection_failed`), never the server's text, which
+  // quotes the recipient.
   readonly lastError: string | null;
   readonly sentAt: Date | null;
   readonly createdAt: Date;
@@ -156,6 +161,19 @@ export class EmailNotification extends AggregateRoot {
       attempts: this.props.attempts + 1,
       lastError: error.slice(0, MAX_ERROR_LENGTH),
     };
+  }
+
+  // Still pending long after it was written: its job is gone. Given up, not sent late.
+  isStale(now: Date): boolean {
+    return this.pending && now.getTime() - this.props.createdAt.getTime() >= STALE_EMAIL_MS;
+  }
+
+  abandon(now: Date): void {
+    if (!this.isStale(now)) {
+      return;
+    }
+    this.props = { ...this.props, lastError: this.props.lastError ?? 'abandoned' };
+    this.giveUp(now);
   }
 
   // The job ran out of attempts. Idempotent.

@@ -8,11 +8,13 @@ import { EMAIL_NOTIFICATION_REPOSITORY, type EmailNotificationRepository } from 
 import {
   EMAIL_RENDERER,
   EMAIL_SENDER,
+  EmailSendFailedError,
   type EmailRenderer,
   type EmailSender,
 } from '../ports/notifications-ports';
 
 // The mail server did not take it; the job retries it (or, on its last attempt, gives up).
+// Carries the category only: the server's text quotes the recipient.
 export class EmailNotSentError extends Error {
   constructor(
     readonly notificationId: string,
@@ -24,7 +26,8 @@ export class EmailNotSentError extends Error {
 }
 
 // Sends one email of the notification log, by its job: rendered from its template and the values
-// recorded with it. A sent or failed one is not sent again.
+// recorded with it. A sent or failed one is not sent again. When the job's last attempt fails
+// before the send (the database), the email is given up anyway.
 export class SendEmailCommand extends Command<'sent' | 'skipped'> {
   constructor(
     readonly notificationId: string,
@@ -46,6 +49,17 @@ export class SendEmailHandler implements ICommandHandler<SendEmailCommand> {
   ) {}
 
   async execute(command: SendEmailCommand): Promise<'sent' | 'skipped'> {
+    try {
+      return await this.send(command);
+    } catch (error) {
+      if (command.lastAttempt && !(error instanceof EmailNotSentError)) {
+        await this.record(command, 'internal_error').catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
+  private async send(command: SendEmailCommand): Promise<'sent' | 'skipped'> {
     const notification = await this.notifications.findById(command.notificationId);
     if (!notification?.pending) {
       return 'skipped';
@@ -63,8 +77,16 @@ export class SendEmailHandler implements ICommandHandler<SendEmailCommand> {
         reference: notification.reference,
       });
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause);
+      error = cause instanceof EmailSendFailedError ? cause.code : 'send_failed';
     }
+    await this.record(command, error);
+    if (error !== null) {
+      throw new EmailNotSentError(command.notificationId, error);
+    }
+    return 'sent';
+  }
+
+  private async record(command: SendEmailCommand, error: string | null): Promise<void> {
     await this.uow.run(async () => {
       const current = await this.notifications.findById(command.notificationId);
       if (!current) {
@@ -80,9 +102,5 @@ export class SendEmailHandler implements ICommandHandler<SendEmailCommand> {
       }
       await this.notifications.save(current);
     });
-    if (error !== null) {
-      throw new EmailNotSentError(command.notificationId, error);
-    }
-    return 'sent';
   }
 }

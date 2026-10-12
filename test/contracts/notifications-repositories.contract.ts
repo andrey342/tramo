@@ -49,7 +49,7 @@ export function notificationsRepositoriesContract(
     it('should store a delivery with its attempts and find it by its event', async () => {
       const { deliveries, run } = await create();
       const delivery = aDelivery();
-      delivery.recordFailedAttempt(1, 503, 'Service Unavailable', LATER);
+      delivery.recordAttempt(1, { statusCode: 503 }, false, LATER);
       await run(() => deliveries.save(delivery));
 
       const found = await run(() => deliveries.findByEvent(delivery.centerId, delivery.eventId));
@@ -62,7 +62,7 @@ export function notificationsRepositoriesContract(
         data: delivery.data,
       });
       expect(found?.attempts).toEqual([
-        { round: 1, at: LATER, statusCode: 503, error: 'Service Unavailable' },
+        { round: 1, at: LATER, statusCode: 503, error: 'http_503' },
       ]);
       await expect(
         run(() =>
@@ -75,7 +75,7 @@ export function notificationsRepositoriesContract(
       const { deliveries, queries, run } = await create();
       const centerId = uuidv7();
       const [older, newer, other] = [aDelivery({ centerId }), aDelivery({ centerId }), aDelivery()];
-      newer.recordDelivered(1, 200, LATER);
+      newer.recordAttempt(1, { statusCode: 200 }, false, LATER);
       await run(async () => {
         for (const delivery of [older, newer, other]) await deliveries.save(delivery);
       });
@@ -88,6 +88,31 @@ export function notificationsRepositoriesContract(
       expect(all.data.map((item) => item.id)).toEqual([newer.id, older.id]);
       expect(pending.data.map((item) => item.id)).toEqual([older.id]);
       expect(all.data[0]).toMatchObject({ status: 'delivered', lastStatusCode: 200, attempts: 1 });
+      const byEvent = await run(() =>
+        queries.listDeliveries(centerId, { event: 'contract.defaulted' }, { limit: 10 }),
+      );
+      expect(byEvent.data).toEqual([]);
+    });
+
+    // Three deliveries written at the same instant: the keyset breaks the tie by id.
+    it('should page through the deliveries of a center with the cursor', async () => {
+      const { deliveries, queries, run } = await create();
+      const centerId = uuidv7();
+      const written = [aDelivery({ centerId }), aDelivery({ centerId }), aDelivery({ centerId })];
+      await run(async () => {
+        for (const delivery of written) await deliveries.save(delivery);
+      });
+
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (;;) {
+        const page = await run(() => queries.listDeliveries(centerId, {}, { limit: 1, cursor }));
+        seen.push(...page.data.map((item) => item.id));
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+      }
+
+      expect(seen).toEqual(written.map((delivery) => delivery.id).reverse());
     });
 
     it('should store an email once per event, template and recipient', async () => {
@@ -110,6 +135,22 @@ export function notificationsRepositoriesContract(
       await expect(
         run(() => emails.save(anEmail({ eventId: email.eventId, template: email.template }))),
       ).rejects.toMatchObject({ code: 'concurrent_modification' });
+    });
+
+    it('should find the emails still pending that were written before a time', async () => {
+      const { emails, run } = await create();
+      const [pending, sent] = [anEmail(), anEmail()];
+      sent.markSent(LATER);
+      await run(async () => {
+        await emails.save(pending);
+        await emails.save(sent);
+      });
+
+      const ids = await run(() => emails.findPendingIds(new Date(LATER.getTime() + 1), 10_000));
+
+      expect(ids).toContain(pending.id);
+      expect(ids).not.toContain(sent.id);
+      expect(await run(() => emails.findPendingIds(new Date(0), 10))).toEqual([]);
     });
   });
 }

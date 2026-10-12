@@ -10,8 +10,11 @@ import {
   type Recipients,
   type RenderedEmail,
   type WebhookPost,
+  EmailSendFailedError,
+  WebhookPostFailedError,
   type WebhookSecrets,
   type WebhookSender,
+  type WebhookTargets,
 } from '../../src/modules/notifications/application/ports/notifications-ports';
 import {
   type EmailNotification,
@@ -78,6 +81,16 @@ export class InMemoryEmailNotificationRepository
     );
   }
 
+  findPendingIds(before: Date, limit: number): Promise<string[]> {
+    return Promise.resolve(
+      this.all()
+        .filter((item) => item.pending && item.createdAt < before)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((item) => item.id),
+    );
+  }
+
   override async save(notification: EmailNotification): Promise<void> {
     const twin = this.all().find(
       (item) =>
@@ -107,31 +120,42 @@ export class FakeEmailRenderer implements EmailRenderer {
 
 export class FakeEmailSender implements EmailSender {
   readonly sent: OutgoingEmail[] = [];
-  // Errors to throw on the next calls, in order.
+  // Categories to fail the next calls with, in order.
   readonly failures: string[] = [];
 
   send(email: OutgoingEmail): Promise<void> {
     const failure = this.failures.shift();
     if (failure) {
-      return Promise.reject(new Error(failure));
+      return Promise.reject(new EmailSendFailedError(failure));
     }
     this.sent.push(email);
     return Promise.resolve();
   }
 }
 
-// Answers each post with the next scripted status (an Error is a post without an answer);
-// 200 once the script runs out.
+// Answers each post with the next scripted status, or fails it with a category (a post
+// without an answer); 200 once the script runs out.
 export class FakeWebhookSender implements WebhookSender {
   readonly posts: WebhookPost[] = [];
-  readonly answers: (number | Error)[] = [];
+  readonly answers: (number | string)[] = [];
 
   post(request: WebhookPost): Promise<{ readonly statusCode: number }> {
     this.posts.push(request);
     const answer = this.answers.shift() ?? 200;
-    return answer instanceof Error
-      ? Promise.reject(answer)
+    return typeof answer === 'string'
+      ? Promise.reject(new WebhookPostFailedError(answer))
       : Promise.resolve({ statusCode: answer });
+  }
+}
+
+// Allows every URL, or refuses those starting with the given prefixes.
+export class FakeWebhookTargets implements WebhookTargets {
+  readonly refused: string[] = [];
+
+  refusal(url: string): string | null {
+    return this.refused.some((prefix) => url.startsWith(prefix))
+      ? 'only https to public addresses is delivered to'
+      : null;
   }
 }
 
@@ -181,9 +205,14 @@ export class InMemoryNotificationsQueries implements NotificationsQueries {
           (!filter.status || delivery.status === filter.status) &&
           (!filter.event || delivery.event === filter.event),
       )
-      .sort((a, b) => b.id.localeCompare(a.id))
-      .slice(0, page.limit)
-      .map(toDeliveryDto);
-    return Promise.resolve({ data, nextCursor: null });
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id));
+    // The cursor is the id of the last delivery of the previous page.
+    const start = page.cursor ? data.findIndex((delivery) => delivery.id === page.cursor) + 1 : 0;
+    const slice = data.slice(start, start + page.limit);
+    const more = start + page.limit < data.length;
+    return Promise.resolve({
+      data: slice.map(toDeliveryDto),
+      nextCursor: more ? (slice.at(-1)?.id ?? null) : null,
+    });
   }
 }

@@ -99,7 +99,7 @@ export class WelcomeOnStudentRegistered
       template: 'welcome',
       to: { address: payload.email },
       reference: payload.userId,
-      data: { email: payload.email },
+      data: {},
     };
   }
 }

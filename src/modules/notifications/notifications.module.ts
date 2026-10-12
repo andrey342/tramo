@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { AbandonStaleEmailsHandler } from './application/commands/abandon-stale-emails.command';
 import { ConfigureWebhookHandler } from './application/commands/configure-webhook.command';
 import { DeliverWebhookHandler } from './application/commands/deliver-webhook.command';
 import { PublishWebhookHandler } from './application/commands/publish-webhook.command';
@@ -16,6 +17,7 @@ import {
   RECIPIENTS,
   WEBHOOK_SECRETS,
   WEBHOOK_SENDER,
+  WEBHOOK_TARGETS,
 } from './application/ports/notifications-ports';
 import { GetWebhookHandler } from './application/queries/get-webhook.query';
 import { ListWebhookDeliveriesHandler } from './application/queries/list-webhook-deliveries.query';
@@ -26,6 +28,7 @@ import {
 } from './domain';
 import { HandlebarsEmailRenderer } from './infrastructure/adapters/handlebars-email-renderer';
 import { HttpWebhookSender } from './infrastructure/adapters/http-webhook-sender';
+import { HttpWebhookTargets } from './infrastructure/adapters/http-webhook-targets';
 import {
   CatalogCenters,
   IamRecipients,
@@ -67,6 +70,7 @@ import {
     { provide: EMAIL_SENDER, useClass: SmtpEmailSender },
     { provide: EMAIL_RENDERER, useClass: HandlebarsEmailRenderer },
     { provide: WEBHOOK_SENDER, useClass: HttpWebhookSender },
+    { provide: WEBHOOK_TARGETS, useClass: HttpWebhookTargets },
     { provide: WEBHOOK_SECRETS, useClass: RandomWebhookSecrets },
     { provide: RECIPIENTS, useClass: IamRecipients },
     { provide: CENTERS, useClass: CatalogCenters },
@@ -77,6 +81,7 @@ import {
     RedeliverWebhookHandler,
     RequestEmailHandler,
     SendEmailHandler,
+    AbandonStaleEmailsHandler,
     GetWebhookHandler,
     ListWebhookDeliveriesHandler,
     EmailJobs,

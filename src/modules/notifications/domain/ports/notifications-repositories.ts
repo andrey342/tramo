@@ -24,5 +24,7 @@ export interface EmailNotificationRepository {
   findById(id: string): Promise<EmailNotification | null>;
   // One per event, template and recipient.
   exists(eventId: string, template: EmailTemplate, recipient: string): Promise<boolean>;
+  // Ids of emails still pending that were written before `before`, oldest first.
+  findPendingIds(before: Date, limit: number): Promise<string[]>;
   save(notification: EmailNotification): Promise<void>;
 }

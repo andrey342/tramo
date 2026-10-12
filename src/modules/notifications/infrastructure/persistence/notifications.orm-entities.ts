@@ -75,6 +75,9 @@ export class WebhookDeliveryOrmEntity {
   @Column('integer')
   round: number;
 
+  @Column({ type: 'timestamptz', name: 'round_started_at', precision: 3 })
+  roundStartedAt: Date;
+
   @Column('jsonb')
   attempts: DeliveryAttemptJson[];
 

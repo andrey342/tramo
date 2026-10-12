@@ -59,6 +59,7 @@ export const WebhookDeliveryMapper = {
       occurredAt: row.occurredAt,
       status: row.status,
       round: row.round,
+      roundStartedAt: row.roundStartedAt,
       attempts: row.attempts.map((attempt) => ({ ...attempt, at: new Date(attempt.at) })),
       deliveredAt: row.deliveredAt,
       createdAt: row.createdAt,
@@ -77,6 +78,7 @@ export const WebhookDeliveryMapper = {
       occurredAt: delivery.occurredAt,
       status: delivery.status,
       round: delivery.round,
+      roundStartedAt: delivery.roundStartedAt,
       attempts: delivery.attempts.map((attempt) => ({
         ...attempt,
         at: attempt.at.toISOString(),

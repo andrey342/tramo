@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -49,7 +50,9 @@ export class WebhooksController {
   ) {}
 
   @Put('webhook')
-  @ApiProblems(400, 401, 403, 404, 422)
+  // The answer carries the signing secret: never kept by a cache.
+  @Header('Cache-Control', 'no-store')
+  @ApiProblems(400, 401, 403, 404, 409, 422)
   @ApiOkResponse({ type: ConfiguredWebhookResponse })
   @Roles('center_admin')
   @Audited({ action: 'webhook.configure', resource: 'center', resourceIdParam: 'centerId' })
@@ -78,7 +81,7 @@ export class WebhooksController {
 
   @Delete('webhook')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiProblems(400, 401, 403, 404)
+  @ApiProblems(400, 401, 403, 404, 409)
   @ApiNoContentResponse()
   @Roles('center_admin')
   @Audited({ action: 'webhook.remove', resource: 'center', resourceIdParam: 'centerId' })

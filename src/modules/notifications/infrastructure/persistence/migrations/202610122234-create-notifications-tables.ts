@@ -67,6 +67,7 @@ export class CreateNotificationsTables1791844440000 implements MigrationInterfac
           CHECK (status IN ('pending', 'delivered', 'failed')),
         round integer NOT NULL CONSTRAINT ck_notifications_webhook_deliveries_round
           CHECK (round > 0),
+        round_started_at timestamptz(3) NOT NULL,
         attempts jsonb NOT NULL,
         delivered_at timestamptz(3) NULL,
         created_at timestamptz(3) NOT NULL,
@@ -121,6 +122,12 @@ export class CreateNotificationsTables1791844440000 implements MigrationInterfac
     await queryRunner.query(`
       CREATE UNIQUE INDEX ux_notifications_notification_log_event_id_template_recipient
         ON notifications.notification_log (event_id, template, recipient)
+    `);
+    // The hourly sweep of emails whose job was lost.
+    await queryRunner.query(`
+      CREATE INDEX ix_notifications_notification_log_pending_created_at
+        ON notifications.notification_log (created_at, id)
+        WHERE status = 'pending'
     `);
     // What was written about an application or a contract.
     await queryRunner.query(`
