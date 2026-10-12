@@ -41,6 +41,10 @@ import {
   CollectDueChargesHandler,
 } from './commands/collect-due-charges.command';
 import {
+  CollectWaitingChargesCommand,
+  CollectWaitingChargesHandler,
+} from './commands/collect-waiting-charges.command';
+import {
   CreatePayoffChargeCommand,
   CreatePayoffChargeHandler,
 } from './commands/create-payoff-charge.command';
@@ -127,6 +131,7 @@ function setup() {
     declare: new DeclareIncomeHandler(uow, declarations, plans, clock),
     cycle: new RunBillingCycleHandler(uow, plans, charges, declarations, clock),
     collect: new CollectDueChargesHandler(uow, charges, mandates, clock),
+    waiting: new CollectWaitingChargesHandler(uow, charges, mandates, clock),
     execute: new ExecuteChargeCollectionHandler(uow, charges, mandates, gateway),
     result: new RecordPaymentResultHandler(uow, charges, audit, clock),
     dunning: new RunDunningHandler(uow, charges, mandates, clock),
@@ -461,7 +466,7 @@ describe('billing use cases', () => {
     });
 
     // A failed charge gets a new attempt; one stuck in collection is asked for again, same key.
-    it('should retry a failed charge, resubmit a pending one, and only while repaid', async () => {
+    it('should retry a failed charge, resubmit a pending one, but not once defaulted', async () => {
       const t = setup();
       const contractId = t.contract();
       await t.mandate(contractId);
@@ -552,6 +557,28 @@ describe('billing use cases', () => {
       expect(t.charges.all()).toHaveLength(1);
     });
 
+    it('should refuse at once a payoff the contract has no mandate for', async () => {
+      const t = setup();
+      const contractId = t.contract();
+
+      await t.payoff.execute(
+        new CreatePayoffChargeCommand({
+          requestId: uuidv7(),
+          planId: uuidv7(),
+          contractId,
+          amountCents: 6_000_00,
+          asOf: day('2026-11-20'),
+        }),
+      );
+
+      expect(t.charges.all()).toEqual([expect.objectContaining({ status: 'cancelled' })]);
+      expect(t.events.ofType(BillingEvents.ChargeFailed)).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ kind: 'payoff', attempt: 0 }),
+        }),
+      ]);
+    });
+
     // The payoff covers what is left: the instalment waits, then is collected once the bank
     // refused the payoff, and a new request is a new charge.
     it('should hold the other charges while a payoff is collected, and charge a new request', async () => {
@@ -588,6 +615,41 @@ describe('billing use cases', () => {
       expect(resumed.submitted).toBe(1);
       expect((await t.charges.findById(instalment.id))?.status).toBe('pending');
       expect(t.charges.all().filter((charge) => charge.kind === 'payoff')).toHaveLength(2);
+    });
+
+    // Due 5 November, overdue and its retries spent without a mandate; signed on the 20th.
+    it('should collect what fell due without a mandate once one is signed', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      const overdue = await t.charge({ contractId, dueDate: '2026-11-05' });
+      const later = await t.charge({
+        contractId,
+        reference: 'installment:2',
+        dueDate: '2026-12-05',
+      });
+      await t.dunning.execute(new RunDunningCommand(day('2026-11-13'), contractId));
+      await t.mandate(contractId);
+
+      const submitted = await t.waiting.execute(
+        new CollectWaitingChargesCommand(contractId, day('2026-11-20')),
+      );
+
+      expect(submitted).toBe(1);
+      expect((await t.charges.findById(overdue.id))?.status).toBe('pending');
+      expect((await t.charges.findById(later.id))?.status).toBe('scheduled');
+    });
+
+    // The last ISA payment ended the plan and completed the contract; its charge failed.
+    it('should let ops retry the last charge of a completed contract', async () => {
+      const t = setup();
+      const contractId = t.contract('isa', 'completed');
+      await t.mandate(contractId);
+      const last = await t.charge({ contractId, kind: 'isa', reference: 'isa:2029-06' });
+      await t.dunning.execute(new RunDunningCommand(day('2026-11-13'), contractId));
+
+      const retried = await t.retry.execute(new RetryChargeCommand(OPS, last.id));
+
+      expect(retried.status).toBe('pending');
     });
 
     it('should collect and dun one contract only when asked to', async () => {

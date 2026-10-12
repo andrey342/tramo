@@ -18,8 +18,9 @@ import { type ChargeDto } from '../dto/billing.dto';
 import { REPAYMENT_PLANS, type RepaymentPlans } from '../ports/billing-ports';
 
 // Ops collect a failed or overdue charge again, outside the dunning timeline (the student asked,
-// or fixed their account), or ask the provider again for a charge stuck in collection. Only
-// while the contract is being repaid.
+// or fixed their account), or ask the provider again for a charge stuck in collection. Also
+// the last charge of a plan that ended with it (an ISA at its cap); not once the contract
+// defaulted, its debt gone to recovery.
 export class RetryChargeCommand extends Command<ChargeDto> {
   constructor(
     readonly actor: Principal,
@@ -47,7 +48,7 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
         throw new EntityNotFoundError('Charge', command.chargeId);
       }
       const contract = await this.plans.findContract(charge.contractId);
-      if (contract?.status !== 'active' && contract?.status !== 'in_arrears') {
+      if (!contract || contract.status === 'defaulted') {
         throw new ContractNotRepayingError(contract?.status ?? 'unknown');
       }
       const mandate = await this.mandates.findActiveByContract(charge.contractId);
