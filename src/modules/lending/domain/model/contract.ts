@@ -18,7 +18,10 @@ export type CancellationReason = 'signature_declined' | 'signature_expired';
 export interface Signature {
   readonly provider: string;
   readonly envelopeId: string;
-  // SHA-256 of the document the student is asked to sign.
+  // The text the student is asked to sign, kept as sent: a later change to how contracts are
+  // rendered does not change what this student signed.
+  readonly document: string;
+  // Its SHA-256.
   readonly documentHash: string;
   readonly sentAt: Date;
   readonly signedAt: Date | null;
@@ -142,7 +145,7 @@ export class Contract extends AggregateRoot {
   }
 
   sentForSignature(
-    envelope: { provider: string; envelopeId: string; documentHash: string },
+    envelope: { provider: string; envelopeId: string; document: string; documentHash: string },
     now: Date,
   ): void {
     this.assertStatus('draft', 'sent_for_signature');

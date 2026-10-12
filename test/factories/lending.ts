@@ -65,7 +65,12 @@ export function aContractSentForSignature(
 ): Contract {
   const contract = aContract(overrides);
   contract.sentForSignature(
-    { provider: 'simulated', envelopeId: `env_${contract.id}`, documentHash: DOCUMENT_HASH },
+    {
+      provider: 'simulated',
+      envelopeId: `env_${contract.id}`,
+      document: `Contract ${contract.id}, as signed`,
+      documentHash: DOCUMENT_HASH,
+    },
     NOW,
   );
   contract.pullEvents();

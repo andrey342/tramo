@@ -85,7 +85,12 @@ describe('Contract', () => {
       contract.pullEvents();
 
       contract.sentForSignature(
-        { provider: 'simulated', envelopeId: 'env_1', documentHash: DOCUMENT_HASH },
+        {
+          provider: 'simulated',
+          envelopeId: 'env_1',
+          document: 'Text',
+          documentHash: DOCUMENT_HASH,
+        },
         LATER,
       );
 
@@ -93,6 +98,7 @@ describe('Contract', () => {
       expect(contract.signature).toEqual({
         provider: 'simulated',
         envelopeId: 'env_1',
+        document: 'Text',
         documentHash: DOCUMENT_HASH,
         sentAt: LATER,
         signedAt: null,
@@ -100,7 +106,12 @@ describe('Contract', () => {
       expect(eventTypes(contract)).toEqual([LendingEvents.ContractSentForSignature]);
       expect(() => {
         contract.sentForSignature(
-          { provider: 'simulated', envelopeId: 'env_2', documentHash: DOCUMENT_HASH },
+          {
+            provider: 'simulated',
+            envelopeId: 'env_2',
+            document: 'Text',
+            documentHash: DOCUMENT_HASH,
+          },
           LATER,
         );
       }).toThrow(InvalidStateTransitionError);

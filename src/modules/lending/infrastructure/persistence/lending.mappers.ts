@@ -23,10 +23,15 @@ import {
 export const ContractMapper = {
   toDomain(row: ContractOrmEntity): Contract {
     const signature =
-      row.signatureProvider && row.envelopeId && row.documentHash && row.sentForSignatureAt
+      row.signatureProvider &&
+      row.envelopeId &&
+      row.document !== null &&
+      row.documentHash &&
+      row.sentForSignatureAt
         ? {
             provider: row.signatureProvider,
             envelopeId: row.envelopeId,
+            document: row.document,
             documentHash: row.documentHash,
             sentAt: row.sentForSignatureAt,
             signedAt: row.signedAt,
@@ -73,6 +78,7 @@ export const ContractMapper = {
       productTerms: productToJson(terms.product),
       signatureProvider: signature?.provider ?? null,
       envelopeId: signature?.envelopeId ?? null,
+      document: signature?.document ?? null,
       documentHash: signature?.documentHash ?? null,
       sentForSignatureAt: signature?.sentAt ?? null,
       signedAt: signature?.signedAt ?? null,

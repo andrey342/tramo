@@ -26,6 +26,9 @@ export class CreateLendingContracts1791828960000 implements MigrationInterface {
           CHECK (jsonb_typeof(product_terms) = 'object' AND product_terms ->> 'kind' = product),
         signature_provider text NULL,
         envelope_id text NULL,
+        -- The text sent for signature, as sent (what the student signed, whatever the code renders
+        -- later).
+        document text NULL,
         document_hash text NULL CONSTRAINT ck_lending_contracts_document_hash
           CHECK (document_hash ~ '^[0-9a-f]{64}$'),
         sent_for_signature_at timestamptz(3) NULL,
@@ -41,9 +44,10 @@ export class CreateLendingContracts1791828960000 implements MigrationInterface {
         updated_at timestamptz(3) NOT NULL DEFAULT now(),
         version integer NOT NULL CONSTRAINT ck_lending_contracts_version CHECK (version > 0),
         CONSTRAINT pk_lending_contracts PRIMARY KEY (id),
-        -- The envelope is sent as a whole: provider, id, hash and time together.
+        -- The envelope is sent as a whole: provider, id, document, hash and time together.
         CONSTRAINT ck_lending_contracts_envelope CHECK (
-          num_nulls(signature_provider, envelope_id, document_hash, sent_for_signature_at) IN (0, 4)
+          num_nulls(signature_provider, envelope_id, document, document_hash, sent_for_signature_at)
+            IN (0, 5)
         ),
         -- Mirrors the domain: past the draft there is an envelope, once signed a signature, once
         -- active a start day, and only a cancelled contract has a cancellation reason.

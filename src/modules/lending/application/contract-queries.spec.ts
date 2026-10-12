@@ -21,7 +21,6 @@ import {
 import { RecordingEventBus } from '../../../../test/fakes/shared';
 import { type Contract, ContractAccessDeniedError, renderContractDocument } from '../domain';
 
-import { documentHash } from './commands/send-contract-for-signature.command';
 import {
   GetContractDocumentHandler,
   GetContractDocumentQuery,
@@ -211,7 +210,8 @@ describe('lending queries', () => {
       await expect(quote('2026-11-13')).rejects.toThrow(InvalidValueError);
     });
 
-    it('should serve the document whose hash the signature carries', async () => {
+    // What was sent is what was signed, whatever the code renders today.
+    it('should serve the text sent for signature, not a new rendering', async () => {
       const t = setup();
       const contract = aContractSentForSignature();
       await t.contracts.save(contract);
@@ -220,8 +220,20 @@ describe('lending queries', () => {
         new GetContractDocumentQuery(studentOf(contract), contract.id),
       );
 
+      expect(document).toBe(contract.signature?.document);
+      expect(document).not.toBe(renderContractDocument(contract));
+    });
+
+    it('should render the document of a contract not yet sent', async () => {
+      const t = setup();
+      const contract = aContract();
+      await t.contracts.save(contract);
+
+      const document = await t.document.execute(
+        new GetContractDocumentQuery(studentOf(contract), contract.id),
+      );
+
       expect(document).toBe(renderContractDocument(contract));
-      expect(documentHash(document)).toMatch(/^[0-9a-f]{64}$/);
     });
   });
 

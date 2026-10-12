@@ -101,6 +101,10 @@ export class ContractOrmEntity {
   @Column('text', { name: 'envelope_id', nullable: true })
   envelopeId: string | null;
 
+  // The text sent for signature, as sent.
+  @Column('text', { nullable: true })
+  document: string | null;
+
   @Column('text', { name: 'document_hash', nullable: true })
   documentHash: string | null;
 

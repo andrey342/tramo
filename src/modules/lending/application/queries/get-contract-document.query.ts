@@ -6,7 +6,8 @@ import { type Principal } from '@shared/application';
 import { CONTRACT_REPOSITORY, type ContractRepository, renderContractDocument } from '../../domain';
 import { canSeeRepayment, findVisibleContract } from '../contract-access';
 
-// The text the student signs; its SHA-256 is the documentHash of the signature.
+// The text the student signs: as it was sent once the contract is out for signature (its SHA-256
+// is the documentHash of the signature), rendered from the terms before that.
 export class GetContractDocumentQuery extends Query<string> {
   constructor(
     readonly actor: Principal,
@@ -27,6 +28,6 @@ export class GetContractDocumentHandler implements IQueryHandler<GetContractDocu
       query.contractId,
       canSeeRepayment,
     );
-    return renderContractDocument(contract);
+    return contract.signature?.document ?? renderContractDocument(contract);
   }
 }

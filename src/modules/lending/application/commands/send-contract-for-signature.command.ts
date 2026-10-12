@@ -50,7 +50,7 @@ export class SendContractForSignatureHandler implements ICommandHandler<SendCont
         return;
       }
       fresh.sentForSignature(
-        { provider: this.signatures.name, envelopeId, documentHash: hash },
+        { provider: this.signatures.name, envelopeId, document, documentHash: hash },
         this.clock.now(),
       );
       await this.contracts.save(fresh);
