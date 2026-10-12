@@ -5,14 +5,17 @@ import {
   type ContractDefaultedPayload,
   LendingEvents,
   type PayoffRequestedPayload,
+  type PayoffWithdrawnPayload,
   type PlanCompletedPayload,
 } from '@modules/lending/domain/events/lending-events';
 import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shared/application';
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
+import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
+import { RunBillingCycleCommand } from '../../application/commands/run-billing-cycle.command';
 import {
   BillingEvents,
   type ChargeCancelledPayload,
@@ -81,6 +84,24 @@ export class ChargeOnPayoffRequested implements EventHandler<PayoffRequestedPayl
 
 // Only a payoff makes the open charges unowed: a plan that ends on its last instalment, its cap
 // or its last ISA payment ends with that charge, which is still collected.
+// The payoff was refused: the cycle skipped the plan meanwhile, so the contract is billed and
+// collected as of that day, not on the next 1st.
+@Injectable()
+@EventSubscriber({ event: LendingEvents.PayoffWithdrawn, consumer: 'billing.rebill-on-withdrawn' })
+export class RebillOnPayoffWithdrawn implements EventHandler<PayoffWithdrawnPayload> {
+  constructor(private readonly commands: CommandBus) {}
+
+  async handle(event: IntegrationEvent<PayoffWithdrawnPayload>): Promise<void> {
+    const { contractId } = event.payload;
+    const asOf = CalendarDate.fromInstant(new Date(event.occurredAt));
+    const billed = await this.commands.execute(new RunBillingCycleCommand(asOf, contractId));
+    if (billed.failedContractIds.length > 0) {
+      throw new Error(`Contract ${contractId} not billed after its payoff was withdrawn`);
+    }
+    await this.commands.execute(new CollectDueChargesCommand(asOf, contractId));
+  }
+}
+
 @Injectable()
 @EventSubscriber({ event: LendingEvents.PlanCompleted, consumer: 'billing.close-plan' })
 export class CancelChargesOnPlanCompleted implements EventHandler<PlanCompletedPayload> {

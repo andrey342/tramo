@@ -9,10 +9,16 @@ import { type IntegrationEvent } from '@shared/application';
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
+import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
+import { RunBillingCycleCommand } from '../../application/commands/run-billing-cycle.command';
 import { BillingEvents } from '../../domain';
 
-import { CancelChargesOnPlanCompleted, CollectOnMandateSigned } from './billing.consumers';
+import {
+  CancelChargesOnPlanCompleted,
+  CollectOnMandateSigned,
+  RebillOnPayoffWithdrawn,
+} from './billing.consumers';
 
 const completed = (
   contractId: string,
@@ -77,6 +83,35 @@ describe('CollectOnMandateSigned', () => {
 
     expect(executed).toEqual([
       new CollectWaitingChargesCommand(contractId, CalendarDate.parse('2026-11-20')),
+    ]);
+  });
+});
+
+describe('RebillOnPayoffWithdrawn', () => {
+  it('should bill and collect the contract as of the day its payoff was withdrawn', async () => {
+    const executed: unknown[] = [];
+    const commands = {
+      execute: (command: unknown) => {
+        executed.push(command);
+        return Promise.resolve({ failedContractIds: [] });
+      },
+    } as unknown as CommandBus;
+    const contractId = uuidv7();
+    const day = CalendarDate.parse('2026-11-22');
+
+    await new RebillOnPayoffWithdrawn(commands).handle({
+      eventId: uuidv7(),
+      eventType: LendingEvents.PayoffWithdrawn,
+      aggregateType: 'FinancingPlan',
+      aggregateId: uuidv7(),
+      occurredAt: '2026-11-22T09:00:00.000Z',
+      correlationId: null,
+      payload: { planId: uuidv7(), contractId, studentId: uuidv7() },
+    });
+
+    expect(executed).toEqual([
+      new RunBillingCycleCommand(day, contractId),
+      new CollectDueChargesCommand(day, contractId),
     ]);
   });
 });
