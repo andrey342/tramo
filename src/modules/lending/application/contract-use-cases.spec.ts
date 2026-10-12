@@ -223,7 +223,7 @@ describe('lending use cases', () => {
 
       await expect(
         t.drawUp.execute(new DrawUpContractCommand({ ...t.offer(), programId: uuidv7() })),
-      ).rejects.toThrow('unknown to the catalog');
+      ).rejects.toThrow(EntityNotFoundError);
     });
   });
 

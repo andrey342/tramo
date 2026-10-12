@@ -17,7 +17,6 @@ import {
   DISBURSEMENT_REPOSITORY,
   disbursementAmount,
   type DisbursementRepository,
-  LendingRecordExistsError,
 } from '../../domain';
 
 // A signed contract pays the center. One disbursement per contract: a redelivered ContractSigned
@@ -38,32 +37,26 @@ export class RequestDisbursementHandler implements ICommandHandler<RequestDisbur
   ) {}
 
   async execute(command: RequestDisbursementCommand): Promise<void> {
-    try {
-      await this.uow.run(async () => {
-        if (await this.disbursements.findByContractId(command.contractId)) {
-          return;
-        }
-        const contract = await this.contracts.findById(command.contractId);
-        if (!contract) {
-          throw new EntityNotFoundError('Contract', command.contractId);
-        }
-        if (contract.status !== 'signed') {
-          throw new InvalidStateTransitionError('Contract', contract.status, 'disbursement');
-        }
-        await this.disbursements.save(
-          Disbursement.request({
-            id: uuidv7(),
-            contractId: contract.id,
-            centerId: contract.centerId,
-            amount: disbursementAmount(contract.terms),
-            now: this.clock.now(),
-          }),
-        );
-      });
-    } catch (error) {
-      if (!(error instanceof LendingRecordExistsError)) {
-        throw error;
+    await this.uow.run(async () => {
+      if (await this.disbursements.findByContractId(command.contractId)) {
+        return;
       }
-    }
+      const contract = await this.contracts.findById(command.contractId);
+      if (!contract) {
+        throw new EntityNotFoundError('Contract', command.contractId);
+      }
+      if (contract.status !== 'signed') {
+        throw new InvalidStateTransitionError('Contract', contract.status, 'disbursement');
+      }
+      await this.disbursements.save(
+        Disbursement.request({
+          id: uuidv7(),
+          contractId: contract.id,
+          centerId: contract.centerId,
+          amount: disbursementAmount(contract.terms),
+          now: this.clock.now(),
+        }),
+      );
+    });
   }
 }

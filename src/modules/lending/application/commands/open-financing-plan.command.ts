@@ -16,7 +16,6 @@ import {
   FINANCING_PLAN_REPOSITORY,
   FinancingPlan,
   type FinancingPlanRepository,
-  LendingRecordExistsError,
 } from '../../domain';
 
 // Opens the repayment plan of an activated contract: its instalment table, or its ISA terms.
@@ -37,36 +36,30 @@ export class OpenFinancingPlanHandler implements ICommandHandler<OpenFinancingPl
   ) {}
 
   async execute(command: OpenFinancingPlanCommand): Promise<void> {
-    try {
-      await this.uow.run(async () => {
-        if (await this.plans.findByContractId(command.contractId)) {
-          return;
-        }
-        const contract = await this.contracts.findById(command.contractId);
-        if (!contract) {
-          throw new EntityNotFoundError('Contract', command.contractId);
-        }
-        if (!contract.activatedOn) {
-          throw new InvalidStateTransitionError('Contract', contract.status, 'plan');
-        }
-        await this.plans.save(
-          FinancingPlan.open({
-            id: uuidv7(),
-            contractId: contract.id,
-            studentId: contract.studentId,
-            centerId: contract.centerId,
-            principal: contract.terms.principal,
-            product: contract.terms.product,
-            programDurationWeeks: contract.program.durationWeeks,
-            activatedOn: contract.activatedOn,
-            now: this.clock.now(),
-          }),
-        );
-      });
-    } catch (error) {
-      if (!(error instanceof LendingRecordExistsError)) {
-        throw error;
+    await this.uow.run(async () => {
+      if (await this.plans.findByContractId(command.contractId)) {
+        return;
       }
-    }
+      const contract = await this.contracts.findById(command.contractId);
+      if (!contract) {
+        throw new EntityNotFoundError('Contract', command.contractId);
+      }
+      if (!contract.activatedOn) {
+        throw new InvalidStateTransitionError('Contract', contract.status, 'plan');
+      }
+      await this.plans.save(
+        FinancingPlan.open({
+          id: uuidv7(),
+          contractId: contract.id,
+          studentId: contract.studentId,
+          centerId: contract.centerId,
+          principal: contract.terms.principal,
+          product: contract.terms.product,
+          programDurationWeeks: contract.program.durationWeeks,
+          activatedOn: contract.activatedOn,
+          now: this.clock.now(),
+        }),
+      );
+    });
   }
 }

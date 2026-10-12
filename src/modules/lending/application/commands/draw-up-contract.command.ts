@@ -3,14 +3,13 @@ import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock, Money } from '@shared/domain';
+import { CLOCK, type Clock, EntityNotFoundError, Money } from '@shared/domain';
 
 import {
   Contract,
   CONTRACT_REPOSITORY,
   type ContractProduct,
   type ContractRepository,
-  LendingRecordExistsError,
 } from '../../domain';
 import { CONTRACTING_DIRECTORY, type ContractingDirectory } from '../ports/lending-ports';
 
@@ -26,7 +25,9 @@ export interface AcceptedOffer {
 }
 
 // Draws up the contract of an accepted offer. Idempotent by application: a redelivered
-// OfferAccepted finds the contract already there and returns it.
+// OfferAccepted finds the contract already there and returns it. Two deliveries of one event never
+// run at once (the consumer's claim on it); a second OfferAccepted for the same application would
+// hit the unique index and be retried, finding the contract.
 export class DrawUpContractCommand extends Command<string> {
   constructor(readonly offer: AcceptedOffer) {
     super();
@@ -44,48 +45,35 @@ export class DrawUpContractHandler implements ICommandHandler<DrawUpContractComm
 
   async execute(command: DrawUpContractCommand): Promise<string> {
     const { offer } = command;
-    try {
-      return await this.uow.run(async () => {
-        const existing = await this.contracts.findByApplicationId(offer.applicationId);
-        if (existing) {
-          return existing.id;
-        }
-        const details = await this.catalog.contractingDetails(offer.centerId, offer.programId);
-        // Centers and programs are never deleted: this is corrupt data, not a missing offer.
-        if (!details) {
-          throw new Error(
-            `Program ${offer.programId} of center ${offer.centerId} is unknown to the catalog.`,
-          );
-        }
-        const contract = Contract.draw({
-          id: uuidv7(),
-          applicationId: offer.applicationId,
-          studentId: offer.studentId,
-          centerId: offer.centerId,
-          program: {
-            programId: offer.programId,
-            name: offer.programName,
-            durationWeeks: details.programDurationWeeks,
-          },
-          terms: {
-            principal: Money.fromCents(offer.principalCents),
-            platformFee: details.platformFee,
-            product: offer.product,
-          },
-          now: this.clock.now(),
-        });
-        await this.contracts.save(contract);
-        return contract.id;
-      });
-    } catch (error) {
-      // A concurrent delivery of the same offer drew it up first.
-      if (error instanceof LendingRecordExistsError) {
-        const contract = await this.contracts.findByApplicationId(offer.applicationId);
-        if (contract) {
-          return contract.id;
-        }
+    return this.uow.run(async () => {
+      const existing = await this.contracts.findByApplicationId(offer.applicationId);
+      if (existing) {
+        return existing.id;
       }
-      throw error;
-    }
+      const details = await this.catalog.contractingDetails(offer.centerId, offer.programId);
+      // Centers and programs are never deleted: the job retries, then dead-letters it for ops.
+      if (!details) {
+        throw new EntityNotFoundError('Program', offer.programId);
+      }
+      const contract = Contract.draw({
+        id: uuidv7(),
+        applicationId: offer.applicationId,
+        studentId: offer.studentId,
+        centerId: offer.centerId,
+        program: {
+          programId: offer.programId,
+          name: offer.programName,
+          durationWeeks: details.programDurationWeeks,
+        },
+        terms: {
+          principal: Money.fromCents(offer.principalCents),
+          platformFee: details.platformFee,
+          product: offer.product,
+        },
+        now: this.clock.now(),
+      });
+      await this.contracts.save(contract);
+      return contract.id;
+    });
   }
 }
