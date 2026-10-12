@@ -136,11 +136,12 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module        | Responsibility                                                           | Main endpoints                                                                                                      |
-| ------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `iam`         | Accounts, sessions, roles, center API keys                               | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                     |
-| `catalog`     | Training centers, VAT verification, programs and their financing options | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                |
-| `origination` | Financing applications, verification saga, risk policies and scoring     | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies` |
+| Module        | Responsibility                                                            | Main endpoints                                                                                                      |
+| ------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `iam`         | Accounts, sessions, roles, center API keys                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                     |
+| `catalog`     | Training centers, VAT verification, programs and their financing options  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                |
+| `origination` | Financing applications, verification saga, risk policies and scoring      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies` |
+| `lending`     | Contracts, e-signature, disbursement to the center and the repayment plan |                                                                                                                     |
 
 ## API overview
 
