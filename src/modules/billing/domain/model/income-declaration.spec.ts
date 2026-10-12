@@ -3,7 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { InvalidValueError, Money } from '@shared/domain';
 
 import { aDeclaration, NOW } from '../../../../../test/factories/billing';
-import { InvalidPeriodError } from '../errors/billing-errors';
+import { ConcurrentChargeError, InvalidPeriodError } from '../errors/billing-errors';
 import { BillingEvents } from '../events/billing-events';
 
 import { IncomeDeclaration } from './income-declaration';
@@ -35,8 +35,37 @@ describe('IncomeDeclaration', () => {
     expect(() => declare(period)).toThrow(InvalidPeriodError);
   });
 
+  it('should be reconstituted as saved', () => {
+    const declaration = aDeclaration();
+
+    const loaded = IncomeDeclaration.reconstitute(declaration.id, {
+      contractId: declaration.contractId,
+      studentId: declaration.studentId,
+      period: declaration.period,
+      grossMonthlyIncome: declaration.grossMonthlyIncome,
+      source: declaration.source,
+      declaredAt: declaration.declaredAt,
+    });
+
+    expect(loaded).toMatchObject({
+      studentId: declaration.studentId,
+      source: 'self',
+      declaredAt: NOW,
+    });
+  });
+
   it('should accept no income and refuse a negative one', () => {
     expect(declare('2026-10', 0).grossMonthlyIncome.isZero()).toBe(true);
     expect(() => declare('2026-10', -1)).toThrow(InvalidValueError);
+  });
+});
+
+describe('ConcurrentChargeError', () => {
+  it('should name the charge another run created', () => {
+    expect(new ConcurrentChargeError('installment:3')).toMatchObject({
+      code: 'concurrent_charge',
+      category: 'conflict',
+      details: { reference: 'installment:3' },
+    });
   });
 });

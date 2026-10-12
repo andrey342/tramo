@@ -4,7 +4,7 @@ import { aCharge, day, LATER, NOW } from '../../../../../test/factories/billing'
 import { UnknownCollectionAttemptError } from '../errors/billing-errors';
 import { BillingEvents } from '../events/billing-events';
 
-import { type Charge } from './charge';
+import { Charge } from './charge';
 
 const MANDATE_ID = '0199a000-0000-7000-8000-00000000000m';
 const eventTypes = (charge: Charge): string[] =>
@@ -26,6 +26,31 @@ describe('Charge', () => {
         payload: expect.objectContaining({ amountCents: 337_50, dueDate: '2026-11-12' }),
       }),
     ]);
+  });
+
+  it('should be reconstituted as saved, without events', () => {
+    const charge = fresh();
+
+    const loaded = Charge.reconstitute(charge.id, {
+      contractId: charge.contractId,
+      studentId: charge.studentId,
+      centerId: charge.centerId,
+      kind: charge.kind,
+      reference: charge.reference,
+      installmentNumber: charge.installmentNumber,
+      period: charge.period,
+      amount: charge.amount,
+      dueDate: charge.dueDate,
+      status: charge.status,
+      attempts: charge.attempts,
+      dunningStep: charge.dunningStep,
+      paidAt: charge.paidAt,
+      statusChangedAt: charge.statusChangedAt,
+      createdAt: charge.createdAt,
+    });
+
+    expect(loaded).toMatchObject({ statusChangedAt: NOW, createdAt: NOW, period: '2026-11' });
+    expect(loaded.hasPendingEvents).toBe(false);
   });
 
   describe('collection', () => {
@@ -91,6 +116,13 @@ describe('Charge', () => {
       charge.recordSucceeded(key, NOW, false);
       expect(() => {
         charge.recordFailed(key, 'late', day('2026-11-12'), NOW);
+      }).toThrow(InvalidStateTransitionError);
+      const refused = fresh();
+      const first = refused.submitCollection(MANDATE_ID, NOW);
+      refused.recordFailed(first, 'insufficient_funds', day('2026-11-12'), NOW);
+      refused.recordFailed(first, 'insufficient_funds', day('2026-11-12'), NOW);
+      expect(() => {
+        refused.recordSucceeded(first, NOW, false);
       }).toThrow(InvalidStateTransitionError);
       expect(() => charge.submitCollection(MANDATE_ID, NOW)).toThrow(InvalidStateTransitionError);
     });
