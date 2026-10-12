@@ -182,7 +182,7 @@ export class FakeESignatureProvider implements ESignatureProvider {
 }
 
 export const OPEN_IBAN = 'ES9121000418450200051332';
-export const CLOSED_IBAN = 'ES7921000813610123450000';
+export const CLOSED_IBAN = 'ES1421000418401234560000';
 
 // Remembers transfers by idempotency key. A transfer to an IBAN ending in 0000 bounces; one to
 // any other account settles, or stays pending while `settleImmediately` is off.

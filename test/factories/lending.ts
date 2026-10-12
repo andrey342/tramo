@@ -39,16 +39,22 @@ export const someTerms = (overrides: Partial<ContractTerms> = {}): ContractTerms
 });
 
 export function aContract(
-  overrides: { terms?: Partial<ContractTerms>; studentId?: string; centerId?: string } = {},
+  overrides: {
+    terms?: Partial<ContractTerms>;
+    studentId?: string;
+    centerId?: string;
+    applicationId?: string;
+    now?: Date;
+  } = {},
 ): Contract {
   return Contract.draw({
     id: uuidv7(),
-    applicationId: uuidv7(),
+    applicationId: overrides.applicationId ?? uuidv7(),
     studentId: overrides.studentId ?? uuidv7(),
     centerId: overrides.centerId ?? uuidv7(),
     program: { programId: uuidv7(), name: 'Full Stack Bootcamp', durationWeeks: 12 },
     terms: someTerms(overrides.terms),
-    now: NOW,
+    now: overrides.now ?? NOW,
   });
 }
 
