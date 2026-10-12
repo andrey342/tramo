@@ -24,11 +24,8 @@ import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/messaging';
 import { QueueNames } from '@shared/infrastructure/queues';
 
-import { anActiveTrainingCenter, aProgram, NOW } from '../../../../../test/factories/catalog';
-import { CLOSED_IBAN, OPEN_IBAN } from '../../../../../test/fakes/lending';
-import { eventually } from '../../../../../test/helpers/eventually';
-import { RecordSignatureEventCommand } from '../../application/commands/record-signature-event.command';
-import { RetryDisbursementCommand } from '../../application/commands/retry-disbursement.command';
+import { RecordSignatureEventCommand } from '../../src/modules/lending/application/commands/record-signature-event.command';
+import { RetryDisbursementCommand } from '../../src/modules/lending/application/commands/retry-disbursement.command';
 import {
   type Contract,
   CONTRACT_REPOSITORY,
@@ -37,9 +34,13 @@ import {
   type DisbursementRepository,
   FINANCING_PLAN_REPOSITORY,
   type FinancingPlanRepository,
-} from '../../domain';
-import { LendingWorkerModule } from '../../lending-worker.module';
+} from '../../src/modules/lending/domain';
+import { LendingWorkerModule } from '../../src/modules/lending/lending-worker.module';
+import { anActiveTrainingCenter, aProgram, NOW } from '../factories/catalog';
+import { CLOSED_IBAN, OPEN_IBAN } from '../fakes/lending';
+import { eventually } from '../helpers/eventually';
 
+// Crosses two modules (lending's saga, catalog's centers and programs), so it lives outside both.
 describe('contract saga (integration)', () => {
   let app: INestApplicationContext;
   let uow: UnitOfWork;
