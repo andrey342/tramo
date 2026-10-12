@@ -3,7 +3,9 @@ import { err, ok, type Result } from './result';
 import { ValueObject } from './value-object';
 
 // Deliberately simple: an address is proven by delivering mail to it, not by a perfect regex.
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// No whitespace, and none of the characters that make an address a list or a display name
+// (,;<>"()[]\:), so a stored address is always one mailbox wherever it is used.
+const EMAIL_PATTERN = /^[^\s@,;<>"()[\]\\:]+@[^\s@,;<>"()[\]\\:]+\.[^\s@,;<>"()[\]\\:]+$/;
 const MAX_LENGTH = 254;
 
 export class Email extends ValueObject<{ value: string }> {

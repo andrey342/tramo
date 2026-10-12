@@ -57,7 +57,18 @@ describe('Email', () => {
     expect(unwrap(Email.create('  Ana.Garcia@Example.COM ')).value).toBe('ana.garcia@example.com');
   });
 
-  it.each(['', 'ana', 'ana@', 'ana@example', 'a b@example.com'])('should reject %p', (raw) => {
+  // A list or a display name is not one mailbox: 'x,victim@gmail.com' would send to both.
+  it.each([
+    '',
+    'ana',
+    'ana@',
+    'ana@example',
+    'a b@example.com',
+    'see-http://evil.tld,victim@gmail.com',
+    'Ana <ana@example.com>',
+    'ana;bob@example.com',
+    '"ana"@example.com',
+  ])('should reject %p', (raw) => {
     expect(Email.create(raw).ok).toBe(false);
   });
 });
