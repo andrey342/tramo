@@ -117,7 +117,9 @@ describe('billing saga (integration)', () => {
     const charge = await charges.findByReference(contractId, 'installment:1');
     await collect(charge, 'succeeded');
 
-    expect(run).toMatchObject({ chargesCreated: 1, collectionsSubmitted: 1 });
+    // Other suites leave plans due the same day: the run bills them too.
+    expect(run.chargesCreated).toBeGreaterThanOrEqual(1);
+    expect(charge?.attempts).toHaveLength(1);
     const plan = await until(
       () => plans.findByContractId(contractId),
       (found) => {
