@@ -8,6 +8,7 @@ export {
 } from './access';
 export { AggregateRoot } from './aggregate-root';
 export { annualPercentageRate, annuityPayment, monthlyRate } from './annuity';
+export { CalendarDate } from './calendar-date';
 export { CLOCK, type Clock, FixedClock } from './clock';
 export { DateRange } from './date-range';
 export {
