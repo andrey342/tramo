@@ -10,6 +10,8 @@ import { signWebhook } from '../src/shared/infrastructure/http/webhook-signature
 
 import { DEMO_PASSWORD, DEMO_USERS } from './demo-users';
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'api']);
+
 interface ContractView {
   status: string;
   signature: { envelopeId: string; documentHash: string } | null;
@@ -27,7 +29,13 @@ async function main(): Promise<void> {
       'usage: pnpm esign:sign <contractId> [--decline], with ESIGN_WEBHOOK_SECRET set',
     );
   }
-  const baseUrl = `${process.env.API_URL ?? 'http://localhost:3000'}/api/v1`;
+  const apiUrl = process.env.API_URL ?? 'http://localhost:3000';
+  // It signs with the webhook secret: pointed at a real deployment it would sign contracts and
+  // release payments. Local stacks only.
+  if (process.env.NODE_ENV === 'production' || !LOCAL_HOSTS.has(new URL(apiUrl).hostname)) {
+    throw new Error(`Refusing to sign for ${apiUrl}: this script is for a local stack only.`);
+  }
+  const baseUrl = `${apiUrl}/api/v1`;
 
   const login = await fetch(`${baseUrl}/auth/login`, {
     method: 'POST',
