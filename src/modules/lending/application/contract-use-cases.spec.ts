@@ -660,6 +660,24 @@ describe('lending use cases', () => {
       expect(t.events.ofType(LendingEvents.ContractDefaulted)).toHaveLength(1);
     });
 
+    // ChargeWrittenOff and PlanCompleted on the same day, the write-off delivered first: the
+    // completion must not dead-letter, and the default stands.
+    it('should leave a defaulted contract defaulted when its plan completes afterwards', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.collectionStatus.execute(
+        new RecordCollectionStatusCommand(contractId, 'defaulted', new Date()),
+      );
+      const version = (await t.contracts.findById(contractId))?.version;
+
+      await t.complete.execute(new CompleteContractCommand(contractId));
+
+      const contract = await t.contracts.findById(contractId);
+      expect(contract?.status).toBe('defaulted');
+      expect(contract?.version).toBe(version);
+      expect(t.events.ofType(LendingEvents.ContractCompleted)).toHaveLength(0);
+    });
+
     // The schedule no longer shows the plan active, and billing no longer lists it.
     it('should close the plan of a defaulted contract once', async () => {
       const t = setup();

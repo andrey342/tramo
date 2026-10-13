@@ -252,10 +252,11 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // The center has been paid. Repayment counts from this day. Idempotent for an active contract
-  // (a redelivered DisbursementSettled).
+  // The center has been paid. Repayment counts from this day. Idempotent for a contract activated
+  // already, whatever became of it since: a DisbursementSettled redelivered after the contract
+  // went into arrears or ended changes nothing.
   activate(now: Date): void {
-    if (this.props.status === 'active') {
+    if (this.props.activatedOn) {
       return;
     }
     this.assertStatus('signed', 'active');
@@ -330,8 +331,12 @@ export class Contract extends AggregateRoot {
   }
 
   // The plan has ended: repaid, paid off, or for an ISA its cap, payments or window reached.
+  // Idempotent. A contract that defaulted meanwhile (a charge written off the day the plan ended,
+  // its event delivered first) stays defaulted: the default stands and the debt stays with
+  // collections. declareDefault leaves a completed contract completed in the same way, so the
+  // first ending recorded is final whatever order the two events arrive in.
   complete(now: Date): void {
-    if (this.props.status === 'completed') {
+    if (this.hasEnded) {
       return;
     }
     if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {

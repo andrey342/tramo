@@ -205,7 +205,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   ```
 
   Arrears notices older than the last change are ignored, and an ended contract (`completed`,
-  `defaulted`) ignores them.
+  `defaulted`) ignores them. The first ending recorded is final: a plan that ends after the
+  contract defaulted (a charge written off the same day, delivered first) leaves it `defaulted`,
+  and a charge written off after it completed leaves it `completed`.
 
 - **`ContractTerms`**: fixed at drawing: `principal` (the program price, financed in full), the
   center's `platformFee` at that moment and the `ContractProduct` (instalments: term and TIN;

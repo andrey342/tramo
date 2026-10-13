@@ -423,8 +423,10 @@ the repayment plan.
   instalment paid (in any order: a retried one may come after the next) or settles a payoff;
   `ContractInArrears` and `ArrearsCleared` move the contract into and out of `in_arrears`;
   `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan (`defaulted`): the
-  schedule shows it ended and billing no longer bills it. A payoff is refused while an instalment
-  due is unpaid, since billing is already collecting it.
+  schedule shows it ended and billing no longer bills it. The first ending recorded is final: a
+  `PlanCompleted` delivered after the default leaves the contract `defaulted` (the default stands
+  and the application stays held), and a write-off after completion leaves it `completed`. A
+  payoff is refused while an instalment due is unpaid, since billing is already collecting it.
 - **Activation and plan.** `DisbursementSettled` activates the contract on that day;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
   the ISA terms with their running totals, assessed month by month without gaps. `PlanCompleted`

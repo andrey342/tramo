@@ -278,9 +278,51 @@ describe('Contract', () => {
       expect(() => {
         aSignedContract().declareDefault(LATER);
       }).toThrow(InvalidStateTransitionError);
-      expect(() => {
-        contract.complete(LATER);
-      }).toThrow(InvalidStateTransitionError);
+    });
+
+    // A charge written off the day the plan ended: ChargeWrittenOff delivered before
+    // PlanCompleted. The default stands, as a completion stands against a later default.
+    it('should leave a defaulted contract defaulted when its plan ends later', () => {
+      const contract = anActiveContract();
+      contract.declareDefault(LATER);
+      contract.pullEvents();
+
+      contract.complete(LATER);
+
+      expect(contract.status).toBe('defaulted');
+      expect(eventTypes(contract)).toEqual([]);
+    });
+
+    it.each([
+      [
+        'in arrears',
+        (contract: Contract) => {
+          contract.markInArrears(LATER, LATER);
+        },
+      ],
+      [
+        'completed',
+        (contract: Contract) => {
+          contract.complete(LATER);
+        },
+      ],
+      [
+        'defaulted',
+        (contract: Contract) => {
+          contract.declareDefault(LATER);
+        },
+      ],
+    ])('should take a redelivered activation as done when the contract is %s', (_case, moveOn) => {
+      const contract = anActiveContract();
+      moveOn(contract);
+      const status = contract.status;
+      contract.pullEvents();
+
+      contract.activate(LATER);
+
+      expect(contract.status).toBe(status);
+      expect(contract.activatedOn?.toString()).toBe('2026-10-12');
+      expect(eventTypes(contract)).toEqual([]);
     });
 
     it('should leave a completed contract completed when a charge is written off later', () => {
