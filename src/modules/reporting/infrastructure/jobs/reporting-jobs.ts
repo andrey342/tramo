@@ -14,8 +14,8 @@ interface RebuildJob extends CorrelatedJobData {
   readonly requestedBy: string | null;
 }
 
-// One rebuild at a time: the job id is fixed while one waits or runs, and freed once it ends, so
-// the next request queues a new one.
+// One rebuild at a time: the job id is fixed while one waits or runs (BullMQ adds nothing for an
+// id it holds), and the job is removed once it ends, so the next request queues a new one.
 @Injectable()
 export class QueuedRebuildJobs implements RebuildJobs {
   constructor(
@@ -23,17 +23,21 @@ export class QueuedRebuildJobs implements RebuildJobs {
   ) {}
 
   async request(requestedBy: string | null): Promise<boolean> {
-    const existing = await this.queue.getJob(REBUILD);
-    const state = existing ? await existing.getState() : undefined;
-    if (state && state !== 'completed' && state !== 'failed') {
+    if (await this.queue.getJob(REBUILD)) {
       return false;
     }
-    await existing?.remove();
     await this.queue.add(
       REBUILD,
       { requestedBy, correlationId: null },
-      { jobId: REBUILD, attempts: 3, backoff: { type: 'exponential', delay: 10_000 } },
+      {
+        jobId: REBUILD,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: true,
+        removeOnFail: true,
+      },
     );
+    // Two requests at the same instant both answer true; only one job exists.
     return true;
   }
 }

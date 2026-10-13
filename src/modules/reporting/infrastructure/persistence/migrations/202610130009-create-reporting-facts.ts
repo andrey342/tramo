@@ -89,6 +89,10 @@ export class CreateReportingFacts1791850140000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(`
+      CREATE INDEX ix_reporting_charge_facts_center_id
+        ON reporting.charge_facts (center_id)
+    `);
+    await queryRunner.query(`
       CREATE INDEX ix_reporting_charge_facts_contract_id
         ON reporting.charge_facts (contract_id)
     `);

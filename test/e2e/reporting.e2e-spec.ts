@@ -61,6 +61,28 @@ describe('Reporting (e2e)', () => {
     expect(byOther.body.code).toBe('reporting_access_denied');
   });
 
+  it('should let a center key read the dashboard only with portfolio:read', async () => {
+    const { centerId, token } = await centerWithAdmin();
+    const issue = async (scopes: string[]) =>
+      (
+        await api()
+          .post(`/api/v1/centers/${centerId}/api-keys`)
+          .set(...bearer(token))
+          .send({ name: 'BI', scopes })
+      ).body.key as string;
+    const [reader, writer] = [await issue(['portfolio:read']), await issue(['programs:write'])];
+    const dashboardOf = (id: string, key: string) =>
+      api().get(`/api/v1/centers/${id}/dashboard`).set('X-Api-Key', key);
+
+    const allowed = await dashboardOf(centerId, reader);
+    const refused = await dashboardOf(centerId, writer);
+    const elsewhere = await dashboardOf(uuidv7(), reader);
+
+    expect(allowed.status).toBe(200);
+    expect(refused.status).toBe(403);
+    expect(elsewhere.status).toBe(403);
+  });
+
   it('should keep program performance to the programs of the center', async () => {
     const { centerId, token } = await centerWithAdmin();
     const program = await api()

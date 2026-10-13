@@ -75,7 +75,7 @@ export class ReportingController {
 
   @Post('ops/reporting/rebuild')
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 409, 422)
   @ApiAcceptedResponse({ type: RebuildResponse })
   @Roles('ops', 'admin')
   @Idempotent()
