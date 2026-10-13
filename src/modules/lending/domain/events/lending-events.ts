@@ -131,7 +131,8 @@ export type PayoffWithdrawnPayload = {
   readonly studentId: string;
 };
 
-// Two months in a row without an income declaration: the student is reminded, ops can see it.
+// Two months in a row without an income declaration: the student is emailed (notifications),
+// and staff see `declarationOverdue` on the contract's schedule until a declaration clears it.
 export type IsaDeclarationOverduePayload = {
   readonly planId: string;
   readonly contractId: string;

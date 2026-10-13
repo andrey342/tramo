@@ -46,14 +46,14 @@ the current period, half-up.
 An ISA counts calendar months. The course is taken to start on activation and last its
 duration; payments start with the first full month after the grace period (the month the grace
 ends in, when it ends on the 1st), and the obligation lapses eight years after the end of the
-course. The student declares a month's income from its first day until the end of the 4th of
-the next month, since salaries are often paid on the last days of a month or the first of the
-next; on the 5th the month is assessed and its charge falls due. Each month is assessed once, in
-order and without gaps: at or above the threshold the student pays the share of the income
-declared, never past the cap; below it, or without a declaration, the month is paused and owes
-nothing; two months in a row without a declaration mark the plan overdue for ops. The plan ends
-at the cap, at the last payment, or when a month starts after the window. Amounts count towards
-the cap when they are charged.
+course. The student declares a month's income from its first day until the end of the 4th of the
+next month, since salaries are often paid on the last days of a month or the first of the next; on
+the 5th the month is assessed and its charge falls due. Each month is assessed once, in order and
+without gaps: at or above the threshold the student pays the share of the income declared, never
+past the cap; below it, or without a declaration, the month is paused and owes nothing; two months
+in a row without a declaration mark the plan overdue: the student is told, and staff see it on the
+schedule. The plan ends at the cap, at the last payment, or when a month starts after the window.
+Amounts count towards the cap when they are charged.
 
 Option 1 is fairer to the day but gives a different instalment each month, which the offer cannot
 state as one figure. Option 3 produces rows whose interest and principal do not add up to the

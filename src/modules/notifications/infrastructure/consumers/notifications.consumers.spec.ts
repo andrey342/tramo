@@ -10,6 +10,7 @@ import {
   EmailOnApplicationRejected,
   EmailOnChargeOverdue,
   EmailOnDisbursementSettled,
+  EmailOnIsaDeclarationOverdue,
   WebhookOnApplicationRejected,
   WebhookOnContractInArrears,
   WelcomeOnStudentRegistered,
@@ -113,6 +114,27 @@ describe('notifications consumers', () => {
       amountCents: 337_50,
       daysOverdue: 15,
       secondNotice: true,
+    });
+  });
+
+  it('should tell the student when two ISA months in a row went undeclared', async () => {
+    const { commands, executed } = recorded();
+
+    await new EmailOnIsaDeclarationOverdue(commands).handle(
+      event('IsaDeclarationOverdue', {
+        planId: 'p-1',
+        contractId: 'c-1',
+        studentId: 's-1',
+        missingSince: '2026-09',
+      }),
+    );
+
+    expect((executed[0] as RequestEmailCommand).request).toEqual({
+      eventId: 'event-1',
+      template: 'isa_declaration_overdue',
+      to: { userId: 's-1' },
+      reference: 'c-1',
+      data: { missingSince: '2026-09' },
     });
   });
 

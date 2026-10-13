@@ -231,8 +231,10 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
     8 years after the program's end. Each month is assessed in order, none skipped
     (`assessPeriod`): with income declared at or above the minimum it is charged the share,
     never past the cap; below the minimum or without a declaration it is `paused`. Two months in
-    a row without a declaration publish `IsaDeclarationOverdue`. The plan ends at the cap, at
-    `maxPayments` or once a month starts after the window.
+    a row without a declaration publish `IsaDeclarationOverdue`, once until a declaration clears
+    it: the student is emailed (`isa_declaration_overdue`) and staff see `declarationOverdue` on
+    the contract's schedule (`GET /contracts/:id/schedule`); the ops overview does not count it.
+    The plan ends at the cap, at `maxPayments` or once a month starts after the window.
 - **Payoff / payoff quote** (`PayoffQuote`): instalments only. What repaying everything costs on
   a day: instalments due and unpaid, the outstanding principal and the interest accrued since the
   last due date, no fee. `POST /contracts/:id/payoff` takes today's quote and records a
@@ -313,7 +315,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   on `notifications.emails`. `EmailTemplate`: `welcome`, `application_received`,
   `application_decided`, `contract_ready_to_sign`, `disbursement_settled`,
   `installment_reminder`, `installment_collected`, `payment_overdue`, `contract_in_arrears`,
-  `isa_declaration_reminder`.
+  `isa_declaration_reminder`, `isa_declaration_overdue`.
 
   ```text
   pending → sent                           the SMTP server took it

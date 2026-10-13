@@ -554,6 +554,7 @@ an event of another module; it decides nothing.
   | `ChargeOverdue`            | `payment_overdue`          | the student                |
   | `ContractInArrears`        | `contract_in_arrears`      | the student                |
   | `IncomeDeclarationDue`     | `isa_declaration_reminder` | the student                |
+  | `IsaDeclarationOverdue`    | `isa_declaration_overdue`  | the student                |
 
 - **Webhooks.** A center's admin points its webhook at a URL (`PUT /centers/:id/webhook`) and
   receives a secret once (ADR 018). Six events are posted: `application.submitted`,
