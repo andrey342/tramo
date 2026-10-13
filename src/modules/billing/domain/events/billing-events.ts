@@ -20,7 +20,9 @@ export const BillingEvents = {
   IncomeDeclarationDue: 'IncomeDeclarationDue',
 } as const;
 
-export type ChargeKind = 'installment' | 'isa' | 'payoff';
+// `accelerated`: the principal of the instalments not billed when a loan defaulted, owed at once
+// and written off as it is raised (the debt goes to collections).
+export type ChargeKind = 'installment' | 'isa' | 'payoff' | 'accelerated';
 
 export type MandateSignedPayload = {
   readonly mandateId: string;
@@ -129,14 +131,15 @@ export type ArrearsClearedPayload = {
   readonly centerId: string;
 };
 
-// Uncollectible: 90 days overdue, the end of dunning, and of the contract (lending defaults it).
+// Uncollectible: 90 days overdue, the end of dunning, and of the contract (lending defaults it);
+// or the principal a defaulted loan had left to bill.
 export type ChargeWrittenOffPayload = {
   readonly chargeId: string;
   readonly contractId: string;
   readonly studentId: string;
   readonly centerId: string;
   readonly amountCents: number;
-  readonly reason: 'dunning_exhausted';
+  readonly reason: 'dunning_exhausted' | 'contract_defaulted';
 };
 
 export type ChargeCancelledPayload = {

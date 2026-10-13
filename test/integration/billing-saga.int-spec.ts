@@ -253,6 +253,19 @@ describe('billing saga (integration)', () => {
       },
     );
     expect((await contracts.findById(contractId))?.status).toBe('defaulted');
+    // Instalment 1 was written off by dunning; the principal of 2 to 24 is raised at once and
+    // written off with the default (billing.close-defaulted).
+    const plan = await plans.findByContractId(contractId);
+    const leftToBill = (plan?.terms.kind === 'installments' ? plan.terms.schedule : [])
+      .filter((row) => row.number > 1)
+      .reduce((sum, row) => sum + row.principal.cents, 0);
+    const accelerated = await until(
+      () => charges.findByReference(contractId, 'accelerated'),
+      (charge) => {
+        expect(charge?.status).toBe('written_off');
+      },
+    );
+    expect(accelerated?.amount.cents).toBe(leftToBill);
   }, 60_000);
 
   // The payoff charge being collected for a contract (one per request).

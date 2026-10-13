@@ -461,7 +461,8 @@ the repayment plan.
   `ChargeReturned` marks it unpaid again (a return before its payment is retried until the
   payment is in); `ContractInArrears` and `ArrearsCleared` move the contract into and out of
   `in_arrears`; `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan
-  (`defaulted`): the schedule shows it ended and billing no longer bills it. A defaulted plan
+  (`defaulted`): the schedule shows it ended and billing no longer bills it; billing raises the
+  principal a defaulted loan had left to bill as one charge written off at once. A defaulted plan
   still records what billing collects or sees returned, since its debt is being recovered, and
   stays `defaulted`; a plan that ended otherwise is not reopened by a return (ADR 020). The first
   ending recorded is final: a `PlanCompleted` delivered after the default leaves the contract

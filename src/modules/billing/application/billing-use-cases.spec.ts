@@ -38,6 +38,10 @@ import {
   CancelOpenChargesHandler,
 } from './commands/cancel-open-charges.command';
 import {
+  CloseDefaultedChargesCommand,
+  CloseDefaultedChargesHandler,
+} from './commands/close-defaulted-charges.command';
+import {
   CollectDueChargesCommand,
   CollectDueChargesHandler,
 } from './commands/collect-due-charges.command';
@@ -144,6 +148,7 @@ function setup() {
     retry: new RetryChargeHandler(uow, charges, mandates, plans, clock),
     payoff: new CreatePayoffChargeHandler(uow, charges, mandates, plans, clock),
     cancel: new CancelOpenChargesHandler(uow, charges, clock),
+    closeDefaulted: new CloseDefaultedChargesHandler(uow, charges, plans, clock),
     remind: new SendDeclarationRemindersHandler(uow, plans, declarations, reminders, events, clock),
     list: new ListChargesHandler(plans, queries),
     statement: new GetStatementHandler(plans, queries),
@@ -960,21 +965,58 @@ describe('billing use cases', () => {
       expect(dunned.chargesReviewed).toBe(1);
     });
 
-    it('should cancel the charges not yet in collection', async () => {
+    // Instalment 1 is being collected, 2 was billed ahead of its due date, 3 was never billed:
+    // the principal of 2 and 3 is owed at once and written off, 1 waits for the provider.
+    it('should cancel what is not due and write off the principal a defaulted loan had left', async () => {
       const t = setup();
       const contractId = t.contract();
+      t.plans.principal.set(contractId, [
+        { number: 1, principalCents: 200_00 },
+        { number: 2, principalCents: 210_00 },
+        { number: 3, principalCents: 220_00 },
+      ]);
       await t.mandate(contractId);
       const collecting = await t.charge({ contractId });
       await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12')));
       const later = await t.charge({
         contractId,
         reference: 'installment:2',
+        installmentNumber: 2,
         dueDate: '2026-11-30',
       });
+      t.events.published.length = 0;
 
-      expect(await t.cancel.execute(new CancelOpenChargesCommand(contractId, 'scheduled'))).toBe(1);
+      const closed = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
+      const again = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
+
+      const accelerated = await t.charges.findByReference(contractId, 'accelerated');
+      expect(closed).toEqual({ cancelled: 1, acceleratedCents: 430_00 });
+      expect(again).toEqual({ cancelled: 0, acceleratedCents: 0 });
       expect((await t.charges.findById(later.id))?.status).toBe('cancelled');
       expect((await t.charges.findById(collecting.id))?.status).toBe('pending');
+      expect(accelerated).toMatchObject({ kind: 'accelerated', status: 'written_off' });
+      expect(accelerated?.amount.cents).toBe(430_00);
+      expect(t.events.published.map((event) => event.eventType)).toEqual([
+        'ChargeCancelled',
+        'ChargeCreated',
+        'ChargeWrittenOff',
+      ]);
+      expect(t.events.published.at(-1)?.payload).toMatchObject({
+        reason: 'contract_defaulted',
+        amountCents: 430_00,
+      });
+    });
+
+    // Its future payments depend on income never earned: nothing is owed beyond the months
+    // assessed.
+    it('should not raise anything for a defaulted ISA', async () => {
+      const t = setup();
+      const contractId = t.contract('isa');
+
+      const closed = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
+
+      expect(closed).toEqual({ cancelled: 0, acceleratedCents: 0 });
+      expect(await t.charges.findByReference(contractId, 'accelerated')).toBeNull();
     });
 
     // Instalment 3 falls due while the payoff is collected: it is not dunned meanwhile, and the
@@ -1005,7 +1047,7 @@ describe('billing use cases', () => {
 
       expect(dunned.retries).toBe(0);
       expect((await t.charges.findById(held.id))?.status).toBe('scheduled');
-      expect(await t.cancel.execute(new CancelOpenChargesCommand(contractId, 'all'))).toBe(2);
+      expect(await t.cancel.execute(new CancelOpenChargesCommand(contractId))).toBe(2);
       expect((await t.charges.findById(overdue.id))?.status).toBe('cancelled');
     });
   });

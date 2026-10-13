@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import { CancelOpenChargesHandler } from './application/commands/cancel-open-charges.command';
+import { CloseDefaultedChargesHandler } from './application/commands/close-defaulted-charges.command';
 import { CollectDueChargesHandler } from './application/commands/collect-due-charges.command';
 import { CollectWaitingChargesHandler } from './application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeHandler } from './application/commands/create-payoff-charge.command';
@@ -40,7 +41,7 @@ import {
 } from './infrastructure/adapters/simulated-payment-gateway';
 import { QueuedPspCallbacks } from './infrastructure/adapters/simulated-psp-callbacks';
 import {
-  CancelChargesOnContractDefaulted,
+  CloseChargesOnContractDefaulted,
   RevokeMandateOnContractCancelled,
   CancelChargesOnPlanCompleted,
   ChargeOnPayoffRequested,
@@ -122,6 +123,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     RetryChargeHandler,
     CreatePayoffChargeHandler,
     CancelOpenChargesHandler,
+    CloseDefaultedChargesHandler,
     RevokeContractMandateHandler,
     SendDeclarationRemindersHandler,
     RunBillingNowHandler,
@@ -135,7 +137,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     ChargeOnPayoffRequested,
     RebillOnPayoffWithdrawn,
     CancelChargesOnPlanCompleted,
-    CancelChargesOnContractDefaulted,
+    CloseChargesOnContractDefaulted,
     RevokeMandateOnContractCancelled,
     LedgerOnChargeCreated,
     LedgerOnChargePaid,

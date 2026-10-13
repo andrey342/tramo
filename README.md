@@ -21,7 +21,8 @@ collects monthly instalments or income-share payments afterwards.
   of payments. A payoff settles a contract early.
 - **Collection.** A monthly billing run turns what is due into charges collected by SEPA direct
   debit through a payment provider; dunning retries failed charges, puts contracts in arrears and
-  writes off what is not recovered. The student sees a statement.
+  writes off what is not recovered. A defaulted loan's principal left to bill is written off with
+  the default. The student sees a statement.
 - **Notifications and reporting.** Emails to students and centers, signed webhooks to centers
   with retries, and dashboards built from the events for centers and operations.
 

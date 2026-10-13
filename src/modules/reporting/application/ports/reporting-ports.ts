@@ -72,7 +72,7 @@ export interface ChargeFact {
   readonly eventId: string;
   readonly contractId?: string;
   readonly centerId?: string;
-  readonly kind?: 'installment' | 'isa' | 'payoff';
+  readonly kind?: 'installment' | 'isa' | 'payoff' | 'accelerated';
   readonly amountCents?: number;
   readonly status?: ChargeStatus;
   // The day (YYYY-MM-DD, UTC) of the last failed collection.

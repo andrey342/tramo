@@ -239,6 +239,8 @@ export class FakeRepaymentPlans implements RepaymentPlans {
   readonly contracts = new Map<string, Omit<RepaidContract, 'nextIsaPeriod'>>();
   readonly plans: BillablePlan[] = [];
   readonly assessed: { contractId: string; period: string; incomeCents: number | null }[] = [];
+  // Loans: the principal of each instalment not paid yet.
+  readonly principal = new Map<string, { number: number; principalCents: number }[]>();
   private readonly lastPeriods = new Map<string, string>();
 
   addContract(
@@ -282,6 +284,15 @@ export class FakeRepaymentPlans implements RepaymentPlans {
         .filter((plan) => !contractId || plan.contractId === contractId)
         .filter((plan) => plan.kind !== 'isa' || plan.nextIsaPeriod !== null)
         .slice(0, limit),
+    );
+  }
+
+  unpaidPrincipal(
+    contractId: string,
+  ): Promise<readonly { number: number; principalCents: number }[] | null> {
+    const contract = this.contracts.get(contractId);
+    return Promise.resolve(
+      contract?.product === 'installments' ? (this.principal.get(contractId) ?? []) : null,
     );
   }
 

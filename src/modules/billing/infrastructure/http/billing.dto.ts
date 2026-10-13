@@ -149,7 +149,7 @@ export class ChargeResponse {
   @ApiProperty({ format: 'uuid' })
   contractId!: string;
 
-  @ApiProperty({ enum: ['installment', 'isa', 'payoff'] })
+  @ApiProperty({ enum: ['installment', 'isa', 'payoff', 'accelerated'] })
   kind!: ChargeKind;
 
   @ApiProperty({ nullable: true, type: Number, example: 3 })

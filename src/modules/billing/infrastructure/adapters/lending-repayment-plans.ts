@@ -4,6 +4,7 @@ import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { FindContractQuery } from '@modules/lending/application/dto/contract-lookup';
 import {
   AssessIsaPeriodCommand,
+  FindUnpaidPrincipalQuery,
   ListBillablePlansQuery,
 } from '@modules/lending/application/dto/plan-lookup';
 
@@ -34,6 +35,12 @@ export class LendingRepaymentPlans implements RepaymentPlans {
     contractId: string | null = null,
   ): Promise<readonly BillablePlan[]> {
     return this.queries.execute(new ListBillablePlansQuery(afterContractId, limit, contractId));
+  }
+
+  unpaidPrincipal(
+    contractId: string,
+  ): Promise<readonly { readonly number: number; readonly principalCents: number }[] | null> {
+    return this.queries.execute(new FindUnpaidPrincipalQuery(contractId));
   }
 
   async assessIsaPeriod(
