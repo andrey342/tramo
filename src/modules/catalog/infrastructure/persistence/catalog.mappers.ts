@@ -41,8 +41,10 @@ export class TrainingCenterMapper {
     return center;
   }
 
-  // Re-encrypts the IBAN on every save: a fresh IV each time, and a rotated key takes over as
-  // centers are saved.
+  // Re-encrypts the IBAN on every save: a fresh IV each time, and a value still in the old `v1`
+  // format becomes `v2` (bound to its row). It does not rotate keys: FieldCipher reads a single
+  // FIELD_ENCRYPTION_KEY, so changing it leaves every stored IBAN unreadable (runbook, Secret
+  // rotation).
   toRow(center: TrainingCenter): Omit<TrainingCenterOrmEntity, 'version'> {
     const vat = center.vatValidation;
     return {
