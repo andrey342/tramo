@@ -22,6 +22,7 @@ export function configureHttpApp(app: INestApplication, config: AppConfig): void
     exclude: [
       { path: 'health/live', method: RequestMethod.GET },
       { path: 'health/ready', method: RequestMethod.GET },
+      { path: 'metrics', method: RequestMethod.GET },
       // Bull Board mounts its own router and assets below this path.
       'admin/queues',
       'admin/queues/{*path}',

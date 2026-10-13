@@ -83,6 +83,7 @@ export interface AppConfig {
     readonly enqueueTimeoutMs: number;
   };
   readonly queueDashboard: { readonly username: string; readonly password: string | undefined };
+  readonly metrics: { readonly token: string | undefined };
 }
 
 export class InvalidConfigError extends Error {
@@ -121,6 +122,7 @@ export function parseDatabaseConfig(source: Record<string, string | undefined>):
 const PUBLISHED_SECRETS = {
   JWT_ACCESS_SECRET: (value: string) => /change-me/i.test(value),
   BULL_BOARD_PASSWORD: (value: string | undefined) => value === 'tramo-queues',
+  METRICS_TOKEN: (value: string | undefined) => value === 'tramo-metrics-token',
   FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
   ESIGN_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
   PSP_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
@@ -135,6 +137,7 @@ function assertProductionSettings(env: Env): void {
     PUBLISHED_SECRETS.BULL_BOARD_PASSWORD(env.BULL_BOARD_PASSWORD)
       ? 'BULL_BOARD_PASSWORD'
       : undefined,
+    PUBLISHED_SECRETS.METRICS_TOKEN(env.METRICS_TOKEN) ? 'METRICS_TOKEN' : undefined,
     PUBLISHED_SECRETS.FIELD_ENCRYPTION_KEY(env.FIELD_ENCRYPTION_KEY)
       ? 'FIELD_ENCRYPTION_KEY'
       : undefined,
@@ -248,5 +251,6 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
       enqueueTimeoutMs: env.OUTBOX_ENQUEUE_TIMEOUT_MS,
     },
     queueDashboard: { username: env.BULL_BOARD_USERNAME, password: env.BULL_BOARD_PASSWORD },
+    metrics: { token: env.METRICS_TOKEN },
   };
 }

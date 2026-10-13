@@ -9,12 +9,14 @@ import { OriginationHttpModule } from '@modules/origination/origination-http.mod
 import { ReportingHttpModule } from '@modules/reporting/reporting-http.module';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { HttpPlatformModule } from '@shared/infrastructure/http';
+import { MetricsModule } from '@shared/infrastructure/metrics';
 import { QueueDashboardModule } from '@shared/infrastructure/queues/queue-dashboard.module';
 
 @Module({
   imports: [
     CoreModule.forRoot({ applicationName: 'tramo-api' }),
     HttpPlatformModule,
+    MetricsModule,
     QueueDashboardModule,
     IamHttpModule,
     CatalogHttpModule,
