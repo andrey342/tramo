@@ -143,7 +143,9 @@ describe('Billing (e2e)', () => {
       expect.objectContaining({ kind: 'installment', installmentNumber: 1, status: 'paid' }),
     ]);
     expect(statement.status).toBe(200);
-    expect(statement.body).toMatchObject({ contractId, balanceCents: expect.any(Number) });
+    // The ledger is a projection of billing events, which only the worker publishes: the api
+    // alone answers an empty statement, its balance zero.
+    expect(statement.body).toEqual({ contractId, entries: [], balanceCents: 0 });
     expect(retryPaid.status).toBe(409);
   });
 
