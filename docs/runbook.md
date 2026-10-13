@@ -122,7 +122,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 
 - **Symptom**: `failed` or dead-letter counts rising, `Job failed, will retry` (warn) or
   `Job moved to dead-letter queue` (error) in the worker logs, `deadLetters` above 0 in
-  `GET /ops/overview`.
+  `GET /ops/overview` (`null` there means Redis did not answer within two seconds).
 - **Check**:
   - `pnpm queue:inspect`: counts per queue, the outbox backlog and the latest dead letters.
   - `pnpm queue:inspect <queue>`: the latest failed jobs (`--limit N`).
@@ -130,32 +130,41 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     job's id is `<eventId>.<consumer>`, which names the event and the consumer.
   - Bull Board at http://localhost:3000/admin/queues (basic auth, `ops` / `tramo-queues` in
     compose; not served without `BULL_BOARD_PASSWORD`).
-- **How a job ends**: retried with backoff (default five attempts from 2 s; provider calls have
-  their own schedule, below); once out of attempts it stays in its queue's failed set and a copy
-  goes to `dead-letter`, kept until someone removes it.
+- **How a job ends**: retried with backoff. An event delivery (`events.<module>`) gets eight
+  attempts, the delay doubling from 10 s, about 21 minutes in all; work queues without a schedule
+  of their own get five attempts from 2 s (about 30 s); provider calls have their own schedule,
+  below. Once out of attempts it stays in its queue's failed set and a copy goes to
+  `dead-letter`, kept until someone removes it.
 - **Action**, only once the cause is fixed:
   - Retry the job in its own queue: `pnpm queue:inspect <queue> <jobId> --retry`, then remove its
     dead letter: `pnpm queue:inspect dead-letter <deadLetterId> --remove`.
+  - After an outage that dead-lettered many jobs of one queue:
+    `pnpm queue:inspect <queue> --retry-dead-letters` retries every job whose dead letter came
+    from that queue and removes those letters. An event delivery whose failed copy expired
+    (30 days) is added again under its id; an expired job of a work queue is kept and listed, and
+    its lever is the endpoint in the table below.
   - If the effect is no longer wanted, `--remove` the job and its dead letter instead.
   - A retry is safe: an event consumer claims `<eventId, consumer>` in `shared.processed_events`
     in the same transaction as its effects, so an event already applied is skipped; work-queue
     jobs are keyed by what they act on and their aggregates ignore a repeated step.
 - For some queues an endpoint is the right lever, not the job:
 
-  | Queue                       | Job id                                              | After the job ran out                                              |
-  | --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
-  | `events.<module>`           | `<eventId>.<consumer>`                              | Retry the job                                                      |
-  | `catalog.vat-checks`        | `<centerId>`                                        | `POST /centers/:id/verify-vat` (admin, ops)                        |
-  | `origination.verifications` | `<applicationId>.<kyc\|employment\|bureau>`         | Retry the job                                                      |
-  | `lending.signatures`        | `<contractId>.send`                                 | Retry the job                                                      |
-  | `lending.disbursements`     | `<disbursementId>.<attempt>.<transfer\|settlement>` | `POST /ops/disbursements/:id/reconcile`                            |
-  | `billing.collect`           | `<chargeId>.<attempt>.collect.<eventId>`            | `POST /charges/:id/retry`                                          |
-  | `billing.psp-simulator`     | `<chargeId>.<attempt>.callback`                     | Retry the job once the worker reaches the api (`PSP_CALLBACK_URL`) |
-  | `billing.cycle`, `.dunning` | scheduled                                           | `POST /ops/billing/run`, `POST /ops/dunning/run`                   |
-  | `billing.cycle` (rebill)    | `<contractId>.rebill.<eventId>`                     | `POST /ops/billing/run?contractId=` (a payoff was withdrawn)       |
-  | `notifications.emails`      | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
-  | `notifications.webhooks`    | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
-  | `reporting.rebuild`         | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
+  | Queue                           | Job id                                              | After the job ran out                                              |
+  | ------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+  | `events.<module>`               | `<eventId>.<consumer>`                              | Retry the job                                                      |
+  | `catalog.vat-checks`            | `<centerId>`, later checks `<centerId>.<eventId>`   | `POST /centers/:id/verify-vat` (admin, ops)                        |
+  | `origination.verifications`     | `<applicationId>.<kyc\|employment\|bureau>`         | Retry the job                                                      |
+  | `lending.signatures`            | `<contractId>.send`                                 | Retry the job                                                      |
+  | `lending.disbursements`         | `<disbursementId>.<attempt>.<transfer\|settlement>` | `POST /ops/disbursements/:id/reconcile`                            |
+  | `billing.collect`               | `<chargeId>.<attempt>.collect.<eventId>`            | `POST /charges/:id/retry`                                          |
+  | `billing.psp-simulator`         | `<chargeId>.<attempt>.callback`                     | Retry the job once the worker reaches the api (`PSP_CALLBACK_URL`) |
+  | `billing.cycle`, `.dunning`     | scheduled                                           | `POST /ops/billing/run`, `POST /ops/dunning/run`                   |
+  | `billing.cycle` (rebill)        | `<contractId>.rebill.<eventId>`                     | `POST /ops/billing/run?contractId=` (a payoff was withdrawn)       |
+  | `billing.declaration-reminders` | scheduled (the 25th)                                | Retry the job: a student reminded this month is skipped            |
+  | `origination.expiry`            | scheduled (hourly, one attempt)                     | None: the next hourly sweep expires what is left                   |
+  | `notifications.emails`          | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
+  | `notifications.webhooks`        | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
+  | `reporting.rebuild`             | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
 
 ## Application stuck in verification
 
@@ -281,7 +290,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     category (`smtp_550`, `timeout`, `connection_failed`).
 - **Action**: fix the SMTP side (`docker compose up -d mailpit`). An email still pending a day
   after it was written is abandoned by the hourly sweep (at minute 15) instead of being sent
-  late. A `failed` email is never sent again, and retrying its job sends nothing; no endpoint
+  late. The sweep runs once per hour (one attempt, the next hour retries); a run that could not
+  give some up fails, names them and is dead-lettered. A `failed` email is never sent again, and retrying its job sends nothing; no endpoint
   resends one. Sending is at least once: a reply lost after the server took the message can
   produce a duplicate.
 
@@ -294,7 +304,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 - **Action**: after a projector fix, on a database that had activity before reporting existed, or
   when facts are suspect: `pnpm api:call POST /ops/reporting/rebuild --as ops`. It answers
   `{"queued": true}`, or `false` when a rebuild is already queued or running (one at a time; the
-  request joins it). The job deletes the facts and replays the outbox in one REPEATABLE READ
+  request joins it); 503 `queue_unavailable` means Redis did not answer within two seconds. The job deletes the facts and replays the outbox in one REPEATABLE READ
   transaction: dashboards show the old figures until it commits, and live projections wait for it
   holding worker connections, so run it when the stack is quiet. The worker logs
   `Reporting read models rebuilt` with the number of events applied.
@@ -313,6 +323,37 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 - Never edit a migration that has been applied (or reached `main`); write a new one. New ones are
   verified with `pnpm migration:verify check`, which runs, reverts and runs them again comparing
   schema dumps. `synchronize` and `schema:sync` are never used.
+
+## Deploying a release that adds a consumer
+
+- **Why it matters**: the outbox publisher hands each event to the consumers that the
+  subscription registry of the worker running it knows, at publish time (ADR 004). While a
+  rolling deploy runs old and new workers side by side, an event published by an old worker never
+  reaches a consumer that only the new release has; nothing retries it later, because the row is
+  marked published. Deploying the worker after the api does not close the gap: the publisher runs
+  in the worker, and old workers keep publishing until the last one stops.
+- **Avoid it**: stop the old workers before starting the new ones. Events wait in the outbox
+  meanwhile (`tramo_outbox_lag_seconds` rises for the length of the switch) and the new workers
+  publish them with the new subscriptions.
+- **Recover** after a rolling deploy: note when the first new worker started and when the last
+  old one stopped, then publish again the rows of the event types the new consumer subscribes to
+  that were published in that window:
+
+  ```sql
+  UPDATE shared.outbox_messages
+     SET published_at = NULL
+   WHERE event_type IN ('<EventType>', '<OtherEventType>')
+     AND published_at >= '<first new worker started>'
+     AND published_at <  '<last old worker stopped>';
+  ```
+
+  The publisher picks them up on its next poll and fans each one out to every current subscriber.
+  This is safe for the consumers that already had it: their job ids (`<eventId>.<consumer>`) are
+  still held by BullMQ for a week, and past that the consumer finds `(eventId, consumer)` in
+  `shared.processed_events` and does nothing. Keep the window and the event types tight all the
+  same, to keep the replay small. Events from before the deploy are history the new consumer
+  never saw either: a read model catches up with its own rebuild (reporting:
+  `POST /ops/reporting/rebuild`).
 
 ## Secret rotation
 

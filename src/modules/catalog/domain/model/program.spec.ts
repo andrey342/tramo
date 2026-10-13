@@ -85,6 +85,40 @@ describe('Program', () => {
     }).toThrow(InvalidFinancingOptionError);
   });
 
+  // Checked as the program ends up, not field by field.
+  it('should accept a lower employability rate when the ISA is dropped in the same change', () => {
+    const program = aProgram({
+      financing: FinancingOptions.of({ installments: installments(), isa: isa() }),
+    });
+    program.publish({ isActive: true }, LATER);
+    program.pullEvents();
+
+    program.revise(
+      {
+        details: { employabilityRate: Percentage.fromPercent(50) },
+        financing: FinancingOptions.of({ installments: installments() }),
+      },
+      LATER,
+    );
+
+    expect(program.details.employabilityRate.basisPoints).toBe(5_000);
+    expect(program.financing.isa).toBeNull();
+    expect(program.pullEvents().map((event) => event.eventType)).toEqual([
+      CatalogEvents.ProgramDetailsChanged,
+      CatalogEvents.ProgramFinancingChanged,
+    ]);
+    expect(() => {
+      program.revise(
+        {
+          details: { employabilityRate: Percentage.fromPercent(40) },
+          financing: FinancingOptions.of({ isa: isa() }),
+        },
+        LATER,
+      );
+    }).toThrow(InvalidFinancingOptionError);
+    expect(program.details.employabilityRate.basisPoints).toBe(5_000);
+  });
+
   it('should validate its details', () => {
     expect(() => aProgram({ details: { name: ' ' } })).toThrow(InvalidValueError);
     expect(() => aProgram({ details: { price: Money.zero() } })).toThrow(InvalidValueError);

@@ -13,6 +13,7 @@ import { DataSource, type EntityManager } from 'typeorm';
 import { type IntegrationEvent } from '@shared/application';
 
 import { APP_CONFIG, type AppConfig } from '../config';
+import { EVENT_JOB_OPTIONS, eventJobId } from '../queues';
 
 import { EventSubscriptionRegistry } from './event-subscription.registry';
 
@@ -159,7 +160,8 @@ export class OutboxPublisher implements OnApplicationBootstrap, BeforeApplicatio
         jobs.push({
           name: subscriber.consumer,
           data: event,
-          opts: { jobId: `${row.id}.${subscriber.consumer}` },
+          // Explicit: the queue default (about 30 s of retries) is too short for a consumer.
+          opts: { ...EVENT_JOB_OPTIONS, jobId: eventJobId(row.id, subscriber.consumer) },
         });
         byQueue.set(subscriber.queue, jobs);
       }

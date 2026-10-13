@@ -33,8 +33,9 @@ split follows what each mechanism can do that the others cannot:
 
 - The conventions file is a map: commands, the four architecture principles, the workflow and an
   index of skills. Detail lives in path-scoped rules (domain, migrations, HTTP, tests).
-- Skills hold procedures. Each one wraps a script under `scripts/` that also runs on its own
-  (`pnpm scaffold:module`, `pnpm verify:migration`, ...). Module templates are derived from `iam`,
+- Skills hold procedures. Each one wraps a script in its own folder
+  (`.claude/skills/<skill>/scripts/`) that also runs on its own as a `pnpm` script
+  (`pnpm scaffold:module`, `pnpm migration:verify`, ...). Module templates are derived from `iam`,
   the reference module. When a skill produces something that needs a manual fix, the skill is fixed
   in the same commit.
 - Review agents run with read-only tools and a fixed checklist (architecture, security).

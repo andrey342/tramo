@@ -4,9 +4,10 @@ import { ApiAcceptedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nest
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import { ApiProblems, Idempotent, ProblemException } from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
+import { QueueUnreachableError } from '@shared/infrastructure/queues';
 
 import { RequestRebuildCommand } from '../../application/commands/request-rebuild.command';
 import {
@@ -75,13 +76,25 @@ export class ReportingController {
 
   @Post('ops/reporting/rebuild')
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiProblems(400, 401, 403, 409, 422)
+  @ApiProblems(400, 401, 403, 409, 422, 503)
   @ApiAcceptedResponse({ type: RebuildResponse })
   @Roles('ops', 'admin')
   @Idempotent()
   @Audited({ action: 'reporting.rebuild', resource: 'reporting' })
   @ApiOperation({ summary: 'Rebuild the read models from the history of events (a job)' })
-  rebuild(@CurrentPrincipal() actor: Principal): Promise<{ readonly queued: boolean }> {
-    return this.commands.execute(new RequestRebuildCommand(actor));
+  async rebuild(@CurrentPrincipal() actor: Principal): Promise<{ readonly queued: boolean }> {
+    try {
+      return await this.commands.execute(new RequestRebuildCommand(actor));
+    } catch (error) {
+      // Redis is down: nothing was queued (or will be once it is back); the client retries.
+      if (error instanceof QueueUnreachableError) {
+        throw new ProblemException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          'queue_unavailable',
+          'The job queue cannot be reached right now. Try again in a moment.',
+        );
+      }
+      throw error;
+    }
   }
 }

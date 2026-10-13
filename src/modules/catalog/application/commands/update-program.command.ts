@@ -84,8 +84,13 @@ export class UpdateProgramHandler implements ICommandHandler<UpdateProgramComman
       assertCenterMayChangePrograms(command.actor, center);
       const before = toProgramDto(program);
       const now = this.clock.now();
-      if (changes.details) program.updateDetails(toProgramDetailChanges(changes.details), now);
-      if (changes.financing) program.changeFinancing(toFinancingOptions(changes.financing), now);
+      program.revise(
+        {
+          details: changes.details && toProgramDetailChanges(changes.details),
+          financing: changes.financing && toFinancingOptions(changes.financing),
+        },
+        now,
+      );
       if (changes.status === 'published') program.publish(center, now);
       if (changes.status === 'archived') program.archive(now);
       await this.programs.save(program);

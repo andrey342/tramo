@@ -4,9 +4,12 @@
 //   pnpm queue:inspect <queue> [--limit N]  counts and the latest failed jobs of one queue
 //   pnpm queue:inspect <queue> <jobId>      one job: state, attempts, error, stack, data, logs
 //   pnpm queue:inspect <queue> <jobId> --retry | --remove
+//   pnpm queue:inspect <queue> --retry-dead-letters   retry every dead letter that came from <queue>
 import { type Job, type Queue } from 'bullmq';
 import { type Client } from 'pg';
 
+import { type DeadLetter } from '../../../../src/shared/infrastructure/queues/dead-letter.queue';
+import { EVENT_JOB_OPTIONS } from '../../../../src/shared/infrastructure/queues/event-jobs';
 import { ago, truncate, withConnections } from '../../../lib/runtime';
 import { fail, parseArgs } from '../../../lib/scaffold';
 
@@ -23,6 +26,10 @@ void withConnections(async ({ db, queues }) => {
   const queue =
     queues.get(queueName) ??
     fail(`unknown queue ${queueName}; known: ${[...queues.keys()].join(', ')}`);
+  if (!jobId && flags.has('retry-dead-letters')) {
+    await retryDeadLetters(queue, queues.get('dead-letter') ?? fail('no dead-letter queue'));
+    return;
+  }
   if (!jobId) {
     await queueReport(queue);
     return;
@@ -119,6 +126,50 @@ async function queueReport(queue: Queue): Promise<void> {
       `  ${job.id ?? '?'}  ${job.name}  attempts ${String(job.attemptsMade)}  ${ago(job.finishedOn)}  ${truncate(job.failedReason, 120)}`,
     );
   }
+}
+
+// After an outage every delivery that ran out of attempts meanwhile is a dead letter: retries
+// them all, then removes their letters. A job still in its failed set is retried; one whose
+// failed copy expired (30 days) is added again under its id, which only an event delivery can be
+// (its data is the event); for the work queues the lever is the endpoint in the runbook.
+async function retryDeadLetters(queue: Queue, deadLetters: Queue): Promise<void> {
+  const letters = (await deadLetters.getJobs(['waiting', 'delayed', 'completed', 'failed'])).filter(
+    (letter) => (letter.data as DeadLetter).queue === queue.name,
+  );
+  if (letters.length === 0) {
+    console.log(`no dead letters from ${queue.name}`);
+    return;
+  }
+  const outcome = { retried: 0, readded: 0, alreadyMoving: 0, skipped: 0 };
+  for (const letter of letters) {
+    const data = letter.data as DeadLetter;
+    const job = data.jobId ? await queue.getJob(data.jobId) : undefined;
+    if (job) {
+      const state = await job.getState();
+      if (state === 'failed') {
+        await job.retry();
+        outcome.retried += 1;
+      } else {
+        // Retried already (by hand, or a letter of the same job came first): only the letter goes.
+        outcome.alreadyMoving += 1;
+      }
+    } else if (data.jobId && queue.name.startsWith('events.')) {
+      await queue.add(data.jobName, data.data, { ...EVENT_JOB_OPTIONS, jobId: data.jobId });
+      outcome.readded += 1;
+    } else {
+      console.log(
+        `  kept ${letter.id ?? '?'}: ${queue.name}/${data.jobId ?? '?'} expired; use the endpoint in the runbook`,
+      );
+      outcome.skipped += 1;
+      continue;
+    }
+    await letter.remove();
+  }
+  console.log(
+    `${queue.name}: ${String(outcome.retried)} retried, ${String(outcome.readded)} added again, ` +
+      `${String(outcome.alreadyMoving)} already retried, ${String(outcome.skipped)} kept; ` +
+      `follow them with: pnpm queue:inspect ${queue.name}`,
+  );
 }
 
 async function jobReport(queue: Queue, job: Job): Promise<void> {

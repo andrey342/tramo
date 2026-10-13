@@ -77,10 +77,13 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   pending_verification → active            a VAT check answers valid
   any but suspended → suspended            an admin, with a reason (CenterSuspended)
   suspended → active                       reinstated with a valid VAT number (CenterActivated)
-  suspended → pending_verification         reinstated without one
+  suspended → pending_verification         reinstated without one (CenterReturnedToVerification,
+                                           which queues a new VAT check)
   ```
 
-  Only an active center publishes programs and receives disbursements.
+  Only an active center publishes programs and receives disbursements. An admin corrects the VAT
+  number of a center that is not active (`CenterVatNumberChanged`): its validation is dropped and
+  the new number is checked as on registration.
 
 - **`VatValidation`** / **`VatCheckResult`**: the latest VAT check kept on the center, with status
   `valid | invalid | unverified`. A check answers `valid`, `invalid` or `unavailable` (VIES could
@@ -111,7 +114,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
     offered when `employabilityRate` is at least 60 %.
 - Events: `CenterRegistered`, `CenterActivated`, `CenterSuspended`, `CenterRenamed`,
   `CenterPlatformFeeChanged`, `CenterPayoutAccountChanged`, `CenterVatInvalidated`,
-  `ProgramPublished`, `ProgramDetailsChanged`, `ProgramFinancingChanged`, `ProgramArchived`.
+  `CenterVatNumberChanged`, `CenterReturnedToVerification`, `ProgramPublished`, `ProgramDetailsChanged`, `ProgramFinancingChanged`, `ProgramArchived`.
 
 ## origination
 
@@ -367,7 +370,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   disbursed, collected, outstanding, written off, delinquency rate), program performance
   (approval rate, mean ticket, mean score in bands from ten scored applicants) and the ops
   overview (applications waiting for an analyst, charges failed today, transfers pending or
-  failed, contracts in arrears, dead letters).
+  failed, contracts in arrears, dead letters; `null` while the queue cannot be read).
 - **Rebuild**: `POST /ops/reporting/rebuild` queues `reporting.rebuild`, one at a time. In one
   REPEATABLE READ transaction the facts are locked against writers, deleted and replayed from the
   outbox (`EventHistory`) through the same projector (ADR 019).

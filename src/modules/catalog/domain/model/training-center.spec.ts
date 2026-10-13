@@ -4,6 +4,7 @@ import {
   InvalidValueError,
   Percentage,
   unwrap,
+  VatNumber,
 } from '@shared/domain';
 
 import {
@@ -12,7 +13,7 @@ import {
   NOW,
   OTHER_IBAN,
 } from '../../../../../test/factories/catalog';
-import { InvalidPlatformFeeError } from '../errors/catalog-errors';
+import { CenterVatNumberLockedError, InvalidPlatformFeeError } from '../errors/catalog-errors';
 import { CatalogEvents } from '../events/catalog-events';
 
 const LATER = new Date(NOW.getTime() + 60_000);
@@ -126,13 +127,22 @@ describe('TrainingCenter', () => {
       ]);
     });
 
-    it('should reinstate an unverified center to waiting for verification', () => {
+    // A check that ended invalid is not retried on its own: the event has it asked again.
+    it('should reinstate a center without a valid number to waiting for verification, to be checked again', () => {
       const center = aTrainingCenter();
+      center.recordVatCheck({ outcome: 'invalid', provider: 'vies' }, LATER);
       center.suspend('Duplicate', LATER);
+      center.pullEvents();
 
       center.reinstate(LATER);
 
       expect(center.status).toBe('pending_verification');
+      expect(center.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: CatalogEvents.CenterReturnedToVerification,
+          payload: { centerId: center.id },
+        }),
+      ]);
     });
 
     it('should refuse to suspend twice, to reinstate an active center and an empty reason', () => {
@@ -148,6 +158,71 @@ describe('TrainingCenter', () => {
       expect(() => {
         center.suspend('Again', LATER);
       }).toThrow(InvalidStateTransitionError);
+    });
+  });
+
+  describe('VAT number correction', () => {
+    const corrected = (): VatNumber => unwrap(VatNumber.create('DE', '123456789'));
+
+    it('should replace the number of a center waiting for verification and have it checked again', () => {
+      const center = aTrainingCenter();
+      center.recordVatCheck({ outcome: 'invalid', provider: 'vies' }, LATER);
+      center.pullEvents();
+
+      center.changeVatNumber(corrected(), LATER);
+
+      expect(center.vatNumber.toString()).toBe('DE123456789');
+      expect(center.vatValidation).toBeNull();
+      expect(center.status).toBe('pending_verification');
+      expect(center.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: CatalogEvents.CenterVatNumberChanged,
+          payload: { centerId: center.id, country: 'DE', taxId: 'DE123456789' },
+        }),
+      ]);
+    });
+
+    it('should correct the number of a suspended center, which then waits for verification when reinstated', () => {
+      const center = anActiveTrainingCenter();
+      center.suspend('Wrong tax id', LATER);
+      center.pullEvents();
+
+      center.changeVatNumber(corrected(), LATER);
+      center.reinstate(LATER);
+
+      expect(center.status).toBe('pending_verification');
+      expect(eventTypes(center)).toEqual([
+        CatalogEvents.CenterVatNumberChanged,
+        CatalogEvents.CenterReturnedToVerification,
+      ]);
+    });
+
+    it('should refuse to change the number when the center is active, and ignore the same number', () => {
+      const center = anActiveTrainingCenter();
+
+      center.changeVatNumber(center.vatNumber, LATER);
+      expect(() => {
+        center.changeVatNumber(corrected(), LATER);
+      }).toThrow(CenterVatNumberLockedError);
+      expect(eventTypes(center)).toEqual([]);
+    });
+
+    // The registry answered about the old number while an admin corrected it.
+    it('should drop a check result when it is about a number the center no longer has', () => {
+      const center = aTrainingCenter();
+      const old = center.vatNumber;
+      center.changeVatNumber(corrected(), LATER);
+      center.pullEvents();
+
+      center.recordVatCheck(
+        { outcome: 'valid', provider: 'vies', registeredName: null },
+        LATER,
+        old,
+      );
+
+      expect(center.status).toBe('pending_verification');
+      expect(center.vatValidation).toBeNull();
+      expect(eventTypes(center)).toEqual([]);
     });
   });
 

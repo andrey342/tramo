@@ -1,11 +1,11 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import { type Queue } from 'bullmq';
 
 import { FindProgramQuery } from '@modules/catalog/application/dto/program-lookup';
 import { GetProgramScoresQuery } from '@modules/origination/application/dto/program-scores';
-import { QueueNames } from '@shared/infrastructure/queues';
+import { QueueNames, withinQueueTimeout } from '@shared/infrastructure/queues';
 
 import {
   type Programs,
@@ -33,13 +33,31 @@ export class OriginationProgramScores implements ProgramScores {
   }
 }
 
-// Dead letters are kept in their queue, waiting, until someone retries or removes them.
+// Dead letters are kept in their queue, waiting, until someone retries or removes them. While
+// Redis is down the count is unknown (null) and the overview still answers: the call gives up
+// after a short wait, and no new one is issued while the last is still waiting for Redis, so an
+// outage does not pile commands up on the connection.
 @Injectable()
 export class BullQueueHealth implements QueueHealth {
+  private readonly logger = new Logger(BullQueueHealth.name);
+  private inFlight = false;
+
   constructor(@InjectQueue(QueueNames.DEAD_LETTER) private readonly queue: Queue) {}
 
-  async deadLetters(): Promise<number> {
-    const counts = await this.queue.getJobCounts('waiting', 'delayed');
-    return (counts.waiting ?? 0) + (counts.delayed ?? 0);
+  async deadLetters(): Promise<number | null> {
+    if (this.inFlight) {
+      return null;
+    }
+    this.inFlight = true;
+    const counts = this.queue.getJobCounts('waiting', 'delayed').finally(() => {
+      this.inFlight = false;
+    });
+    try {
+      const { waiting = 0, delayed = 0 } = await withinQueueTimeout(counts);
+      return waiting + delayed;
+    } catch (error) {
+      this.logger.warn({ err: error }, 'Dead letters could not be counted');
+      return null;
+    }
   }
 }

@@ -202,6 +202,24 @@ describe('program use cases', () => {
       expect(archived.status).toBe('archived');
     });
 
+    it('should drop the ISA and lower the employability rate below 60 % in one request', async () => {
+      const t = setup();
+      const center = await withCenter(t);
+      const draft = await t.create.execute(
+        new CreateProgramCommand(ADMIN, center.id, DETAILS, { ...INSTALLMENTS, ...ISA }),
+      );
+
+      const updated = await t.update.execute(
+        new UpdateProgramCommand(ADMIN, draft.id, {
+          details: { employabilityRateBasisPoints: 5_000 },
+          financing: INSTALLMENTS,
+        }),
+      );
+
+      expect(updated.employabilityRateBasisPoints).toBe(5_000);
+      expect(updated.financing.isa).toBeNull();
+    });
+
     it('should leave the programs of a suspended center to Tramo admins', async () => {
       const t = setup();
       const center = await withCenter(t);

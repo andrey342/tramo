@@ -159,12 +159,16 @@ describe('reporting use cases', () => {
   });
 
   // 3 applications for 7,500, 4,200 and 9,900: a mean ticket of 7,200. 1 approved, 1 rejected.
+  // Ten applicants scored 70 to 79: a mean of 74.5, shown in its band of five, 75.
   it('should show how a program converts, with the scores origination aggregates', async () => {
     const t = setup();
     const portfolio = aPortfolio();
     await t.happened(...portfolio.events);
     t.programs.centers.set(portfolio.programId, portfolio.centerId);
-    t.scores.scores.set(portfolio.programId, [70, 81]);
+    t.scores.scores.set(
+      portfolio.programId,
+      Array.from({ length: 10 }, (_, index) => 70 + index),
+    );
 
     const performance = await t.performance.execute(
       new GetProgramPerformanceQuery(OPS, portfolio.centerId, portfolio.programId),
@@ -178,13 +182,28 @@ describe('reporting use cases', () => {
       rejected: 1,
       approvalRateBasisPoints: 5_000,
       averageTicketCents: 7_200_00,
-      scoredApplications: 2,
-      averageScore: 76,
+      scoredApplications: 10,
+      averageScore: 75,
       generatedAt: NOW,
     });
     await expect(
       t.performance.execute(new GetProgramPerformanceQuery(OPS, uuidv7(), portfolio.programId)),
     ).rejects.toThrow(EntityNotFoundError);
+  });
+
+  // Origination gives no mean below ten scored applicants: it would say too much about each.
+  it('should show no mean score when fewer than ten applicants were scored', async () => {
+    const t = setup();
+    const portfolio = aPortfolio();
+    await t.happened(...portfolio.events);
+    t.programs.centers.set(portfolio.programId, portfolio.centerId);
+    t.scores.scores.set(portfolio.programId, [70, 81]);
+
+    const performance = await t.performance.execute(
+      new GetProgramPerformanceQuery(OPS, portfolio.centerId, portfolio.programId),
+    );
+
+    expect(performance).toMatchObject({ scoredApplications: 2, averageScore: null });
   });
 
   it('should show operations what needs them today, for staff only', async () => {
@@ -206,6 +225,16 @@ describe('reporting use cases', () => {
     await expect(t.overview.execute(new GetOpsOverviewQuery(adminOf(uuidv7())))).rejects.toThrow(
       ReportingAccessDeniedError,
     );
+  });
+
+  it('should still answer the overview, without the dead letters, when the queue cannot be read', async () => {
+    const t = setup();
+    await t.happened(...aPortfolio().events);
+    t.queues.letters = null;
+
+    const overview = await t.overview.execute(new GetOpsOverviewQuery(OPS));
+
+    expect(overview).toMatchObject({ reviewQueue: 1, contractsInArrears: 1, deadLetters: null });
   });
 
   // The read models are disposable: thrown away and replayed, they answer the same.

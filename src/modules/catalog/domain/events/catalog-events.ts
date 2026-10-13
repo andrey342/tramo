@@ -9,6 +9,8 @@ export const CatalogEvents = {
   CenterPlatformFeeChanged: 'CenterPlatformFeeChanged',
   CenterPayoutAccountChanged: 'CenterPayoutAccountChanged',
   CenterVatInvalidated: 'CenterVatInvalidated',
+  CenterVatNumberChanged: 'CenterVatNumberChanged',
+  CenterReturnedToVerification: 'CenterReturnedToVerification',
   ProgramPublished: 'ProgramPublished',
   ProgramDetailsChanged: 'ProgramDetailsChanged',
   ProgramFinancingChanged: 'ProgramFinancingChanged',
@@ -47,6 +49,20 @@ export type CenterPlatformFeeChangedPayload = {
 export type CenterVatInvalidatedPayload = {
   readonly centerId: string;
   readonly provider: string;
+};
+
+// A VAT number registered wrong was corrected (the center was not active); the new one is checked
+// as on registration.
+export type CenterVatNumberChangedPayload = {
+  readonly centerId: string;
+  readonly country: string;
+  readonly taxId: string;
+};
+
+// A suspended center was reinstated without a valid VAT number: it waits for verification again,
+// and its number is checked again.
+export type CenterReturnedToVerificationPayload = {
+  readonly centerId: string;
 };
 
 // Only the last digits: notifications warn the center, and nobody downstream needs the account.

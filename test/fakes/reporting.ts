@@ -1,3 +1,6 @@
+import { GetProgramScoresQuery } from '../../src/modules/origination/application/dto/program-scores';
+import { type ApplicationQueries } from '../../src/modules/origination/application/ports/origination-ports';
+import { GetProgramScoresHandler } from '../../src/modules/origination/application/queries/get-program-scores.query';
 import {
   type OpsFiguresDto,
   type ProgramFiguresDto,
@@ -228,25 +231,30 @@ export class FakePrograms implements Programs {
   }
 }
 
+// Origination's answer, through its own handler: the mean only from ten scored applicants, in
+// bands of five (GetProgramScoresHandler), so a test cannot rely on a figure production hides.
 export class FakeProgramScores implements ProgramScores {
   readonly scores = new Map<string, number[]>();
 
   of(programId: string): Promise<{ scoredApplications: number; averageScore: number | null }> {
     const scores = this.scores.get(programId) ?? [];
-    return Promise.resolve({
+    const raw = {
       scoredApplications: scores.length,
       averageScore:
-        scores.length === 0
-          ? null
-          : Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
-    });
+        scores.length === 0 ? null : scores.reduce((sum, score) => sum + score, 0) / scores.length,
+    };
+    const origination = new GetProgramScoresHandler({
+      programScores: () => Promise.resolve(raw),
+    } as unknown as ApplicationQueries);
+    return origination.execute(new GetProgramScoresQuery(programId));
   }
 }
 
 export class FakeQueueHealth implements QueueHealth {
-  letters = 0;
+  // null: the queue cannot be read (Redis down).
+  letters: number | null = 0;
 
-  deadLetters(): Promise<number> {
+  deadLetters(): Promise<number | null> {
     return Promise.resolve(this.letters);
   }
 }
@@ -263,7 +271,7 @@ export class FakeRebuildJobs implements RebuildJobs {
   }
 }
 
-// The history as a list, in order.
+// The history as a list, kept in whatever order it was filled; read in id order like the outbox.
 export class InMemoryEventHistory implements EventHistory {
   readonly events: IntegrationEvent[] = [];
 
@@ -276,6 +284,7 @@ export class InMemoryEventHistory implements EventHistory {
       this.events
         .filter((event) => eventTypes.includes(event.eventType))
         .filter((event) => !afterId || event.eventId > afterId)
+        .sort((a, b) => Number(a.eventId > b.eventId) - Number(a.eventId < b.eventId))
         .slice(0, limit),
     );
   }

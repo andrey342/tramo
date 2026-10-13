@@ -49,6 +49,7 @@ export interface ProgramPerformanceDto {
 }
 
 export interface OpsOverviewDto extends OpsFiguresDto {
-  readonly deadLetters: number;
+  // Null when the dead-letter queue could not be read (Redis down).
+  readonly deadLetters: number | null;
   readonly generatedAt: Date;
 }

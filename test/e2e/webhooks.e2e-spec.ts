@@ -59,6 +59,8 @@ describe('Webhooks (e2e)', () => {
       status: 'active',
       secret: expect.stringMatching(/^whsec_[\w-]{43}$/),
     });
+    // The secret is shown once: no cache along the way may keep a copy of the answer.
+    expect(configured.headers['cache-control']).toBe('no-store');
     expect(read.status).toBe(200);
     expect(read.body).not.toHaveProperty('secret');
     expect(read.body.events).toEqual([

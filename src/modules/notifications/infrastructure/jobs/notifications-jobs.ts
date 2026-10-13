@@ -73,7 +73,9 @@ export class WebhookJobs {
 const SWEEP = 'emails.sweep';
 
 // Every hour, emails whose job was lost are given up (AbandonStaleEmailsCommand). Upserted by
-// name on every worker start: one schedule.
+// name on every worker start: one schedule. One attempt: the next hour's run is the retry, and
+// a failed run (emails it could not give up) goes straight to the dead-letter queue instead of
+// five retries over the same rows.
 @Injectable()
 export class NotificationSchedules implements OnApplicationBootstrap {
   constructor(@InjectQueue(QueueNames.EMAILS) private readonly queue: Queue) {}
@@ -82,7 +84,7 @@ export class NotificationSchedules implements OnApplicationBootstrap {
     await this.queue.upsertJobScheduler(
       SWEEP,
       { pattern: '15 * * * *', tz: 'UTC' },
-      { name: SWEEP },
+      { name: SWEEP, opts: { attempts: 1 } },
     );
   }
 }

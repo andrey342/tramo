@@ -46,6 +46,11 @@ async function main(): Promise<void> {
   const response = await fetch(`${baseUrl}/contracts/${contractId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  if (!response.ok) {
+    throw new Error(
+      `Could not read contract ${contractId}: HTTP ${String(response.status)} ${await response.text()}`,
+    );
+  }
   const contract = (await response.json()) as ContractView;
   if (!contract.signature) {
     throw new Error(`Contract ${contractId} has not been sent for signature (${contract.status}).`);

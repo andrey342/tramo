@@ -22,5 +22,5 @@ body:json {
 }
 
 docs {
-  Admin only. All fields optional: `name`, `platformFeeBasisPoints`, `payoutIban`, `status` (`suspended` with a `suspensionReason`, or `active` to reinstate a suspended center).
+  Admin only. All fields optional: `name`, `platformFeeBasisPoints`, `payoutIban`, `country` and `taxId` together (corrects the VAT number of a center that is not active; it is checked again with VIES, 409 `center_vat_number_locked` for an active center, 409 `center_already_registered` for a number another center has), `status` (`suspended` with a `suspensionReason`, or `active` to reinstate a suspended center; without a valid VAT number it waits for verification and the number is checked again).
 }

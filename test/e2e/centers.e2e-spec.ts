@@ -146,6 +146,47 @@ describe('Training centers (e2e)', () => {
     expect(withoutReason.status).toBe(400);
   });
 
+  // VIES_MODE=fake: 200 is an invalid number, any other is valid.
+  it('should let an admin correct the VAT number of a center that is not active', async () => {
+    const created = await register({ country: 'DE', taxId: '200' });
+    const id = created.body.id as string;
+    const patch = (body: Record<string, unknown>) =>
+      api()
+        .patch(`/api/v1/centers/${id}`)
+        .set(...bearer(adminToken))
+        .send(body);
+    const checked = await api()
+      .post(`/api/v1/centers/${id}/verify-vat`)
+      .set(...bearer(opsToken));
+    expect(checked.body).toMatchObject({
+      status: 'pending_verification',
+      vatValidation: { status: 'invalid' },
+    });
+    const takenTaxId = aTaxId();
+    await register({ taxId: takenTaxId });
+
+    const halfNumber = await patch({ taxId: aTaxId() });
+    const duplicate = await patch({ country: 'ES', taxId: takenTaxId });
+    const corrected = await patch({ country: 'ES', taxId: aTaxId() });
+    const verified = await api()
+      .post(`/api/v1/centers/${id}/verify-vat`)
+      .set(...bearer(opsToken));
+    const onceActive = await patch({ country: 'ES', taxId: aTaxId() });
+
+    expect(halfNumber.status).toBe(400);
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.code).toBe('center_already_registered');
+    expect(corrected.status).toBe(200);
+    expect(corrected.body).toMatchObject({
+      country: 'ES',
+      status: 'pending_verification',
+      vatValidation: null,
+    });
+    expect(verified.body).toMatchObject({ status: 'active', vatValidation: { status: 'valid' } });
+    expect(onceActive.status).toBe(409);
+    expect(onceActive.body.code).toBe('center_vat_number_locked');
+  });
+
   it('should show a center to its own admin only', async () => {
     const created = await register();
     const id = created.body.id as string;

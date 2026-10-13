@@ -4,7 +4,8 @@ import { type EventHistory, type IntegrationEvent } from '../../src/shared/appli
 
 export interface EventHistoryHarness {
   readonly history: EventHistory;
-  // Records events, in this order, as the outbox would.
+  // Records events as the outbox would, ids in this order; each call is one transaction. Where
+  // they are stored is the store's business: a table returns rows in no particular order.
   readonly record: (events: readonly Omit<IntegrationEvent, 'eventId'>[]) => Promise<void>;
   readonly run: <T>(work: () => Promise<T>) => Promise<T>;
 }
@@ -40,6 +41,28 @@ export function eventHistoryContract(
         aggregateType: 'Contract',
         occurredAt: new Date(Date.UTC(2026, 10, 12, 8, 0, 4)).toISOString(),
       });
+    });
+
+    // The order is the event ids', not the order rows happen to be stored or returned in.
+    it('should return the events in id order when they were recorded in several transactions', async () => {
+      const { history, record, run } = await create();
+      const type = `Sorted${uuidv7().slice(-8)}`;
+      const event = (n: number) => ({
+        eventType: type,
+        aggregateType: 'Contract',
+        aggregateId: uuidv7(),
+        occurredAt: new Date(Date.UTC(2026, 10, 12, 9, 0, n)).toISOString(),
+        correlationId: null,
+        payload: { n },
+      });
+      for (const n of [1, 2, 3]) {
+        await record([event(n)]);
+      }
+
+      const all = await run(() => history.read([type], null, 10));
+
+      expect(all.map((item) => item.payload)).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+      expect(all.map((item) => item.eventId)).toEqual([...all.map((item) => item.eventId)].sort());
     });
   });
 }

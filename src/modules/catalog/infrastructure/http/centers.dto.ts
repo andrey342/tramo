@@ -80,6 +80,26 @@ export class UpdateTrainingCenterRequest {
   @MaxLength(42)
   payoutIban?: string;
 
+  // A VAT number is a country and a number: one without the other is a 400.
+  @ApiPropertyOptional({
+    enum: VAT_COUNTRIES,
+    example: 'ES',
+    description: 'With taxId: corrects the VAT number of a center that is not active',
+  })
+  @ValidateIf((request: UpdateTrainingCenterRequest) => request.taxId !== undefined)
+  @IsIn(VAT_COUNTRIES)
+  country?: VatCountry;
+
+  @ApiPropertyOptional({
+    example: 'B87654321',
+    description:
+      'With country: the corrected national VAT number, checked again with VIES. Refused (409) for an active center.',
+  })
+  @ValidateIf((request: UpdateTrainingCenterRequest) => request.country !== undefined)
+  @IsString()
+  @MaxLength(20)
+  taxId?: string;
+
   @ApiPropertyOptional({
     enum: ['suspended', 'active'],
     description: '`suspended` (needs suspensionReason) or `active` to reinstate a suspended center',

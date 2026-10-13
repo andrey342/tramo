@@ -25,7 +25,11 @@ import { ListProgramsHandler } from './application/queries/list-programs.query';
 import { PROGRAM_REPOSITORY, TRAINING_CENTER_REPOSITORY } from './domain';
 import { FakeVatValidator } from './infrastructure/adapters/fake-vat-validator';
 import { ViesVatValidator } from './infrastructure/adapters/vies-vat-validator';
-import { VerifyRegisteredCenterVatConsumer } from './infrastructure/consumers/verify-registered-center-vat.consumer';
+import {
+  VerifyChangedCenterVatConsumer,
+  VerifyRegisteredCenterVatConsumer,
+  VerifyReinstatedCenterVatConsumer,
+} from './infrastructure/consumers/vat-check.consumers';
 import { VatCheckScheduler } from './infrastructure/jobs/vat-checks';
 import { TrainingCenterMapper } from './infrastructure/persistence/catalog.mappers';
 import { ProgramOrmEntity } from './infrastructure/persistence/program.orm-entity';
@@ -67,6 +71,8 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
     GetProgramHandler,
     ListProgramsHandler,
     VerifyRegisteredCenterVatConsumer,
+    VerifyChangedCenterVatConsumer,
+    VerifyReinstatedCenterVatConsumer,
     VatCheckScheduler,
   ],
   exports: [],

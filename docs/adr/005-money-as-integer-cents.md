@@ -23,14 +23,16 @@ JavaScript numbers are binary floating point (`0.1 + 0.2 !== 0.3`).
 - Rounding is never implicit. Where rounding leaves a remainder (instalments, splits), the rule
   that absorbs it is part of the domain and tested (for example, the last instalment absorbs the
   difference so the principal adds up exactly).
-- The API exposes amounts as decimal strings with two decimals (`"7500.00"`) plus the currency,
-  never as floats.
+- The API exposes amounts as integer cents in fields named `*Cents` (`"priceCents": 750000` is
+  7,500.00 EUR) and rates as integer basis points in fields named `*BasisPoints`, never as floats.
+  Every amount is in euros, the only currency Tramo lends in, so no currency field is sent.
 
 ### Consequences
 
 - Good: sums and comparisons are exact; schedules reconcile to the cent.
 - Good: rounding decisions are visible in code and covered by tests.
-- Bad: one more conversion at the API boundary.
+- Bad: clients divide by 100 to show an amount; the field names say so, and OpenAPI examples
+  are in cents.
 - Bad: interest calculations need `decimal.js`, which is slower than floats. The volumes here
   (a few hundred rows per schedule) make that irrelevant.
 

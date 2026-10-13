@@ -5,7 +5,7 @@
 
 ## Context and problem statement
 
-Billing cycles run on the first of the month, dunning escalates at D+1, D+3, D+30 and D+90,
+Billing cycles run on the first of the month, dunning runs its steps at D-3, D+1, D+3, D+7, D+15, D+30 and D+90,
 applications expire after 14 days and ISA plans end eight years after the program. Code that
 calls `new Date()` directly can only be tested by waiting or by patching globals, and the demo
 cannot show a contract's life in a few minutes.

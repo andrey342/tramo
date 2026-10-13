@@ -7,7 +7,7 @@ import {
   type VatNumber,
 } from '@shared/domain';
 
-import { InvalidPlatformFeeError } from '../errors/catalog-errors';
+import { CenterVatNumberLockedError, InvalidPlatformFeeError } from '../errors/catalog-errors';
 import { CatalogEvents } from '../events/catalog-events';
 
 import { type VatCheckResult, type VatValidation } from './vat-check';
@@ -109,8 +109,13 @@ export class TrainingCenter extends AggregateRoot {
   // A valid number activates a center waiting for verification. An invalid one is recorded and
   // leaves the status alone: ops decide what happens to a center already working with Tramo, and
   // CenterVatInvalidated tells them when a number that was valid stops being so. An unavailable
-  // registry only marks a center that was never checked as unverified.
-  recordVatCheck(result: VatCheckResult, now: Date): void {
+  // registry only marks a center that was never checked as unverified. `checked` is the number
+  // the registry was asked about: an answer about a number the center no longer has (it was
+  // corrected while the registry answered) is dropped, the new number's own check follows.
+  recordVatCheck(result: VatCheckResult, now: Date, checked: VatNumber = this.vatNumber): void {
+    if (!checked.equals(this.props.vatNumber)) {
+      return;
+    }
     const previous = this.props.vatValidation;
     if (result.outcome === 'unavailable') {
       if (previous === null || previous.status === 'unverified') {
@@ -167,17 +172,47 @@ export class TrainingCenter extends AggregateRoot {
     });
   }
 
-  // Back to active only with a valid VAT number; otherwise back to waiting for verification, which
-  // needs no event: the center was already announced as suspended and is still not active.
+  // Back to active only with a valid VAT number; otherwise back to waiting for verification, and
+  // CenterReturnedToVerification has the number checked again: a check that ended invalid is
+  // not retried on its own.
   reinstate(now: Date): void {
     if (this.props.status !== 'suspended') {
       throw new InvalidStateTransitionError('TrainingCenter', this.props.status, 'active');
     }
     if (this.props.vatValidation?.status === 'valid') {
       this.activate(now);
-    } else {
-      this.props = { ...this.props, status: 'pending_verification' };
+      return;
     }
+    this.props = { ...this.props, status: 'pending_verification' };
+    this.record({
+      eventType: CatalogEvents.CenterReturnedToVerification,
+      aggregateType: 'TrainingCenter',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { centerId: this.id },
+    });
+  }
+
+  // Corrects a VAT number registered wrong. Only while the center is not active: an active one
+  // has a number the registry confirmed, and changing it would move money to a center nobody
+  // checked. The previous validation was about the old number, so it is dropped, and
+  // CenterVatNumberChanged has the new one checked (a valid answer activates a pending center).
+  // Uniqueness across centers is the caller's to check, as on registration.
+  changeVatNumber(vatNumber: VatNumber, now: Date): void {
+    if (vatNumber.equals(this.props.vatNumber)) {
+      return;
+    }
+    if (this.props.status === 'active') {
+      throw new CenterVatNumberLockedError(this.id);
+    }
+    this.props = { ...this.props, vatNumber, vatValidation: null };
+    this.record({
+      eventType: CatalogEvents.CenterVatNumberChanged,
+      aggregateType: 'TrainingCenter',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { centerId: this.id, country: vatNumber.country, taxId: vatNumber.toString() },
+    });
   }
 
   rename(name: string, now: Date): void {

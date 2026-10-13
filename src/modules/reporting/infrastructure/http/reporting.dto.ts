@@ -153,8 +153,13 @@ export class OpsOverviewResponse {
   @ApiProperty()
   contractsInArrears!: number;
 
-  @ApiProperty({ description: 'Jobs in the dead-letter queue' })
-  deadLetters!: number;
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    example: 0,
+    description: 'Jobs in the dead-letter queue; null when the queue cannot be read (Redis down)',
+  })
+  deadLetters!: number | null;
 
   @ApiProperty()
   generatedAt!: Date;

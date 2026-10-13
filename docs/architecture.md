@@ -133,9 +133,10 @@ Every request to the api goes through, in order: request id and CLS context, rat
 validation, idempotency, the handler, auditing, and Problem Details rendering of errors.
 
 - **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
-  all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Routes declare
-  stricter limits with `@Throttle`; health checks and `/metrics` are exempt. Exceeding the limit
-  returns 429 with `Retry-After`.
+  all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Credential
+  routes marked `@AuthRateLimited()` (every `/auth/*` route and `POST /applications`)
+  also count against `THROTTLE_AUTH_LIMIT` per minute; health checks and `/metrics` are exempt.
+  Exceeding either limit returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
@@ -199,8 +200,8 @@ Known gaps, accepted for now:
 
 - `POST /auth/register` answers 409 for an email that already has an account, so registration
   reveals which emails are registered. Answering the same way in both cases needs an email
-  confirmation step, which comes with the notifications module; until then the auth rate limit
-  slows enumeration down.
+  confirmation step (a link the notifications module would send), which does not exist yet; until
+  then the auth rate limit slows enumeration down.
 - `StudentRegistered` and `CenterUserCreated` carry the email address (the first for the welcome
   email, which is sent before anything else knows the user). Their jobs (and Bull Board, behind
   its own credentials) therefore hold it until completed jobs expire after seven days.
@@ -220,6 +221,14 @@ Training centers and the programs students finance.
   center active and emits `CenterVatInvalidated` for ops to decide. Only an admin changes a
   center's fee, payout account or status, and each change is an event (`CenterRenamed`,
   `CenterPlatformFeeChanged`, `CenterPayoutAccountChanged`, `CenterSuspended`...).
+- **Correcting a VAT number.** A center registered with a wrong number is not stuck: while it is
+  not active an admin sends `country` and `taxId` in `PATCH /centers/:id`. The number must not
+  belong to another center (409 `center_already_registered`), the previous validation is dropped
+  and `CenterVatNumberChanged` queues a check of the new number, as registration does. An active
+  center's number is the one VIES confirmed (409 `center_vat_number_locked`): suspend it first.
+  Reinstating a suspended center without a valid number returns it to `pending_verification` and
+  `CenterReturnedToVerification` queues a new check, since a check that ended `invalid` is not
+  retried on its own. A check answered for a number the center no longer has is dropped.
 - **VIES client.** Each attempt has a timeout; transient failures and timeouts are retried twice
   with backoff, and a circuit breaker stops calling for 30 s after five failures in a row. Every
   failure becomes an `unavailable` answer: a registry outage never fails a request. `VIES_MODE`
@@ -230,14 +239,18 @@ Training centers and the programs students finance.
   terms of 6 to 48 months, or an income share agreement capped at 1.0 to 2.0 times the price,
   offered only when at least 60 % of graduates find a job) and their center is active. The same
   rules are CHECK constraints on `catalog.programs`, and request validation reads its bounds from
-  the domain. Changes to a published program are announced in full (`ProgramDetailsChanged`,
+  the domain. A `PATCH` that changes details and financing is checked once, as the program ends
+  up (`Program.revise`): dropping the ISA while lowering the employability rate below 60 % is one
+  valid change. Changes to a published program are announced in full (`ProgramDetailsChanged`,
   `ProgramFinancingChanged`) so other modules keep their own copy. While a center is suspended,
   only Tramo admins change its programs.
 - **Public catalog.** `GET /programs` reads a SQL read model that maps rows straight to DTOs:
   published programs of active centers, filtered by center, modality, product and price, newest
   first with keyset pagination on a partial index.
 - **Optional authentication.** `GET /programs/:id` is open to anonymous callers and also reads
-  the credentials when they are sent (`@OptionalAuthentication()`), so a center sees its own drafts.
+  the credentials when they are sent (`@OptionalAuthentication()`), so whoever manages a program
+  sees it while it is a draft or archived: the center's admins, its API keys and Tramo admins
+  (ops do not manage programs); everybody else gets a 404.
   Invalid credentials are still rejected, but the route is public to the authorization guard, which
   therefore checks no roles or scopes: the use case does (`canSeeUnpublishedPrograms` requires
   `programs:read` or `programs:write` from an API key). Any new optional route has to do the same.
@@ -536,8 +549,8 @@ an event of another module; it decides nothing.
   (`notifications.emails`, five attempts with backoff) render it from its handlebars template and
   hand it to the SMTP server (Mailpit locally, `SMTP_*`; encrypted in production, and whenever
   credentials are sent); a sent email is not sent again, one that runs out of attempts is
-  `failed` and its job dead-lettered, and an hourly sweep gives up those still pending a day
-  later (their job was lost). Failures are recorded and published as categories (`smtp_550`,
+  `failed` and its job dead-lettered, and an hourly sweep (one attempt: the next hour is its
+  retry) gives up those still pending a day later (their job was lost). Failures are recorded and published as categories (`smtp_550`,
   `timeout`), never the server's text, which quotes the recipient. Sending is at least once: an
   answer lost after the server accepted the message sends it again. Recipients are looked up in
   iam when the email is written (`FindUserContactQuery`, `ListCenterContactsQuery`); the
@@ -628,8 +641,12 @@ modules (ADR 019). It decides nothing and owns no aggregate.
     there. A program of another center is a 404.
   - `GET /ops/overview` (staff): applications waiting for an analyst, charges whose collection
     failed today and are still unpaid, transfers to centers pending or failed, contracts in
-    arrears, jobs in the dead-letter queue.
-- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time). In one
+    arrears, jobs in the dead-letter queue. The queue connection waits for Redis instead of
+    failing, so the count is given up after two seconds: while Redis is down `deadLetters` is
+    `null` and the rest still answers.
+- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time; a request
+  while one is queued or running answers 202 `{"queued": false}`). When the queue does not answer
+  within two seconds (Redis down) it answers 503 `queue_unavailable` and the client retries. In one
   REPEATABLE READ transaction the facts are locked against writers (readers still see the old
   ones), deleted, and the history of events, read from the outbox (`EventHistory`), is replayed
   through the same projector. A deployment that adds reporting to existing data runs it once.

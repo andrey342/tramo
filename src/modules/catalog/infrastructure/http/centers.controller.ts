@@ -101,7 +101,10 @@ export class CentersController {
   @ApiOkResponse({ type: TrainingCenterResponse })
   @Roles('admin')
   @Audited({ action: 'center.update', resource: 'center', resourceIdParam: 'centerId' })
-  @ApiOperation({ summary: 'Rename, change fee or payout account, suspend or reinstate (admin)' })
+  @ApiOperation({
+    summary:
+      'Rename, change fee, payout account or VAT number (not active), suspend or reinstate (admin)',
+  })
   update(
     @CurrentPrincipal() actor: Principal,
     @Param('centerId', ParseUUIDPipe) centerId: string,

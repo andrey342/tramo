@@ -14,6 +14,7 @@ import {
   CatalogEvents,
   CenterAccessDeniedError,
   CenterAlreadyRegisteredError,
+  CenterVatNumberLockedError,
   type TrainingCenter,
 } from '../domain';
 
@@ -188,6 +189,72 @@ describe('training center use cases', () => {
       );
 
       expect(result.status).toBe('active');
+    });
+
+    it('should correct the VAT number of a center that is not active and audit it', async () => {
+      const t = setup();
+      const center = await registered(t);
+      const before = center.vatNumber.toString();
+
+      const result = await t.update.execute(
+        new UpdateTrainingCenterCommand(ADMIN, center.id, { country: 'DE', taxId: '123456789' }),
+      );
+
+      expect(result).toMatchObject({
+        country: 'DE',
+        taxId: 'DE123456789',
+        status: 'pending_verification',
+        vatValidation: null,
+      });
+      expect(t.changes).toEqual([{ taxId: { before, after: 'DE123456789' } }]);
+      expect(t.events.ofType(CatalogEvents.CenterVatNumberChanged)).toHaveLength(1);
+    });
+
+    it('should refuse a VAT number another center has, and any change when the center is active', async () => {
+      const t = setup();
+      const taken = await registered(t);
+      const center = await registered(t);
+      const active = await registered(t, anActiveTrainingCenter());
+      const correction = (id: string, taxId: string) =>
+        new UpdateTrainingCenterCommand(ADMIN, id, { country: 'ES', taxId });
+
+      await expect(t.update.execute(correction(center.id, taken.vatNumber.number))).rejects.toThrow(
+        CenterAlreadyRegisteredError,
+      );
+      await expect(t.update.execute(correction(active.id, aTaxId()))).rejects.toThrow(
+        CenterVatNumberLockedError,
+      );
+      await expect(t.update.execute(correction(center.id, 'B'))).rejects.toThrow(InvalidValueError);
+    });
+
+    it('should suspend an active center and correct its VAT number in one request', async () => {
+      const t = setup();
+      const center = await registered(t, anActiveTrainingCenter());
+
+      const result = await t.update.execute(
+        new UpdateTrainingCenterCommand(ADMIN, center.id, {
+          status: 'suspended',
+          suspensionReason: 'Wrong tax id',
+          country: 'ES',
+          taxId: 'B99999999',
+        }),
+      );
+
+      expect(result).toMatchObject({ status: 'suspended', taxId: 'ESB99999999' });
+    });
+
+    it('should have the VAT number checked again when a center is reinstated without a valid one', async () => {
+      const t = setup();
+      const center = aTrainingCenter();
+      center.suspend('Audit', t.clock.now());
+      await registered(t, center);
+
+      const result = await t.update.execute(
+        new UpdateTrainingCenterCommand(ADMIN, center.id, { status: 'active' }),
+      );
+
+      expect(result.status).toBe('pending_verification');
+      expect(t.events.ofType(CatalogEvents.CenterReturnedToVerification)).toHaveLength(1);
     });
 
     it('should be reserved to admins, also for the center itself', async () => {

@@ -19,5 +19,5 @@ auth:bearer {
 }
 
 docs {
-  Queues a job that rebuilds the reporting read models from the event history; answers 202 with `queued`. 409 while a rebuild is already running.
+  Queues a job that rebuilds the reporting read models from the event history, one at a time; answers 202 with `queued: true`, or `queued: false` while a rebuild is already queued or running. 503 `queue_unavailable` when the job queue (Redis) does not answer in time.
 }

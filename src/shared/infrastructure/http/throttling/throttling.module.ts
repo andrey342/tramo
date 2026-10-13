@@ -1,6 +1,6 @@
-import { type ExecutionContext, Module, SetMetadata } from '@nestjs/common';
+import { type ExecutionContext, Injectable, Module, SetMetadata } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, type ThrottlerLimitDetail, ThrottlerModule } from '@nestjs/throttler';
 import { type Redis } from 'ioredis';
 
 import { APP_CONFIG, type AppConfig } from '../../config';
@@ -23,8 +23,22 @@ function isAuthRateLimited(context: ExecutionContext): boolean {
   );
 }
 
-// Global per-client limit for every route; stricter limits (authentication) are declared on the
-// routes with @Throttle. Health checks opt out with @SkipThrottle.
+// The guard names the header of every throttler but `default` after it (`Retry-After-auth`);
+// clients and proxies only know `Retry-After`, so every 429 carries it too.
+@Injectable()
+export class RetryAfterThrottlerGuard extends ThrottlerGuard {
+  protected override async throwThrottlingException(
+    context: ExecutionContext,
+    detail: ThrottlerLimitDetail,
+  ): Promise<void> {
+    const { res } = this.getRequestResponse(context);
+    this.setResponseHeader(res, 'Retry-After', detail.timeToBlockExpire);
+    await super.throwThrottlingException(context, detail);
+  }
+}
+
+// Global per-client limit for every route; credential routes get the stricter auth limit on top
+// with @AuthRateLimited(). Health checks opt out with @SkipThrottle.
 @Module({
   imports: [
     ThrottlerModule.forRootAsync({
@@ -45,6 +59,6 @@ function isAuthRateLimited(context: ExecutionContext): boolean {
       }),
     }),
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: RetryAfterThrottlerGuard }],
 })
 export class ThrottlingModule {}
