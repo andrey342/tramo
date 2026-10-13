@@ -89,7 +89,8 @@ contract id is in the `contractId` environment variable after step 7.
 - **Notifications**: the center's webhook (pointed at the compose sink; received deliveries at
   http://localhost:9099/deliveries), its delivery log and redelivery.
 - **Reporting**: center dashboard, program performance, ops overview and a read model rebuild.
-- **Operations**: disbursements to centers, the center's integration API keys (issue, call
+- **Operations**: disbursements to centers and cancelling a contract whose disbursement failed,
+  the center's integration API keys (issue, call
   `/me` with `X-Api-Key`, list, revoke), and disabling an account (the student registered by
   Auth).
 

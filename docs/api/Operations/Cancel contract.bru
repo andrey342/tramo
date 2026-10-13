@@ -1,0 +1,21 @@
+meta {
+  name: Cancel contract
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/ops/contracts/{{contractId}}/cancel
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  Cancels a signed contract whose disbursement failed for good (the center closed, or its account cannot be fixed): the disbursement becomes `cancelled` and is never retried, the contract `cancelled` with `disbursement_failed`, and the student's application is withdrawn so they may apply again. 409 `disbursement_not_failed` while the disbursement is pending or sent, or once it settled; a contract already cancelled is answered as it is.
+
+  On the demo contract it answers 409 once its disbursement settled.
+}

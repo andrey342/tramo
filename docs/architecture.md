@@ -391,10 +391,11 @@ Contracts drawn up from accepted offers, their signature, the payment to the tra
 the repayment plan.
 
 - **Contract.** `draft → sent_for_signature → signed → active → completed`; a contract not yet
-  signed is cancelled when the student declines or the envelope expires (`defaulted` comes with
-  billing's dunning). One per accepted offer (unique application id). Its terms are fixed when it
-  is drawn up: the principal (the program price), the center's platform fee at that moment, and
-  the product as accepted (term and TIN, or the ISA's share, threshold, payments, cap and grace).
+  signed is cancelled when the student declines or the envelope expires, and a signed one when
+  ops give up on its failed disbursement (`defaulted` comes with billing's dunning). One per
+  accepted offer (unique application id). Its terms are fixed when it is drawn up: the principal
+  (the program price), the center's platform fee at that moment, and the product as accepted
+  (term and TIN, or the ISA's share, threshold, payments, cap and grace).
 - **Signature.** `ContractCreated` → a job renders the contract text, hashes it (SHA-256) and
   sends the envelope to the e-signature provider; the text is stored with the envelope, so `GET
 /contracts/:id/document` serves what the student signs whatever the code renders later. The
@@ -421,7 +422,14 @@ the repayment plan.
   `POST /ops/disbursements/:id/retry`, a new attempt with a new key (the account is read again, so
   a corrected IBAN is used). A disbursement whose jobs ran out stays `pending` or `sent`; ops
   reconcile it with `POST /ops/disbursements/:id/reconcile`, which sends a pending attempt again
-  with its key or asks the bank about a sent one. Both are audited.
+  with its key or asks the bank about a sent one. A disbursement that failed for good (the center
+  closed) would otherwise hold the contract `signed` and the student's application for ever:
+  `POST /ops/contracts/:id/cancel` cancels the disbursement (`failed → cancelled`, never retried)
+  and the contract (`signed → cancelled`, `disbursement_failed`) in one transaction, and only
+  once the disbursement is `failed`; while it is pending or sent money may be on its way
+  (`disbursement_not_failed`). `ContractCancelled` withdraws the application. Nothing is left in
+  billing: the plan opens on activation, so no charge exists; a mandate the student signed for
+  the contract stays recorded but has nothing to collect. All three routes are audited.
 - **Repayment.** Billing collects (see Billing) and lending follows it: `ChargePaid` marks an
   instalment paid (in any order: a retried one may come after the next) or settles a payoff;
   `ContractInArrears` and `ArrearsCleared` move the contract into and out of `in_arrears`;

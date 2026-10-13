@@ -237,7 +237,14 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     day and a half): `POST /ops/disbursements/:id/reconcile`. A pending attempt is sent again
     with its own key, so the bank never pays it twice; a sent one is checked with the bank.
     Nothing is failed blindly, since money may already be out.
-  - Both are audited. A settled disbursement activates the contract and opens its plan.
+  - `failed` for good (the center closed, its account cannot be fixed):
+    `POST /ops/contracts/<contractId>/cancel`. The disbursement becomes `cancelled` (never
+    retried, its failure reason kept) and the contract `cancelled` with `disbursement_failed`;
+    `ContractCancelled` withdraws the application (consumer `origination.withdraw-application`),
+    so the student may apply again. Refused with `disbursement_not_failed` while the disbursement
+    is pending or sent (reconcile it first) or once it settled. A repeated call answers the
+    cancelled contract and changes nothing.
+  - All are audited. A settled disbursement activates the contract and opens its plan.
 
 ## Charges failing and dunning
 
