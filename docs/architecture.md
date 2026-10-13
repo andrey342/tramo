@@ -649,7 +649,9 @@ an event of another module; it decides nothing.
   (a new round; ops can too). A round whose job was lost (no attempt for 15 minutes) can be
   redelivered too, and a job that fails before posting on its last attempt closes its round.
   Removing the webhook (idempotent) stops new deliveries; those still pending are given up when
-  their job next runs. In production only
+  their job next runs. Configuring the webhook again rotates the secret; for 24 hours each
+  delivery carries a second `v1` signed with the secret it replaced, so a center verifying with
+  either accepts it while it deploys the new one (ADR 018). In production only
   https to public addresses is posted, checked at configuration and on the address each
   connection uses (ADR 018); the compose stack points centers at the webhook sink. The audit
   entry of a configuration keeps the old and new URL, never the secret, and its answer is not

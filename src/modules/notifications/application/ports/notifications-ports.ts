@@ -61,13 +61,14 @@ export interface EmailRenderer {
 
 export interface WebhookPost {
   readonly url: string;
-  readonly secret: string;
+  // Each one signs the body (a v1 value each in the signature header), the current one first.
+  readonly secrets: readonly string[];
   readonly deliveryId: string;
   readonly event: string;
   readonly body: string;
 }
 
-// The HTTP client of deliveries: signs the body with the center's secret and posts it. Resolves
+// The HTTP client of deliveries: signs the body with the center's secrets and posts it. Resolves
 // with the status of any answer; rejects with WebhookPostFailedError when there is none
 // (timeout, refused connection, a target it will not post to).
 export interface WebhookSender {

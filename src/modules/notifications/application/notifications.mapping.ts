@@ -10,6 +10,7 @@ export function toSubscriptionDto(subscription: WebhookSubscription): WebhookSub
     events: WEBHOOK_EVENTS,
     createdAt: subscription.createdAt,
     changedAt: subscription.changedAt,
+    previousSecretExpiresAt: subscription.previousSecret?.expiresAt ?? null,
   };
 }
 

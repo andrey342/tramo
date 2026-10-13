@@ -15,6 +15,8 @@ import {
 // (ADR 014).
 const secretContext = (subscriptionId: string): string =>
   `notifications.webhook_subscriptions.secret:${subscriptionId}`;
+const previousSecretContext = (subscriptionId: string): string =>
+  `notifications.webhook_subscriptions.previous_secret:${subscriptionId}`;
 
 // A class: it needs the cipher for the secret.
 @Injectable()
@@ -26,6 +28,16 @@ export class WebhookSubscriptionMapper {
       centerId: row.centerId,
       url: row.url,
       secret: this.cipher.decrypt(row.secretEncrypted, secretContext(row.id)),
+      previousSecret:
+        row.previousSecretEncrypted !== null && row.previousSecretExpiresAt !== null
+          ? {
+              value: this.cipher.decrypt(
+                row.previousSecretEncrypted,
+                previousSecretContext(row.id),
+              ),
+              expiresAt: row.previousSecretExpiresAt,
+            }
+          : null,
       status: row.status,
       createdAt: row.createdAt,
       changedAt: row.changedAt,
@@ -37,11 +49,16 @@ export class WebhookSubscriptionMapper {
   toRow(
     subscription: WebhookSubscription,
   ): Omit<WebhookSubscriptionOrmEntity, 'version' | 'updatedAt'> {
+    const previous = subscription.previousSecret;
     return {
       id: subscription.id,
       centerId: subscription.centerId,
       url: subscription.url,
       secretEncrypted: this.cipher.encrypt(subscription.secret, secretContext(subscription.id)),
+      previousSecretEncrypted: previous
+        ? this.cipher.encrypt(previous.value, previousSecretContext(subscription.id))
+        : null,
+      previousSecretExpiresAt: previous?.expiresAt ?? null,
       status: subscription.status,
       createdAt: subscription.createdAt,
       changedAt: subscription.changedAt,

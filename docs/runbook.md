@@ -298,6 +298,11 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   is resolved and refused if any address is loopback, private, link-local, carrier-grade NAT,
   documentation, multicast, reserved or an IPv6 form carrying IPv4 (`target_unreachable`).
   Outside production it is on by default, which is how compose reaches the sink.
+- **Signatures refused after a rotation**: for 24 hours after `PUT /centers/:id/webhook` each
+  delivery carries two `v1` values (new secret first, then the replaced one;
+  `previousSecretExpiresAt` in `GET /centers/:id/webhook` says until when). A center whose
+  endpoint answers 401 or 400 in that window is checking only the first `v1`: it must accept the
+  request when any `v1` matches. After the window only the new secret signs.
 - **Action**: once the center's endpoint answers 2xx,
   `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver` (center admin, ops, admin) starts a
   new round. It is refused with `webhook_delivery_in_progress` while a round is pending, unless
@@ -414,7 +419,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   working (they live 15 minutes) and clients refresh. Refresh tokens are opaque and unaffected.
 - **`METRICS_TOKEN`, `BULL_BOARD_PASSWORD`**: change and restart the api.
 - **Center webhook secrets**: configuring the webhook again (`PUT /centers/:id/webhook`, center
-  admin) generates a new secret, returned once; deliveries are signed with it from then on.
+  admin) generates a new secret, returned once; deliveries are signed with it from then on, and
+  for 24 hours also with the one it replaced (a second `v1`), so the center has a day to deploy
+  it.
 - **`FIELD_ENCRYPTION_KEY`**: the process reads one key and has no previous-key variable.
   Changing it on a database with data makes every encrypted value unreadable (payout and creditor
   IBANs, mandate IBANs, webhook secrets, national ids fail with `FieldDecryptionError`), and so

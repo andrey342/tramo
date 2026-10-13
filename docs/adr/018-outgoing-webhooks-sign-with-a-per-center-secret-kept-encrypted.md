@@ -66,3 +66,16 @@ anything else, a timeout or a redirect (never followed) is a failed attempt.
 - Bad: a center learns of an event only after its round of attempts; one whose endpoint is down
   for hours sees the delivery `failed` and has to redeliver (`POST
 /centers/:id/webhook-deliveries/:deliveryId/redeliver`).
+
+### Rotation overlap (2026-10-13)
+
+Rotating the secret used to switch signatures at once: every delivery between the `PUT` and the
+center deploying the new secret failed its verification. The secret a rotation replaces is now
+kept for 24 hours (`SECRET_ROTATION_OVERLAP_MS`), encrypted and bound to its row like the current
+one (`previous_secret_encrypted`, with `previous_secret_expires_at`), and each delivery made in
+that window carries one `v1` per secret, the current one first:
+`X-Tramo-Signature: t=<unix>,v1=<hex with the new secret>,v1=<hex with the old one>`. Receivers
+must accept a request when any `v1` matches a secret they hold, as Tramo does for the callbacks it
+receives. Only the secret just replaced overlaps: rotating twice within a day drops the oldest.
+A removed webhook configured again starts with its new secret alone. After the window the
+replaced secret stays stored, unused, until the next rotation overwrites it.

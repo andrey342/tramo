@@ -61,6 +61,18 @@ describe('webhook signatures', () => {
     expect(verifyWebhook([SECRET], header, BODY, NOW).valid).toBe(false);
   });
 
+  it('should sign once per secret, current first, when a rotation overlaps', () => {
+    const previous = 'previous-secret-of-at-least-32-chars';
+
+    const header = signWebhook([SECRET, previous], BODY, NOW);
+
+    expect(header).toMatch(/^t=1791799200,v1=[0-9a-f]{64},v1=[0-9a-f]{64}$/);
+    expect(header.split(',')[1]).toBe(signWebhook(SECRET, BODY, NOW).split(',')[1]);
+    // A receiver that still holds only the old secret, and one that already has the new one.
+    expect(verifyWebhook(previous, header, BODY, NOW)).toEqual({ valid: true });
+    expect(verifyWebhook(SECRET, header, BODY, NOW)).toEqual({ valid: true });
+  });
+
   it('should accept any of several signatures, as during a secret rotation', () => {
     const [timestamp, current] = signWebhook(SECRET, BODY, NOW).split(',');
     const old = `v1=${'0'.repeat(64)}`;

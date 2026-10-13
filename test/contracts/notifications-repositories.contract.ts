@@ -37,6 +37,23 @@ export function notificationsRepositoriesContract(
       expect(await run(() => subscriptions.findByCenter(uuidv7()))).toBeNull();
     });
 
+    it('should keep the secret a rotation replaced, with the end of its overlap', async () => {
+      const { subscriptions, run } = await create();
+      const subscription = aSubscription();
+      await run(() => subscriptions.save(subscription));
+      const loaded = await run(() => subscriptions.findById(subscription.id));
+      loaded?.reconfigure(subscription.url, 'whsec_rotated', LATER);
+      if (loaded) await run(() => subscriptions.save(loaded));
+
+      const found = await run(() => subscriptions.findById(subscription.id));
+
+      expect(found?.secret).toBe('whsec_rotated');
+      expect(found?.previousSecret).toEqual({
+        value: SECRET,
+        expiresAt: new Date(LATER.getTime() + 24 * 60 * 60 * 1000),
+      });
+    });
+
     it('should refuse a second subscription for a center', async () => {
       const { subscriptions, run } = await create();
       const first = aSubscription();

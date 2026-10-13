@@ -33,6 +33,13 @@ export class WebhookSubscriptionOrmEntity {
   @Column('text', { name: 'secret_encrypted' })
   secretEncrypted: string;
 
+  // The secret the last rotation replaced and until when it still signs; both or neither.
+  @Column('text', { name: 'previous_secret_encrypted', nullable: true })
+  previousSecretEncrypted: string | null;
+
+  @Column({ type: 'timestamptz', name: 'previous_secret_expires_at', precision: 3, nullable: true })
+  previousSecretExpiresAt: Date | null;
+
   @Column('text')
   status: SubscriptionStatus;
 

@@ -40,13 +40,21 @@ export class WebhookResponse {
 
   @ApiProperty()
   changedAt!: Date;
+
+  @ApiProperty({
+    nullable: true,
+    type: Date,
+    description:
+      'After a rotation: until when deliveries also carry a v1 signed with the replaced secret',
+  })
+  previousSecretExpiresAt!: Date | null;
 }
 
 export class ConfiguredWebhookResponse extends WebhookResponse {
   @ApiProperty({
     example: 'whsec_3q2-7wEXAMPLEc0nUoT0QsN8m6x8u1z8p3Jr4k7m2v9yWQ',
     description:
-      'HMAC-SHA256 key of the X-Tramo-Signature header (t=<unix>,v1=<hex of "<t>.<body>">). Shown only now; configure the webhook again to rotate it.',
+      'HMAC-SHA256 key of the X-Tramo-Signature header (t=<unix>,v1=<hex of "<t>.<body>">). Shown only now; configure the webhook again to rotate it. For 24 hours after a rotation each delivery carries two v1 values, one per secret: accept the request when any of them matches.',
   })
   secret!: string;
 }

@@ -9,6 +9,8 @@ export interface WebhookSubscriptionDto {
   readonly events: readonly WebhookEvent[];
   readonly createdAt: Date;
   readonly changedAt: Date;
+  // After a rotation, until when deliveries are also signed with the secret it replaced.
+  readonly previousSecretExpiresAt: Date | null;
 }
 
 // Returned once, when the webhook is configured: the only time the secret leaves Tramo.

@@ -130,7 +130,9 @@ function failureCode(error: unknown): string {
 }
 
 // Posts deliveries to the centers' endpoints: JSON, signed (t=<unix>,v1=<HMAC-SHA256 of
-// "<t>.<body>">, as Tramo's own incoming webhooks), with the delivery id and the event in headers.
+// "<t>.<body>">, as Tramo's own incoming webhooks; one v1 per secret while a rotation overlaps,
+// and the receiver accepts the request when any of them matches), with the delivery id and the
+// event in headers.
 // Only the status of the answer is read: its body is never buffered, and redirects are not
 // followed (a 3xx is a failed attempt). Where private targets are off (production), only https to
 // public addresses is posted, the address checked being the one connected to (ADR 018).
@@ -155,7 +157,7 @@ export class HttpWebhookSender implements WebhookSender {
         'Content-Length': Buffer.byteLength(request.body),
         'Accept-Encoding': 'identity',
         'User-Agent': 'Tramo-Webhooks/1',
-        [SIGNATURE_HEADER]: signWebhook(request.secret, request.body, this.clock.now()),
+        [SIGNATURE_HEADER]: signWebhook(request.secrets, request.body, this.clock.now()),
         [DELIVERY_HEADER]: request.deliveryId,
         [EVENT_HEADER]: request.event,
       },

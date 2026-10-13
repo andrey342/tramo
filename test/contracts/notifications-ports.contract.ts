@@ -26,7 +26,7 @@ export function webhookSenderContract(
     const post = (sender: WebhookSender, url: string) =>
       sender.post({
         url,
-        secret: 'whsec_contract',
+        secrets: ['whsec_contract'],
         deliveryId: 'd-1',
         event: 'contract.signed',
         body: '{}',
