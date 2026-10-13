@@ -18,10 +18,14 @@ error.
    variables the scripts fill in: ids, the first due date and so on. Tokens, the API key and
    `esignSecret` are secret variables: Bruno keeps their values out of the collection files, so a
    run never writes a token into the repository.
-4. Run the **Auth** folder first (right click, **Run**). It signs in as admin, ops and the
+4. Run the **Auth** folder once, first (right click, **Run**). It signs in as admin, ops and the
    Codeworks center admin, stores the center id, and registers and signs in a new student, whose
-   token ends up in `studentToken`. Access tokens last 15 minutes; run Auth again when requests
-   start answering 401.
+   token ends up in `studentToken`. Its last two requests rotate that student's refresh token and
+   log the session out: the access token keeps working, the refresh token does not. Access tokens
+   last 15 minutes; when requests start answering 401, run the sign-in requests again (**Login
+   admin**, **Login ops**, **Login center admin**, **Login new student**), not the whole folder:
+   **Register student** would create another student, who does not own the applications and
+   contracts made so far.
 
 Requests that need an `Idempotency-Key` send a fresh `{{$guid}}` each time. Post-response scripts
 copy ids from the answers into the environment, so the requests below can be run one after another
