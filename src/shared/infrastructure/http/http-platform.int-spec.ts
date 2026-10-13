@@ -239,7 +239,7 @@ describe('HTTP platform (integration)', () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/probe/centers/center-1/suspend')
         .set('x-test-user', 'ops-7')
-        .set('x-request-id', 'req-audit-1');
+        .set('x-request-id', '0199a000-0000-7000-8000-0000000a0d17');
 
       expect(response.status).toBe(201);
       expect(await entriesFor('center-1')).toEqual([
@@ -250,7 +250,7 @@ describe('HTTP platform (integration)', () => {
           resource_type: 'center',
           outcome: 'succeeded',
           error_code: null,
-          request_id: 'req-audit-1',
+          request_id: '0199a000-0000-7000-8000-0000000a0d17',
           changes: { status: { before: 'active', after: 'suspended' } },
           metadata: { method: 'POST', path: '/api/v1/probe/centers/center-1/suspend' },
         },

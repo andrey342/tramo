@@ -53,7 +53,7 @@ Conventions used below:
 
 - `docker compose logs -f api worker` (`--since 10m` to narrow). Lines are JSON (pino); those
   written within a request or a job carry `correlationId`.
-- Each request has an id: the caller's `X-Request-Id` when well formed, otherwise a UUIDv7. It is
+- Each request has an id: the caller's `X-Request-Id` when it is a UUID, otherwise a UUIDv7. It is
   returned in the `x-request-id` header, as `requestId` in Problem Details, and kept in
   `shared.audit_log` for audited routes.
 - The outbox rows a request writes store it as `correlation_id`, and every job those events cause

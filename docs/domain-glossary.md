@@ -37,7 +37,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `UnrecoverableError`) is copied there with its queue, job id, data and reason; the original
   stays in its queue's failed set.
 - **Request id / correlation id**: every request gets an id (`X-Request-Id` when the caller sends
-  a well-formed one, otherwise a UUIDv7), returned in `x-request-id` and in Problem Details as
+  a UUID, otherwise a UUIDv7), returned in `x-request-id` and in Problem Details as
   `requestId`. Outbox rows written by the request store it as `correlation_id`, and jobs run with
   it as their context id, so log lines (`correlationId`) of the request and of the jobs it caused
   share it. A job not caused by a request uses `<queue>.<jobId>`.
