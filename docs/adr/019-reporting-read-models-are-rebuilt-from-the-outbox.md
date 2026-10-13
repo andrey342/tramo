@@ -31,21 +31,26 @@ its facts, and what does a rebuild replay?
 ## Decision outcome
 
 Option 2. The outbox already keeps every event after publishing it, in id (time) order; a
-shared `EventHistory` port reads it. Reporting keeps one fact per application, contract,
-disbursement and charge (`reporting.*_facts`), written by upserts that take descriptive fields
-from whichever event has them and the status of the most recent event (by time, then event
-id), so the order and the repetition of events do not matter. The consumers and the rebuild
-call the same `ReportingProjector`. `POST /ops/reporting/rebuild` queues a job that truncates
-the facts and replays the history in one transaction: dashboards answer with the old figures
-until it commits, and live consumers wait on the tables' locks, then apply their event on top.
-Figures are computed from the facts when asked.
+shared `EventHistory` port reads it (meant for projections only: payloads hold what each module
+published, an email included). Reporting keeps one fact per application, contract,
+disbursement and charge (`reporting.*_facts`), written by upserts that give the same facts
+whatever the order and repetition of events: descriptive fields are the same in every event that
+carries them; the status follows the most recent event (by time, then event id) but a final
+status is never replaced by one that is not (lending keeps an ended contract ended); an
+application's decision is set once; a charge keeps the day of its latest failure. The consumers
+and the rebuild call the same `ReportingProjector`. `POST /ops/reporting/rebuild` queues a job
+that, in one REPEATABLE READ transaction, locks the facts in EXCLUSIVE mode (writers wait,
+readers do not), deletes them and replays the history: dashboards answer with the old figures
+until it commits, and live consumers then apply their event on top. Figures are computed from
+the facts when asked, by pure functions of the domain over grouped rows.
 
 Option 1 would need a query per module and per kind of fact only for the rebuild, a second path
 that could drift from the consumers. Option 3 duplicates the outbox.
 
 The mean score of a program's applicants is not projected: putting scores in events would
 publish personal financial data to every consumer and job. Origination answers it as an
-aggregate (`GetProgramScoresQuery`), the only thing that leaves the module.
+aggregate (`GetProgramScoresQuery`), only from ten scored applicants and in bands of five, so
+neither one applicant's score nor the newest one can be read from it.
 
 ### Consequences
 
@@ -54,7 +59,12 @@ aggregate (`GetProgramScoresQuery`), the only thing that leaves the module.
 - Bad: the outbox is never pruned while reporting replays it; at volume it grows without bound.
   An archive of published events (a partitioned table, or a copy to object storage) would keep
   the history without slowing the publisher's scans, which only read unpublished rows.
-- Bad: a rebuild holds one transaction for the whole history; at volume it would replay into
-  shadow tables and swap them.
+- Bad: a rebuild holds one transaction for the whole history, and live consumers wait for it; at
+  volume it would replay into shadow tables and swap them.
+- Bad: an event whose transaction commits after the rebuild's snapshot but with a smaller id
+  than events already replayed (a transaction left open across the start of a rebuild) is
+  missed if its consumer ran before the rebuild; the next rebuild picks it up.
+- Bad: events published before reporting existed reach no consumer: a deployment that adds
+  reporting to existing data runs one rebuild.
 - Bad: figures are aggregated per request; a large portfolio would want summary tables updated by
   the same projector.

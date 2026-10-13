@@ -496,23 +496,31 @@ The read side: dashboards for centers and operations, built from the events of t
 modules (ADR 019). It decides nothing and owns no aggregate.
 
 - **Facts.** One row per application, contract, disbursement and charge in the `reporting`
-  schema, written by a consumer per event through `ReportingProjector`. Each event sets what it
-  knows; the status follows the most recent event (time, then event id), so events applied twice
-  or out of order leave the same facts. A charge failure, which does not name the center, is
-  placed by its contract.
-- **Figures.** Computed from the facts when asked:
+  schema, written by a consumer per event through `ReportingProjector`. The upserts give the same
+  facts whatever the order and repetition of events: each event sets what it knows; the status
+  follows the most recent event but a final one (a contract completed, defaulted or cancelled, a
+  charge paid, written off or cancelled, an application rejected, accepted, cancelled or
+  expired) is never replaced by one that is not; the decision is set once; a charge keeps the
+  day of its latest failure. A charge whose events never named the center is placed by its
+  contract's.
+- **Figures.** Pure functions of the domain over rows the store groups, computed when asked:
   - `GET /centers/:id/dashboard` (the center's admins, its API keys with `portfolio:read`,
-    staff): applications by where they are now, contracts by state, in total and by product,
-    money disbursed (settled transfers), collected, outstanding (charged, not collected) and
-    written off, and the delinquency rate (contracts in arrears among those being repaid).
+    staff): applications submitted (drafts are not in the funnel) by where they are now,
+    contracts by state, in total and by product, money disbursed (settled transfers), collected,
+    outstanding (charged, not collected; a payoff being collected is left out, it covers the
+    charges still open) and written off, and the delinquency rate (contracts in arrears among
+    those being repaid).
   - `GET /centers/:id/programs/:programId/performance`: applications, approval rate (approved
-    among decided), mean ticket, and how applicants scored, an aggregate origination answers
-    (`GetProgramScoresQuery`): scores stay there. A program of another center is a 404.
-  - `GET /ops/overview` (staff): applications waiting for an analyst, collections failed today,
-    transfers to centers pending or failed, contracts in arrears, jobs in the dead-letter queue.
-- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time): the
-  facts are truncated and the history of events, read from the outbox (`EventHistory`), is
-  replayed through the same projector, in one transaction.
+    among decided), mean ticket, and the mean score of the applicants, which origination gives
+    only from ten scored applicants and in bands of five (`GetProgramScoresQuery`): scores stay
+    there. A program of another center is a 404.
+  - `GET /ops/overview` (staff): applications waiting for an analyst, charges whose collection
+    failed today and are still unpaid, transfers to centers pending or failed, contracts in
+    arrears, jobs in the dead-letter queue.
+- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time). In one
+  REPEATABLE READ transaction the facts are locked against writers (readers still see the old
+  ones), deleted, and the history of events, read from the outbox (`EventHistory`), is replayed
+  through the same projector. A deployment that adds reporting to existing data runs it once.
 
 Known gaps, accepted for now:
 

@@ -243,7 +243,8 @@ backoff, and can be asked for again with
 `POST /centers/<centerId>/webhook-deliveries/<deliveryId>/redeliver` (ADR 018).
 
 The center sees its portfolio, and operations their day, in read models built from the events
-(ADR 019); they can be thrown away and rebuilt from the outbox:
+(ADR 019); they can be thrown away and rebuilt from the outbox (do it once on a database that
+already had activity before reporting existed):
 
 ```bash
 pnpm api:call GET '/centers/<centerId>/dashboard' --as center
