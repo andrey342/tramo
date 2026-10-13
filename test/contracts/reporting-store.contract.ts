@@ -332,6 +332,55 @@ export function reportingStoreContract(
       expect(figures).toMatchObject({ collectedCents: 100_00, outstandingCents: 0 });
     });
 
+    // The bank returned a collected payment (t=2); the payment (t=1) arrives after it, and an
+    // older failure without the flag cannot take the charge back from paid either.
+    it('should take a paid charge back to open when a newer event reopens it', async () => {
+      const { store, run } = await create();
+      const [centerId, contractId, returned, stillPaid] = [uuidv7(), uuidv7(), uuidv7(), uuidv7()];
+      await run(async () => {
+        await store.recordCharge({
+          chargeId: returned,
+          at: at(2),
+          eventId: uuidv7(),
+          contractId,
+          centerId,
+          amountCents: 100_00,
+          status: 'failed',
+          failedOn: TODAY,
+          reopens: true,
+        });
+        await store.recordCharge({
+          chargeId: returned,
+          at: at(1),
+          eventId: uuidv7(),
+          contractId,
+          centerId,
+          amountCents: 100_00,
+          status: 'paid',
+        });
+        await store.recordCharge({
+          chargeId: stillPaid,
+          at: at(1),
+          eventId: uuidv7(),
+          contractId,
+          centerId,
+          amountCents: 50_00,
+          status: 'paid',
+        });
+        await store.recordCharge({
+          chargeId: stillPaid,
+          at: at(2),
+          eventId: uuidv7(),
+          contractId,
+          status: 'failed',
+        });
+      });
+
+      const figures = await figuresOf(store, run, centerId);
+
+      expect(figures).toMatchObject({ collectedCents: 50_00, outstandingCents: 100_00 });
+    });
+
     // A refused payoff: failed and cancelled at the same instant, applied in either order.
     it('should keep the day of the latest failure, but not count it once the charge is settled', async () => {
       const { store, run } = await create();

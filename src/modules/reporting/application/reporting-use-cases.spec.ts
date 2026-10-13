@@ -1,5 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 
+import { BillingEvents } from '@modules/billing/domain/events/billing-events';
 import { OriginationEvents } from '@modules/origination/domain/events/origination-events';
 import { type Principal } from '@shared/application';
 import { type ApiKeyScope, EntityNotFoundError, FixedClock } from '@shared/domain';
@@ -106,6 +107,38 @@ describe('reporting use cases', () => {
       { active: 1, inArrears: 0, completed: 0, defaulted: 0, cancelled: 0 },
       { active: 0, inArrears: 1, completed: 0, defaulted: 0, cancelled: 0 },
     ]);
+  });
+
+  // The return reaches the consumer before the payment it undoes, and still wins: it is newer.
+  it('should count a payment as outstanding again when the bank returns it', async () => {
+    const t = setup();
+    const [centerId, contractId, chargeId] = [uuidv7(), uuidv7(), uuidv7()];
+    const charge = { chargeId, contractId, studentId: uuidv7(), centerId, kind: 'installment' };
+    const created = anEvent(BillingEvents.ChargeCreated, {
+      ...charge,
+      amountCents: 337_50,
+      dueDate: '2026-11-12',
+    });
+    const paid = anEvent(BillingEvents.ChargePaid, {
+      ...charge,
+      installmentNumber: 1,
+      amountCents: 337_50,
+      paidAt: NOW.toISOString(),
+    });
+    const returned = anEvent(BillingEvents.ChargeReturned, {
+      ...charge,
+      installmentNumber: 1,
+      amountCents: 337_50,
+      attempt: 1,
+      reason: 'MD06',
+      dueDate: '2026-11-12',
+      returnedAt: NOW.toISOString(),
+    });
+
+    await t.happened(created, returned, paid);
+
+    const dashboard = await t.dashboard.execute(new GetCenterDashboardQuery(OPS, centerId));
+    expect(dashboard).toMatchObject({ collectedCents: 0, outstandingCents: 337_50 });
   });
 
   it('should keep an offer accepted in the funnel when its contract is cancelled later', async () => {

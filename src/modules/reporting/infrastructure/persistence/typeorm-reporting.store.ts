@@ -23,21 +23,32 @@ interface Upsert {
   readonly terminal: readonly string[];
   // Columns with a rule of their own (written as SQL against t and EXCLUDED).
   readonly special?: Readonly<Record<string, string>>;
+  // Takes one more parameter, after the columns: true when the event may take a final status
+  // back (a charge whose payment was returned).
+  readonly reopens?: boolean;
 }
 
 // An upsert that can be applied twice and in any order (see the ReportingStore port): the status
 // follows the most recent event by (time, event id), unless the stored one is final and the new
-// one is not.
-function upsertSql({ table, key, descriptive, terminal, special = {} }: Upsert): string {
+// one is not (and does not reopen it).
+function upsertSql({
+  table,
+  key,
+  descriptive,
+  terminal,
+  special = {},
+  reopens = false,
+}: Upsert): string {
   const columns = [key, ...descriptive, 'status', ...Object.keys(special)];
   const newer =
     '(EXCLUDED.last_event_at, EXCLUDED.last_event_id) >= (t.last_event_at, t.last_event_id)';
   const final = terminal.map((status) => `'${status}'`).join(', ');
+  const kept = reopens ? ` AND NOT $${String(columns.length + 3)}::boolean` : '';
   const sets = [
     ...descriptive.map((column) => `${column} = COALESCE(EXCLUDED.${column}, t.${column})`),
     `status = CASE
        WHEN EXCLUDED.status IS NULL OR NOT ${newer} THEN t.status
-       WHEN t.status IN (${final}) AND EXCLUDED.status NOT IN (${final}) THEN t.status
+       WHEN t.status IN (${final}) AND EXCLUDED.status NOT IN (${final})${kept} THEN t.status
        ELSE EXCLUDED.status END`,
     ...Object.entries(special).map(([column, rule]) => `${column} = ${rule}`),
     `last_event_id = CASE WHEN ${newer} THEN EXCLUDED.last_event_id ELSE t.last_event_id END`,
@@ -75,6 +86,7 @@ const CHARGE_UPSERT = upsertSql({
   descriptive: ['contract_id', 'center_id', 'kind', 'amount_cents'],
   terminal: ['paid', 'written_off', 'cancelled'],
   special: { failed_on: 'GREATEST(t.failed_on, EXCLUDED.failed_on)' },
+  reopens: true,
 });
 
 const FACT_TABLES = [
@@ -143,6 +155,7 @@ export class TypeOrmReportingStore implements ReportingStore {
       none(fact.failedOn),
       fact.at,
       fact.eventId,
+      fact.reopens === true,
     ]);
   }
 
