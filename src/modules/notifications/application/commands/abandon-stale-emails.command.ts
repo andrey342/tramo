@@ -32,6 +32,7 @@ export class AbandonStaleEmailsHandler implements ICommandHandler<AbandonStaleEm
     let abandoned = 0;
     for (;;) {
       const ids = await this.notifications.findPendingIds(before, PAGE);
+      const abandonedBefore = abandoned;
       for (const id of ids) {
         // One row that cannot be given up (a concurrent send) is left to the next sweep.
         await this.uow
@@ -45,7 +46,9 @@ export class AbandonStaleEmailsHandler implements ICommandHandler<AbandonStaleEm
           })
           .catch(() => undefined);
       }
-      if (ids.length < PAGE) {
+      // Rows left pending come back first in the next page: a page that gave nothing up would
+      // be read again forever, so the sweep stops there and the next one retries them.
+      if (ids.length < PAGE || abandoned === abandonedBefore) {
         return abandoned;
       }
     }

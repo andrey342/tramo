@@ -486,5 +486,27 @@ describe('notifications use cases', () => {
         lastError: 'abandoned',
       });
     });
+
+    // A full page of rows that cannot be given up would otherwise be read again forever.
+    it('should end the sweep when a whole page cannot be given up', async () => {
+      const t = setup();
+      for (let n = 0; n < 200; n += 1) {
+        await t.request.execute(
+          new RequestEmailCommand({
+            eventId: uuidv7(),
+            template: 'installment_reminder',
+            to: { address: `late-${String(n)}@example.com` },
+            reference: 'contract-1',
+            data: {},
+          }),
+        );
+      }
+      t.clock.advanceBy(24 * 60 * 60 * 1000 + 1);
+      jest.spyOn(t.emails, 'save').mockRejectedValue(new Error('database unavailable'));
+
+      const abandoned = await t.sweep.execute();
+
+      expect(abandoned).toBe(0);
+    });
   });
 });
