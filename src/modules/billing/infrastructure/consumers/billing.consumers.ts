@@ -3,6 +3,7 @@ import { CommandBus } from '@nestjs/cqrs';
 
 import {
   type ContractDefaultedPayload,
+  type ContractCancelledPayload,
   LendingEvents,
   type PayoffRequestedPayload,
   type PayoffWithdrawnPayload,
@@ -14,6 +15,7 @@ import { CalendarDate } from '@shared/domain';
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
+import { RevokeContractMandateCommand } from '../../application/commands/revoke-contract-mandate.command';
 import {
   BillingEvents,
   type ChargeCancelledPayload,
@@ -124,6 +126,17 @@ export class CancelChargesOnContractDefaulted implements EventHandler<ContractDe
     await this.commands.execute(
       new CancelOpenChargesCommand(event.payload.contractId, 'scheduled'),
     );
+  }
+}
+
+// A contract cancelled before it took effect has nothing to collect: its mandate is revoked.
+@Injectable()
+@EventSubscriber({ event: LendingEvents.ContractCancelled, consumer: 'billing.revoke-mandate' })
+export class RevokeMandateOnContractCancelled implements EventHandler<ContractCancelledPayload> {
+  constructor(private readonly commands: CommandBus) {}
+
+  async handle(event: IntegrationEvent<ContractCancelledPayload>): Promise<void> {
+    await this.commands.execute(new RevokeContractMandateCommand(event.payload.contractId));
   }
 }
 
