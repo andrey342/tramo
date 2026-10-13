@@ -85,8 +85,12 @@ export class InMemoryChargeRepository
     );
   }
 
-  // One test, one worker: nothing runs at the same time.
-  lockContract(): Promise<void> {
+  // One test, one worker: nothing runs at the same time. Which contracts were locked is kept, so
+  // tests can check that a path that reads payoffs or mandates takes the lock.
+  readonly locked: string[] = [];
+
+  lockContract(contractId: string): Promise<void> {
+    this.locked.push(contractId);
     return Promise.resolve();
   }
 

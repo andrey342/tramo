@@ -26,6 +26,7 @@ import {
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
   MandateMissingError,
+  PayoffInProgressError,
   NotAnIncomeShareError,
   PeriodNotOpenError,
   PaymentMismatchError,
@@ -127,7 +128,7 @@ function setup() {
     contract,
     charge,
     mandate,
-    sign: new SignMandateHandler(uow, mandates, plans, clock),
+    sign: new SignMandateHandler(uow, mandates, charges, plans, clock),
     declare: new DeclareIncomeHandler(uow, declarations, plans, charges, clock),
     cycle: new RunBillingCycleHandler(uow, plans, charges, declarations, clock),
     collect: new CollectDueChargesHandler(uow, charges, mandates, clock),
@@ -615,6 +616,75 @@ describe('billing use cases', () => {
       expect(resumed.submitted).toBe(1);
       expect((await t.charges.findById(instalment.id))?.status).toBe('pending');
       expect(t.charges.all().filter((charge) => charge.kind === 'payoff')).toHaveLength(2);
+    });
+
+    // The payoff covers the overdue instalment: retrying it on its own would debit it twice.
+    it('should not retry a charge that a payoff being collected covers', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const overdue = await t.charge({ contractId });
+      await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12'), contractId));
+      await t.result.execute(
+        new RecordPaymentResultCommand({
+          reference: `${overdue.id}.1`,
+          paymentId: 'pay-1',
+          outcome: 'failed',
+          failureReason: 'insufficient_funds',
+        }),
+      );
+      await t.payoff.execute(
+        new CreatePayoffChargeCommand({
+          requestId: uuidv7(),
+          planId: uuidv7(),
+          contractId,
+          amountCents: 6_000_00,
+          asOf: day('2026-11-20'),
+        }),
+      );
+
+      await expect(t.retry.execute(new RetryChargeCommand(OPS, overdue.id))).rejects.toThrow(
+        PayoffInProgressError,
+      );
+    });
+
+    // Collections decide on the payoff and the mandate in force under the contract's lock; every
+    // path that changes either takes it too.
+    it('should take the contract lock wherever payoffs or mandates decide a collection', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      const charge = await t.charge({ contractId });
+      const lockedBy = async (run: () => Promise<unknown>): Promise<boolean> => {
+        t.charges.locked.length = 0;
+        await run().catch(() => undefined);
+        return t.charges.locked.includes(contractId);
+      };
+
+      const sign = await lockedBy(() =>
+        t.sign.execute(new SignMandateCommand(t.student, contractId, STUDENT_IBAN)),
+      );
+      const collect = await lockedBy(() =>
+        t.collect.execute(new CollectDueChargesCommand(day('2026-11-12'), contractId)),
+      );
+      const retry = await lockedBy(() => t.retry.execute(new RetryChargeCommand(OPS, charge.id)));
+      const payoff = await lockedBy(() =>
+        t.payoff.execute(
+          new CreatePayoffChargeCommand({
+            requestId: uuidv7(),
+            planId: uuidv7(),
+            contractId,
+            amountCents: 6_000_00,
+            asOf: day('2026-11-20'),
+          }),
+        ),
+      );
+
+      expect({ sign, collect, retry, payoff }).toEqual({
+        sign: true,
+        collect: true,
+        retry: true,
+        payoff: true,
+      });
     });
 
     // Due 5 November, overdue and its retries spent without a mandate; signed on the 20th.

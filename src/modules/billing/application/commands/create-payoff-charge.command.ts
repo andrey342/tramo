@@ -49,6 +49,8 @@ export class CreatePayoffChargeHandler implements ICommandHandler<CreatePayoffCh
     const { payoff } = command;
     const reference = `payoff:${payoff.requestId}`;
     await this.uow.run(async () => {
+      // Under the contract's lock, so a collection deciding whether a payoff exists waits for it.
+      await this.charges.lockContract(payoff.contractId);
       if (await this.charges.findByReference(payoff.contractId, reference)) {
         return;
       }
