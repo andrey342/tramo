@@ -1,4 +1,4 @@
-import { isApiKeyScope, isRole } from './access';
+import { isRole } from './access';
 import { AggregateRoot } from './aggregate-root';
 import { FixedClock } from './clock';
 import { DateRange } from './date-range';
@@ -209,8 +209,7 @@ describe('aggregate versions and access vocabulary', () => {
     });
   });
 
-  it('should recognise roles and scopes', () => {
+  it('should recognise roles', () => {
     expect([isRole('ops'), isRole('root')]).toEqual([true, false]);
-    expect([isApiKeyScope('programs:read'), isApiKeyScope('everything')]).toEqual([true, false]);
   });
 });

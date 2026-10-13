@@ -5,12 +5,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import { CreateCenterUserHandler } from './application/commands/create-center-user.command';
+import { DisableUserHandler } from './application/commands/disable-user.command';
 import { IssueApiKeyHandler } from './application/commands/issue-api-key.command';
 import { LoginHandler } from './application/commands/login.command';
 import { LogoutHandler } from './application/commands/logout.command';
+import { PurgeEndedSessionsHandler } from './application/commands/purge-ended-sessions.command';
 import { RefreshSessionHandler } from './application/commands/refresh-session.command';
 import { RegisterStudentHandler } from './application/commands/register-student.command';
 import { RevokeApiKeyHandler } from './application/commands/revoke-api-key.command';
+import { RevokeCenterApiKeysHandler } from './application/commands/revoke-center-api-keys.command';
 import {
   ACCESS_TOKEN_ISSUER,
   CENTER_DIRECTORY,
@@ -35,6 +38,7 @@ import { CatalogCenterDirectory } from './infrastructure/adapters/catalog-center
 import { CryptoCredentialGenerator } from './infrastructure/adapters/crypto-credential.generator';
 import { JwtAccessTokenIssuer } from './infrastructure/adapters/jwt-access-token.issuer';
 import { RedisLoginAttemptTracker } from './infrastructure/adapters/redis-login-attempt.tracker';
+import { RevokeKeysOnCenterSuspended } from './infrastructure/consumers/iam.consumers';
 import { ApiKeyOrmEntity } from './infrastructure/persistence/api-key.orm-entity';
 import { RefreshTokenOrmEntity } from './infrastructure/persistence/refresh-token.orm-entity';
 import { TypeOrmApiKeyRepository } from './infrastructure/persistence/typeorm-api-key.repository';
@@ -62,10 +66,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     LoginHandler,
     RefreshSessionHandler,
     LogoutHandler,
+    PurgeEndedSessionsHandler,
     GetCurrentPrincipalHandler,
     CreateCenterUserHandler,
+    DisableUserHandler,
     IssueApiKeyHandler,
     RevokeApiKeyHandler,
+    RevokeCenterApiKeysHandler,
+    RevokeKeysOnCenterSuspended,
     ListApiKeysHandler,
     AuthenticateApiKeyHandler,
     FindStudentHandler,

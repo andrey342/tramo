@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Body, Controller, Inject, type INestApplication, Param, Post, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Throttle } from '@nestjs/throttler';
@@ -68,6 +70,12 @@ class ProbeController {
   activate(): never {
     throw new InvalidStateTransitionError('TrainingCenter', 'suspended', 'active');
   }
+
+  @Post('centers/:id/fee')
+  @Audited({ action: 'center.change_fee', resource: 'center' })
+  changeFee(@Param('id') id: string, @Body() body: PaymentDto): { id: string; cents: number } {
+    return { id, cents: body.amountCents };
+  }
 }
 
 const OPS_USER: Principal = { kind: 'user', userId: 'ops-1', roles: ['ops'], centerId: null };
@@ -125,6 +133,17 @@ describe('HTTP platform (integration)', () => {
       expect(retry.body).toEqual(first.body);
       expect(retry.headers['idempotent-replayed']).toBe('true');
       expect(paymentsTaken - before).toBe(1);
+    });
+
+    it('should keep the stored response encrypted in Redis', async () => {
+      const first = await pay('key-sealed', 4321);
+      const storageKey = createHash('sha256').update('user:student-1\nkey-sealed').digest('hex');
+
+      const raw = await app.get<Redis>(REDIS_CLIENT).get(`tramo:idempotency:${storageKey}`);
+
+      expect(first.body).toMatchObject({ amountCents: 4321 });
+      expect(raw).toContain('"sealedBody":"v2.');
+      expect(raw).not.toContain('amountCents');
     });
 
     it('should reject the same key with a different body', async () => {
@@ -233,7 +252,7 @@ describe('HTTP platform (integration)', () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/probe/centers/center-1/suspend')
         .set('x-test-user', 'ops-7')
-        .set('x-request-id', 'req-audit-1');
+        .set('x-request-id', '0199a000-0000-7000-8000-0000000a0d17');
 
       expect(response.status).toBe(201);
       expect(await entriesFor('center-1')).toEqual([
@@ -244,7 +263,7 @@ describe('HTTP platform (integration)', () => {
           resource_type: 'center',
           outcome: 'succeeded',
           error_code: null,
-          request_id: 'req-audit-1',
+          request_id: '0199a000-0000-7000-8000-0000000a0d17',
           changes: { status: { before: 'active', after: 'suspended' } },
           metadata: { method: 'POST', path: '/api/v1/probe/centers/center-1/suspend' },
         },
@@ -259,6 +278,19 @@ describe('HTTP platform (integration)', () => {
       expect(response.status).toBe(409);
       expect(await entriesFor('center-2')).toEqual([
         expect.objectContaining({ outcome: 'failed', error_code: 'invalid_state_transition' }),
+      ]);
+    });
+
+    it('should record a request refused by validation with the code the client saw', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/probe/centers/center-3/fee')
+        .set('x-test-user', 'ops-7')
+        .send({ amountCents: 0 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('validation_error');
+      expect(await entriesFor('center-3')).toEqual([
+        expect.objectContaining({ outcome: 'failed', error_code: 'validation_error' }),
       ]);
     });
   });

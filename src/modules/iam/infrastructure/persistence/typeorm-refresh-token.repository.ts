@@ -51,4 +51,45 @@ export class TypeOrmRefreshTokenRepository implements RefreshTokenRepository {
     );
     return revoked;
   }
+
+  // Each family is locked as revokeFamily does, in id order so two revocations of the same user
+  // queue behind each other instead of deadlocking. A family the user opens meanwhile (a sign-in
+  // that read the account before it was disabled) is not seen here; its first refresh finds the
+  // account disabled and revokes it.
+  async revokeAllOfUser(userId: string, now: Date): Promise<number> {
+    const families: { family_id: string }[] = await this.txHost.tx.query(
+      `SELECT DISTINCT family_id FROM iam.refresh_tokens
+        WHERE user_id = $1 AND status <> 'revoked'
+        ORDER BY family_id`,
+      [userId],
+    );
+    for (const { family_id: familyId } of families) {
+      await this.lockFamily(familyId);
+    }
+    const [, revoked]: [unknown[], number] = await this.txHost.tx.query(
+      `UPDATE iam.refresh_tokens
+          SET status = 'revoked', used_at = COALESCE(used_at, $2), version = version + 1
+        WHERE user_id = $1 AND status <> 'revoked'`,
+      [userId, now],
+    );
+    return revoked;
+  }
+
+  // No family lock: a session that ended this long ago can no longer be refreshed, so no rotation
+  // or revocation writes these rows. A rotated token presented after its row is gone is simply
+  // unknown, and the family it would revoke is already over. Served by
+  // ix_iam_refresh_tokens_family_expires_at.
+  async deleteEndedBefore(endedBefore: Date, limit: number): Promise<number> {
+    const [, deleted]: [unknown[], number] = await this.txHost.tx.query(
+      `DELETE FROM iam.refresh_tokens
+        WHERE id IN (
+          SELECT id FROM iam.refresh_tokens
+           WHERE family_expires_at < $1
+           ORDER BY family_expires_at
+           LIMIT $2
+        )`,
+      [endedBefore, limit],
+    );
+    return deleted;
+  }
 }

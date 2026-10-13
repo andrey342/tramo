@@ -1,0 +1,19 @@
+meta {
+  name: Disable user
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/users/{{newStudentId}}/disable
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+docs {
+  Disables the student from "Register student" (admin only, 204, again 204). Its refresh tokens stop working and it can no longer sign in; access tokens it already holds last until they expire. Run it last: the happy path signs in as that student.
+}

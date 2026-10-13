@@ -48,7 +48,7 @@ export class OpsApplicationsController {
 
   @Post('ops/applications/:applicationId/decide')
   @HttpCode(200)
-  @ApiProblems(400, 401, 403, 404, 409)
+  @ApiProblems(400, 401, 403, 404, 409, 422)
   @ApiOkResponse({ type: ApplicationResponse })
   @Roles('ops', 'admin')
   @Audited({

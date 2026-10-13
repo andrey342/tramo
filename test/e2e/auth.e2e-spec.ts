@@ -3,6 +3,7 @@ import request from 'supertest';
 import { uuidv7 } from 'uuidv7';
 
 import { createApiApp } from '../helpers/create-api-app';
+import { accessTokenFor, createStaffUser } from '../helpers/users';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -92,6 +93,7 @@ describe('Authentication (e2e)', () => {
       .post('/api/v1/auth/refresh')
       .send({ refreshToken: tokens.refreshToken });
     expect(replay.status).toBe(401);
+    expect(replay.headers['www-authenticate']).toBe('Bearer');
     expect(replay.body.code).toBe('invalid_refresh_token');
     // Revoking the family when an old token comes back after the grace window is covered by the
     // unit tests, which control the clock.
@@ -150,5 +152,51 @@ describe('Authentication (e2e)', () => {
     expect(locked.status).toBe(429);
     expect(locked.body.code).toBe('account_temporarily_locked');
     expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  describe('disabling an account', () => {
+    let adminToken: string;
+    let adminId: string;
+
+    beforeAll(async () => {
+      adminToken = await accessTokenFor(app, await createStaffUser(app, 'admin'));
+      const me = await api().get('/api/v1/me').set('Authorization', `Bearer ${adminToken}`);
+      adminId = me.body.id as string;
+    });
+
+    const disable = (userId: string, token = adminToken): request.Test =>
+      api().post(`/api/v1/users/${userId}/disable`).set('Authorization', `Bearer ${token}`);
+
+    it('should end every session of the account and refuse its next sign-in', async () => {
+      const email = uniqueEmail('disabled');
+      const { userId, tokens } = await registerAndLogin(email);
+      const second = await api().post('/api/v1/auth/login').send({ email, password: PASSWORD });
+
+      const disabled = await disable(userId);
+      const again = await disable(userId);
+
+      expect([disabled.status, again.status]).toEqual([204, 204]);
+      for (const refreshToken of [tokens.refreshToken, second.body.refreshToken]) {
+        const refresh = await api().post('/api/v1/auth/refresh').send({ refreshToken });
+        expect(refresh.status).toBe(401);
+        expect(refresh.body.code).toBe('invalid_refresh_token');
+      }
+      const login = await api().post('/api/v1/auth/login').send({ email, password: PASSWORD });
+      expect(login.status).toBe(401);
+      expect(login.body.code).toBe('invalid_credentials');
+    });
+
+    it('should let only an admin disable someone else', async () => {
+      const { userId, tokens } = await registerAndLogin(uniqueEmail('not-admin'));
+
+      const byStudent = await disable(userId, tokens.accessToken as string);
+      const ownAccount = await disable(adminId);
+      const unknown = await disable(uuidv7());
+
+      expect(byStudent.status).toBe(403);
+      expect(ownAccount.status).toBe(422);
+      expect(ownAccount.body.code).toBe('cannot_disable_own_account');
+      expect(unknown.status).toBe(404);
+    });
   });
 });

@@ -11,7 +11,7 @@ describe('contact lookups', () => {
   it('should give the address of an active user only', async () => {
     const users = new InMemoryUserRepository(new RecordingEventBus());
     const [student, disabled] = [aStudent(), aStudent()];
-    disabled.disable();
+    disabled.disable(new Date('2026-10-09T10:00:00Z'));
     await users.save(student);
     await users.save(disabled);
     const handler = new FindUserContactHandler(users);
@@ -28,7 +28,7 @@ describe('contact lookups', () => {
     const users = new InMemoryUserRepository(new RecordingEventBus());
     const centerId = uuidv7();
     const [admin, gone] = [aCenterAdmin({ centerId }), aCenterAdmin({ centerId })];
-    gone.disable();
+    gone.disable(new Date('2026-10-09T10:00:00Z'));
     await users.save(admin);
     await users.save(gone);
     await users.save(aCenterAdmin());

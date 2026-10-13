@@ -4,6 +4,7 @@ import {
   type AccessTokenClaims,
   type AccessTokenIssuer,
   type CenterDirectory,
+  type CenterStanding,
   type CredentialGenerator,
   type GeneratedApiKey,
   type GeneratedSecret,
@@ -48,9 +49,28 @@ export class InMemoryRefreshTokenRepository
   // Mirrors the bulk UPDATE of the real repository: every non-revoked token of the family is
   // stored again as revoked.
   revokeFamily(familyId: string, now: Date): Promise<number> {
+    return Promise.resolve(this.revokeWhere((token) => token.familyId === familyId, now));
+  }
+
+  revokeAllOfUser(userId: string, now: Date): Promise<number> {
+    return Promise.resolve(this.revokeWhere((token) => token.userId === userId, now));
+  }
+
+  deleteEndedBefore(endedBefore: Date, limit: number): Promise<number> {
+    const ended = this.all()
+      .filter((token) => token.familyExpiresAt < endedBefore)
+      .sort((a, b) => a.familyExpiresAt.getTime() - b.familyExpiresAt.getTime())
+      .slice(0, limit);
+    for (const token of ended) {
+      this.items.delete(token.id);
+    }
+    return Promise.resolve(ended.length);
+  }
+
+  private revokeWhere(matches: (token: RefreshToken) => boolean, now: Date): number {
     let revoked = 0;
     for (const token of this.all()) {
-      if (token.familyId === familyId && token.status !== 'revoked') {
+      if (matches(token) && token.status !== 'revoked') {
         this.items.set(
           token.id,
           RefreshToken.reconstitute(token.id, {
@@ -67,7 +87,7 @@ export class InMemoryRefreshTokenRepository
         revoked += 1;
       }
     }
-    return Promise.resolve(revoked);
+    return revoked;
   }
 }
 
@@ -202,11 +222,16 @@ export class InMemoryLoginAttemptTracker implements LoginAttemptTracker {
   }
 }
 
-// Without a list every center exists, which is what most handler tests want.
+// Without a list every center exists, which is what most handler tests want. Centers are active
+// unless listed as suspended.
 export class FakeCenterDirectory implements CenterDirectory {
-  constructor(private readonly known?: ReadonlySet<string>) {}
+  constructor(
+    private readonly known?: ReadonlySet<string>,
+    private readonly suspended: ReadonlySet<string> = new Set(),
+  ) {}
 
-  exists(centerId: string): Promise<boolean> {
-    return Promise.resolve(this.known?.has(centerId) ?? true);
+  find(centerId: string): Promise<CenterStanding | null> {
+    const exists = this.known?.has(centerId) ?? true;
+    return Promise.resolve(exists ? { suspended: this.suspended.has(centerId) } : null);
   }
 }

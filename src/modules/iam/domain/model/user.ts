@@ -154,8 +154,20 @@ export class User extends AggregateRoot {
     this.props = { ...this.props, passwordHash };
   }
 
-  disable(): void {
+  // Disabling twice is a no-op, so a retried request records one event. Signing the account out
+  // (its refresh tokens) is the use case's job: sessions are not part of this aggregate.
+  disable(now: Date): void {
+    if (this.props.status === 'disabled') {
+      return;
+    }
     this.props = { ...this.props, status: 'disabled' };
+    this.record({
+      eventType: IamEvents.UserDisabled,
+      aggregateType: 'User',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { userId: this.id },
+    });
   }
 
   private static assertRoles(roles: readonly Role[], centerId: string | null): void {

@@ -2,7 +2,7 @@ import { Inject, Logger } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { EVENT_BUS, type EventBus, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock, ConcurrentModificationError } from '@shared/domain';
+import { CLOCK, type Clock } from '@shared/domain';
 
 import {
   IamEvents,
@@ -41,18 +41,11 @@ export class RefreshSessionHandler implements ICommandHandler<RefreshSessionComm
   async execute(command: RefreshSessionCommand): Promise<SessionTokensDto> {
     const now = this.clock.now();
     // Rejections commit their own side effects (revocation) and are thrown after the transaction,
-    // otherwise the rollback would undo the revocation.
-    const outcome = await this.uow
-      .run(async () => this.rotate(command.refreshToken, now))
-      .catch((error: unknown) => {
-        // Two requests raced with the same token (a retried request, a double click): one of them
-        // rotated it first. Not theft, so the session survives; the loser just has to use the
-        // winner's token.
-        if (error instanceof ConcurrentModificationError) {
-          return null;
-        }
-        throw error;
-      });
+    // otherwise the rollback would undo the revocation. Two requests racing with the same token
+    // (a retried request, a double click) cannot both rotate it: the second waits on the family
+    // lock, reads the token again and finds it rotated moments ago ('superseded'), so it is
+    // rejected without ending the session.
+    const outcome = await this.uow.run(async () => this.rotate(command.refreshToken, now));
     if (!outcome) {
       throw new InvalidRefreshTokenError();
     }

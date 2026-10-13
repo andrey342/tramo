@@ -53,7 +53,7 @@ Conventions used below:
 
 - `docker compose logs -f api worker` (`--since 10m` to narrow). Lines are JSON (pino); those
   written within a request or a job carry `correlationId`.
-- Each request has an id: the caller's `X-Request-Id` when well formed, otherwise a UUIDv7. It is
+- Each request has an id: the caller's `X-Request-Id` when it is a UUID, otherwise a UUIDv7. It is
   returned in the `x-request-id` header, as `requestId` in Problem Details, and kept in
   `shared.audit_log` for audited routes.
 - The outbox rows a request writes store it as `correlation_id`, and every job those events cause
@@ -165,6 +165,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   | `notifications.emails`          | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
   | `notifications.webhooks`        | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
   | `reporting.rebuild`             | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
+  | `iam.session-sweep`             | scheduled                                           | None: the next daily run deletes what this one left                |
 
 ## Application stuck in verification
 
@@ -372,7 +373,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   admin) generates a new secret, returned once; deliveries are signed with it from then on.
 - **`FIELD_ENCRYPTION_KEY`**: the process reads one key and has no previous-key variable.
   Changing it on a database with data makes every encrypted value unreadable (payout and creditor
-  IBANs, mandate IBANs, webhook secrets, national ids fail with `FieldDecryptionError`). ADR 014
+  IBANs, mandate IBANs, webhook secrets, national ids fail with `FieldDecryptionError`), and so
+  does replaying an idempotent response stored in the last 24 hours (the retry answers 500). ADR 014
   records that the versioned ciphertext prefix allows a key change later: decrypt every known
   version, write only the newest, re-encrypt old rows in a background job, then stop reading the
   old version. That procedure is not implemented.
@@ -401,7 +403,8 @@ future billing runs and private webhook targets by default. The compose stack ru
 
 - **Per client**: `THROTTLE_LIMIT` (120) requests per `THROTTLE_TTL_MS` (60 s) per client and
   route, counted in Redis so every api instance shares the counters. A client is an IPv4 address
-  or an IPv6 /64; behind proxies set `TRUST_PROXY_HOPS`. Health checks and `/metrics` are exempt.
+  or an IPv6 /64; behind proxies set `TRUST_PROXY_HOPS`. Health checks, `/metrics` and the
+  provider callbacks (`/webhooks/psp`, `/webhooks/esign`, signed) are exempt.
 - **Credential routes** (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and
   `POST /applications`): `THROTTLE_AUTH_LIMIT` (10) per minute per client on top.
 - What the caller sees: 429 with `Retry-After` and Problem Details code `too_many_requests`.
@@ -411,7 +414,28 @@ future billing runs and private webhook targets by default. The compose stack ru
   a successful sign-in clears them. While locked, sign-in answers 429
   `account_temporarily_locked` with `Retry-After` and "Try again in N seconds", even with the
   right password. No endpoint unlocks an account; the lock expires. Anyone can lock an account by
-  failing on purpose; the attempts are in the logs.
+  failing on purpose. The api logs a warning when an account gets locked
+  (`Failed sign-in limit reached`, with `lockSeconds`) and for each sign-in refused while locked
+  (`Sign-in refused: the account is locked`, with `retryAfterSeconds`), the account masked as
+  `a***@example.com`: `docker compose logs api | grep 'the account is locked'`.
 - **Bull Board**: ten failed sign-ins from one client within 15 minutes refuse every attempt from
-  it (429 with `Retry-After`) until the window ends.
+  it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
+  counted, however many the dashboard sends at once, and clear the failures below the limit.
+
+## Sessions and accounts
+
+- **Ended sessions**: every day at 03:30 UTC the worker deletes from `iam.refresh_tokens` the
+  tokens of sessions that ended (`family_expires_at`) more than 30 days earlier, 1,000 rows per
+  transaction, and logs `Ended sessions purged` with the count. The job runs once on
+  `iam.session-sweep`; a failed run is not retried, the next day's catches up. Like the hourly
+  sweeps of emails (`notifications.emails`) and of stale applications (`origination.expiry`), it
+  is a job scheduler re-registered at every worker start.
+- **A suspended center's integrations**: suspending a center revokes all its API keys within
+  seconds (the `iam.revoke-suspended-center-keys` consumer on `events.iam`), and no key can be
+  issued while it is suspended. After reinstating it, its admins issue new keys; the old ones stay
+  revoked. Its users can still sign in.
+- **Signing someone out everywhere**: `pnpm api:call POST /users/<userId>/disable --as admin`
+  (204, also when already disabled). The account can no longer sign in and its refresh tokens
+  stop working at once; access tokens it holds keep working until they expire, at most 15
+  minutes. There is no endpoint to enable it again or to change a password.
 - In compose these variables are not passed to the containers, so the defaults above apply.

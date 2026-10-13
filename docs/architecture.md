@@ -91,7 +91,7 @@ foreign key. Lists are paginated on `(created_at, id)` (the ops review queue on
 
 | Schema          | Tables                                                                                          | Notes                                                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `iam`           | `users`, `refresh_tokens`, `api_keys`                                                           | Passwords as argon2id, refresh tokens and API keys as SHA-256                             |
+| `iam`           | `users`, `refresh_tokens`, `api_keys`                                                           | Passwords as argon2id, refresh tokens and API keys as SHA-256; ended sessions pruned      |
 | `catalog`       | `training_centers`, `programs`                                                                  | Payout IBAN encrypted (ADR 014); financing options as columns with CHECKs                 |
 | `origination`   | `financing_applications`, `risk_policies`                                                       | Profile, verifications and the decision record (score, factors, reasons) as jsonb         |
 | `lending`       | `contracts`, `disbursements`, `financing_plans`                                                 | The instalment table or ISA periods read back whole as jsonb                              |
@@ -134,20 +134,25 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 
 - **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
   all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Credential
-  routes marked `@AuthRateLimited()` (every `/auth/*` route and `POST /applications`)
-  also count against `THROTTLE_AUTH_LIMIT` per minute; health checks and `/metrics` are exempt.
-  Exceeding either limit returns 429 with `Retry-After`.
+  routes marked `@AuthRateLimited()` (every `/auth/*` route and `POST /applications`) also count
+  against `THROTTLE_AUTH_LIMIT` per minute. Health checks, `/metrics` and the provider callbacks
+  (`POST /webhooks/psp`, `POST /webhooks/esign`) are exempt: a provider sends its callbacks from
+  a few addresses and in bursts (a billing run, a batch of signatures), each one is authenticated
+  by its HMAC signature before anything runs, and its volume follows what Tramo asked of the
+  provider. Exceeding either limit returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
-  concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
+  concurrent duplicate fail fast with 409; a completed response is kept for 24 h, its body
+  encrypted with `FieldCipher` and bound to the caller and key (ADR 014), and replayed with
   `Idempotent-Replayed: true`. The same key with a different method, path, query or body returns 422.
   Failed requests are not stored, so a client can fix the request and retry with the same key.
   The in-progress record is renewed while the handler runs; if the response cannot be stored after
   a success, the record is left to expire instead of being released: an immediate retry gets 409
   rather than running the operation a second time.
 - **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
-  `shared.audit_log` per call: actor, action, resource, outcome, error code, request id and the
-  changes the handler described through the `AuditTrail` port. The row is written after the
+  `shared.audit_log` per call: actor, action, resource, outcome, error code (the Problem Details
+  `code` the client got, `validation_error` for a refused body), request id and the changes the
+  handler described through the `AuditTrail` port. The row is written after the
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
@@ -176,7 +181,9 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 
 - **Sessions.** Access tokens are HS256 JWTs valid for 15 minutes. Refresh tokens are opaque,
   stored as SHA-256, single use and rotated on every refresh within a family. A family ends
-  `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed.
+  `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed. A 401 for a missing or
+  invalid access token, wrong credentials or a refresh token that no longer works carries
+  `WWW-Authenticate: Bearer`.
 - **Reuse.** A rotated refresh token presented again more than 10 seconds after its rotation is
   treated as stolen: the whole family is revoked and `RefreshTokenReuseDetected` is published.
   Within those 10 seconds it is rejected without revocation, because it is almost always the
@@ -185,11 +192,28 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   cannot avoid them. Each attempt is checked against the lock and counted in one Redis script
   before its password is verified, so parallel requests cannot all slip past the threshold; a
   success clears the count. The cost is that anyone can lock an account by failing on purpose; the lock is
-  progressive and capped at an hour, the auth routes are rate limited per client, and the attempts
-  are visible in the logs. A per-IP and device-cookie scheme would reduce that risk at the price of
+  progressive and capped at an hour, the auth routes are rate limited per client, and every lock
+  and every sign-in refused while locked is logged (warn, email masked as `a***@example.com`). A per-IP and device-cookie scheme would reduce that risk at the price of
   more state.
+- **Housekeeping.** A daily job (`iam.session-sweep`, 03:30 UTC) deletes the refresh tokens of
+  sessions that ended more than 30 days earlier, in batches of 1,000 rows per transaction, along
+  `ix_iam_refresh_tokens_family_expires_at`. The month of grace keeps reuse of a stolen token
+  detectable after its session ended.
+- **Disabling an account.** An admin disables an account with `POST /users/:id/disable`
+  (audited, `UserDisabled`): it can no longer sign in, and every refresh token of every family it
+  has is revoked in the same transaction, each family under its lock (ADR 013). Disabling it again
+  answers 204 and changes nothing; an admin cannot disable their own account. A sign-in that read
+  the account just before it was disabled can still open a session, which ends at its first
+  refresh, since refreshing checks the account again.
 - **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
   Routes opened to API keys are not implicitly open to users; they must also name roles.
+- **Suspended centers.** iam consumes `CenterSuspended` (`iam.revoke-suspended-center-keys`) and
+  revokes every active key of the center, each with its `ApiKeyRevoked`; a redelivery finds
+  nothing left to revoke. No key is issued for a suspended center (`center_suspended`), and the
+  revoked ones stay revoked after it is reinstated: its admins issue new ones. Its users keep
+  signing in, on purpose: they still follow their contracts, payouts and the suspension itself,
+  and the catalog refuses what a suspended center may not change. Shutting one of them out is
+  `POST /users/:id/disable`.
 - **Roles.** Users only reach routes that name their roles with `@Roles`; a route that forgets it
   refuses every user, since anyone can register as a student.
 - **Rate limits.** Clients are counted per IPv4 address and per IPv6 /64 network. The queue
@@ -207,6 +231,12 @@ Known gaps, accepted for now:
   its own credentials) therefore hold it until completed jobs expire after seven days.
 - An admin sets a new center administrator's first password. Production needs an invitation
   link, or a forced change on first sign-in, so the admin does not keep a working password.
+- Requests are authenticated from the access token alone (`JwtStrategy` does not read the user
+  row), so a disabled account keeps the access tokens it already holds until they expire, at most
+  15 minutes. Its refresh tokens stop working at once. Closing that window needs a revocation
+  list or a user lookup on every request.
+- There is no password change or reset. A user who loses their password, or whose password
+  leaked, can only be disabled by an admin.
 
 ## Catalog
 

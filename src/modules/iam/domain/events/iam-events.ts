@@ -6,6 +6,7 @@ import { type ApiKeyScope, type DomainEvent, type Role } from '@shared/domain';
 export const IamEvents = {
   StudentRegistered: 'StudentRegistered',
   CenterUserCreated: 'CenterUserCreated',
+  UserDisabled: 'UserDisabled',
   ApiKeyIssued: 'ApiKeyIssued',
   ApiKeyRevoked: 'ApiKeyRevoked',
   RefreshTokenReuseDetected: 'RefreshTokenReuseDetected',
@@ -21,6 +22,10 @@ export type CenterUserCreatedPayload = {
   readonly email: string;
   readonly centerId: string;
   readonly roles: readonly Role[];
+};
+
+export type UserDisabledPayload = {
+  readonly userId: string;
 };
 
 export type ApiKeyIssuedPayload = {
@@ -44,6 +49,7 @@ export type RefreshTokenReuseDetectedPayload = {
 
 export type StudentRegistered = DomainEvent<StudentRegisteredPayload>;
 export type CenterUserCreated = DomainEvent<CenterUserCreatedPayload>;
+export type UserDisabled = DomainEvent<UserDisabledPayload>;
 export type ApiKeyIssued = DomainEvent<ApiKeyIssuedPayload>;
 export type ApiKeyRevoked = DomainEvent<ApiKeyRevokedPayload>;
 export type RefreshTokenReuseDetected = DomainEvent<RefreshTokenReuseDetectedPayload>;

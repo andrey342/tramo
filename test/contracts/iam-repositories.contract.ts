@@ -115,6 +115,57 @@ export function iamRepositoriesContract(
         expect(first?.usedAt).toEqual(later(1_000));
         expect((await t.refreshTokens.findByTokenHash(other.tokenHash))?.status).toBe('active');
       });
+
+      it('should delete the tokens of sessions that ended before a date, a batch at a time', async () => {
+        const student = await saved(aStudent());
+        // Sessions that ended in 1990: no other test writes tokens that old into a shared database.
+        const endedAt = (day: number): Date => new Date(Date.UTC(1990, 0, day));
+        const tokenOf = (familyExpiresAt: Date): RefreshToken =>
+          RefreshToken.issue({
+            id: uuidv7(),
+            familyId: uuidv7(),
+            userId: student.id,
+            tokenHash: `hash-${uuidv7()}`,
+            now: new Date(familyExpiresAt.getTime() - 60_000),
+            ttlMs: 60_000,
+            familyExpiresAt,
+          });
+        const ended = [tokenOf(endedAt(1)), tokenOf(endedAt(2)), tokenOf(endedAt(3))];
+        const recent = tokenOf(endedAt(20));
+        await t.run(async () => {
+          for (const token of [...ended, recent]) await t.refreshTokens.save(token);
+        });
+
+        const first = await t.run(() => t.refreshTokens.deleteEndedBefore(endedAt(10), 2));
+        const second = await t.run(() => t.refreshTokens.deleteEndedBefore(endedAt(10), 2));
+        const third = await t.run(() => t.refreshTokens.deleteEndedBefore(endedAt(10), 2));
+
+        expect([first, second, third]).toEqual([2, 1, 0]);
+        for (const token of ended) {
+          expect(await t.refreshTokens.findByTokenHash(token.tokenHash)).toBeNull();
+        }
+        expect((await t.refreshTokens.findByTokenHash(recent.tokenHash))?.id).toBe(recent.id);
+      });
+
+      it("should revoke every family of one user and leave other users' sessions alone", async () => {
+        const [student, other] = [await saved(aStudent()), await saved(aStudent())];
+        const tokens = [issue(student.id, uuidv7()), issue(student.id, uuidv7())];
+        const foreign = issue(other.id, uuidv7());
+        await t.run(async () => {
+          for (const token of [...tokens, foreign]) await t.refreshTokens.save(token);
+        });
+
+        const revoked = await t.run(() =>
+          t.refreshTokens.revokeAllOfUser(student.id, later(1_000)),
+        );
+        const again = await t.run(() => t.refreshTokens.revokeAllOfUser(student.id, later(2_000)));
+
+        expect([revoked, again]).toEqual([2, 0]);
+        for (const token of tokens) {
+          expect((await t.refreshTokens.findByTokenHash(token.tokenHash))?.status).toBe('revoked');
+        }
+        expect((await t.refreshTokens.findByTokenHash(foreign.tokenHash))?.status).toBe('active');
+      });
     });
 
     describe('ApiKeyRepository', () => {

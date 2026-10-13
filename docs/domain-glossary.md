@@ -37,7 +37,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `UnrecoverableError`) is copied there with its queue, job id, data and reason; the original
   stays in its queue's failed set.
 - **Request id / correlation id**: every request gets an id (`X-Request-Id` when the caller sends
-  a well-formed one, otherwise a UUIDv7), returned in `x-request-id` and in Problem Details as
+  a UUID, otherwise a UUIDv7), returned in `x-request-id` and in Problem Details as
   `requestId`. Outbox rows written by the request store it as `correlation_id`, and jobs run with
   it as their context id, so log lines (`correlationId`) of the request and of the jobs it caused
   share it. A job not caused by a request uses `<queue>.<jobId>`.
@@ -55,7 +55,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 ## iam
 
 - **`User`**: an account with roles of one kind only: a student, a center user (`center_admin`,
-  always bound to one center) or staff. `UserStatus`: `active | disabled`.
+  always bound to one center) or staff. `UserStatus`: `active | disabled`; an admin disables an
+  account, which also revokes every refresh token family it has.
 - **`RefreshToken`** and family: refresh tokens are opaque, stored hashed and single use; each
   refresh rotates the presented token into the next one of the same family. `RefreshTokenStatus`:
   `active → rotated` (used) or `revoked`. A rotated token presented again more than 10 s
@@ -63,10 +64,11 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `RefreshTokenReuseDetected`; within those 10 s it is only rejected (`superseded`). A family
   ends `SESSION_MAX_DAYS` after sign-in.
 - **`ApiKey`**: a center's integration credential, `tramo_<8 hex prefix>_<secret>`, shown once,
-  stored as a hash, with at least one scope. Revoked keys keep `revokedAt`.
+  stored as a hash, with at least one scope. Revoked keys keep `revokedAt`. Suspending a center
+  revokes all its keys, and a suspended center gets no new ones.
 - **Lockout**: failed sign-ins counted per account in Redis. See the runbook for durations.
-- Events: `StudentRegistered`, `CenterUserCreated`, `ApiKeyIssued`, `ApiKeyRevoked`,
-  `RefreshTokenReuseDetected`.
+- Events: `StudentRegistered`, `CenterUserCreated`, `UserDisabled`, `ApiKeyIssued`,
+  `ApiKeyRevoked`, `RefreshTokenReuseDetected`.
 
 ## catalog
 

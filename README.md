@@ -344,7 +344,8 @@ pnpm api:call POST '/ops/reporting/rebuild' --as ops
 ```
 
 Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
-progressively after five failed attempts.
+progressively after five failed attempts. An admin disables an account with
+`POST /api/v1/users/:id/disable`, which also ends all its sessions.
 
 ## Developer tooling
 
@@ -414,5 +415,8 @@ docker/                         Dockerfile, Postgres image with extensions, webh
 - The outbox is never pruned, since reporting replays it; it needs an archive at volume.
 - One currency (EUR). Days (due dates, the ISA window) are taken from instants in UTC, which a
   center or student in another timezone may see shifted around midnight.
+- No password change or reset, and no invitation flow: an admin sets a center administrator's
+  first password, and an account whose password is lost or leaked can only be disabled. A
+  disabled account's access tokens keep working until they expire (15 minutes).
 - No tracing backend: correlation ids join logs, jobs and webhooks, and `/metrics` serves
   Prometheus, but no collector or dashboards ship with the stack.

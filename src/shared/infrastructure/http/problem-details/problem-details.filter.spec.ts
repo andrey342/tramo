@@ -12,7 +12,7 @@ import { Type } from 'class-transformer';
 import { IsEmail, IsInt, Min, ValidateNested } from 'class-validator';
 import request from 'supertest';
 
-import { InvalidStateTransitionError, InvalidValueError } from '@shared/domain';
+import { DomainError, InvalidStateTransitionError, InvalidValueError } from '@shared/domain';
 
 import { httpErrorHandlingProviders } from '../testing';
 
@@ -33,8 +33,18 @@ class SignUpDto {
   address!: AddressDto;
 }
 
+class WrongPasswordError extends DomainError {
+  readonly code = 'invalid_credentials';
+  readonly category = 'unauthorized';
+}
+
 @Controller('probe')
 class ProbeController {
+  @Post('sign-in')
+  signIn(): never {
+    throw new WrongPasswordError('Invalid email or password.');
+  }
+
   @Get('missing')
   missing(): never {
     throw new NotFoundException('Program 42 does not exist.');
@@ -129,6 +139,20 @@ describe('ProblemDetailsFilter', () => {
     expect(response.body.errors).toEqual([
       { field: 'nationalId', message: 'DNI control letter does not match.' },
     ]);
+  });
+
+  it('should challenge for a bearer token when a use case answers 401', async () => {
+    const response = await request(app.getHttpServer()).post('/probe/sign-in');
+
+    expect(response.status).toBe(401);
+    expect(response.headers['www-authenticate']).toBe('Bearer');
+    expect(response.body.code).toBe('invalid_credentials');
+  });
+
+  it('should not challenge when the error is not a 401', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/transition');
+
+    expect(response.headers['www-authenticate']).toBeUndefined();
   });
 
   it('should hide internal details when the error is unexpected', async () => {

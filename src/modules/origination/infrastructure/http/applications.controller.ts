@@ -118,7 +118,7 @@ export class ApplicationsController {
 
   @Post(':applicationId/accept-offer')
   @HttpCode(200)
-  @ApiProblems(400, 401, 403, 404, 409)
+  @ApiProblems(400, 401, 403, 404, 409, 422)
   @ApiOkResponse({ type: ApplicationResponse })
   @Roles('student')
   @Idempotent()

@@ -25,6 +25,12 @@ export interface RefreshTokenRepository {
   // Revokes every token of the family that is not revoked yet; returns how many were affected.
   // Takes the family lock first.
   revokeFamily(familyId: string, now: Date): Promise<number>;
+  // Revokes every token of every family of the user (signs them out everywhere); returns how many
+  // were affected. Takes each family's lock first.
+  revokeAllOfUser(userId: string, now: Date): Promise<number>;
+  // Housekeeping: deletes at most `limit` tokens of sessions that ended (family expiry) before
+  // `endedBefore`, oldest first; returns how many were deleted.
+  deleteEndedBefore(endedBefore: Date, limit: number): Promise<number>;
 }
 
 export interface ApiKeyRepository {

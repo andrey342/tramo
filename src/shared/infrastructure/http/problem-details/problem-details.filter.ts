@@ -50,6 +50,15 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     if (typeof retryAfter === 'number') {
       response.setHeader('Retry-After', String(retryAfter));
     }
+    // RFC 9110 wants a challenge on every 401. The guards set theirs; a 401 from a use case (wrong
+    // password, refresh token no longer valid) answers with the scheme the api's sessions use.
+    if (
+      exception instanceof DomainError &&
+      problem.status === 401 &&
+      !response.hasHeader('WWW-Authenticate')
+    ) {
+      response.setHeader('WWW-Authenticate', 'Bearer');
+    }
     response.status(problem.status).type(PROBLEM_CONTENT_TYPE).json(problem);
   }
 
@@ -63,7 +72,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         title: 'Validation failed',
         status: HttpStatus.BAD_REQUEST,
         detail: exception.message,
-        code: 'validation_error',
+        code: exception.code,
         errors: exception.errors,
       };
     }

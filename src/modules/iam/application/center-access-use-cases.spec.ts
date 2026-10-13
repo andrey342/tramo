@@ -10,7 +10,12 @@ import {
   SequentialCredentialGenerator,
 } from '../../../../test/fakes/iam';
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
-import { API_KEY_FORMAT, CenterAccessDeniedError, IamEvents } from '../domain';
+import {
+  API_KEY_FORMAT,
+  CenterAccessDeniedError,
+  CenterSuspendedError,
+  IamEvents,
+} from '../domain';
 
 import {
   CreateCenterUserCommand,
@@ -18,6 +23,10 @@ import {
 } from './commands/create-center-user.command';
 import { IssueApiKeyCommand, IssueApiKeyHandler } from './commands/issue-api-key.command';
 import { RevokeApiKeyCommand, RevokeApiKeyHandler } from './commands/revoke-api-key.command';
+import {
+  RevokeCenterApiKeysCommand,
+  RevokeCenterApiKeysHandler,
+} from './commands/revoke-center-api-keys.command';
 import {
   AuthenticateApiKeyHandler,
   AuthenticateApiKeyQuery,
@@ -32,7 +41,7 @@ const asUser = (user: {
 }): Principal =>
   ({ kind: 'user', userId: user.id, roles: user.roles, centerId: user.centerId }) as Principal;
 
-function setup(knownCenters?: ReadonlySet<string>) {
+function setup(knownCenters?: ReadonlySet<string>, suspendedCenters?: ReadonlySet<string>) {
   const clock = new FixedClock(new Date('2026-10-09T10:00:00Z'));
   const uow = new InlineUnitOfWork();
   const events = new RecordingEventBus();
@@ -40,7 +49,7 @@ function setup(knownCenters?: ReadonlySet<string>) {
   const apiKeys = new InMemoryApiKeyRepository(events);
   const credentials = new SequentialCredentialGenerator();
   const changes: unknown[] = [];
-  const centers = new FakeCenterDirectory(knownCenters);
+  const centers = new FakeCenterDirectory(knownCenters, suspendedCenters);
   return {
     clock,
     events,
@@ -57,6 +66,7 @@ function setup(knownCenters?: ReadonlySet<string>) {
     ),
     issue: new IssueApiKeyHandler(uow, apiKeys, credentials, centers, clock),
     revoke: new RevokeApiKeyHandler(uow, apiKeys, clock),
+    revokeCenterKeys: new RevokeCenterApiKeysHandler(uow, apiKeys, clock),
     list: new ListApiKeysHandler(apiKeys),
     authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, clock),
   };
@@ -162,6 +172,42 @@ describe('center access use cases', () => {
           ),
         ),
       ).rejects.toThrow(CenterAccessDeniedError);
+    });
+
+    it('should refuse new keys for a suspended center', async () => {
+      const t = setup(undefined, new Set([DEFAULT_CENTER_ID]));
+
+      await expect(
+        t.issue.execute(
+          new IssueApiKeyCommand(asUser(admin), DEFAULT_CENTER_ID, 'x', ['programs:read']),
+        ),
+      ).rejects.toThrow(CenterSuspendedError);
+      expect(t.apiKeys.all()).toEqual([]);
+    });
+
+    it("should revoke every active key of a center once when it is suspended, and no other center's", async () => {
+      const t = setup();
+      const issue = (centerId: string) =>
+        t.issue.execute(new IssueApiKeyCommand(asUser(admin), centerId, 'x', ['programs:read']));
+      const [first, second, foreign] = [
+        await issue(DEFAULT_CENTER_ID),
+        await issue(DEFAULT_CENTER_ID),
+        await issue(OTHER_CENTER_ID),
+      ];
+      await t.revoke.execute(new RevokeApiKeyCommand(asUser(admin), DEFAULT_CENTER_ID, first.id));
+      t.clock.advanceBy(60_000);
+
+      const revoked = await t.revokeCenterKeys.execute(
+        new RevokeCenterApiKeysCommand(DEFAULT_CENTER_ID),
+      );
+      const again = await t.revokeCenterKeys.execute(
+        new RevokeCenterApiKeysCommand(DEFAULT_CENTER_ID),
+      );
+
+      expect([revoked, again]).toEqual([1, 0]);
+      expect((await t.apiKeys.findById(second.id))?.revokedAt).toEqual(t.clock.now());
+      expect((await t.apiKeys.findById(foreign.id))?.isActive).toBe(true);
+      expect(t.events.ofType(IamEvents.ApiKeyRevoked)).toHaveLength(2);
     });
 
     it('should report a key of another center as not found when revoking', async () => {

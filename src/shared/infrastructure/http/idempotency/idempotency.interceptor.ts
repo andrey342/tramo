@@ -14,6 +14,7 @@ import { type Response } from 'express';
 import { Redis } from 'ioredis';
 import { catchError, concatMap, finalize, from, type Observable, of, throwError } from 'rxjs';
 
+import { FieldCipher } from '../../crypto';
 import { REDIS_CLIENT } from '../../redis';
 import { principalOf, type RequestWithPrincipal } from '../principal';
 import { ProblemException } from '../problem-details';
@@ -32,8 +33,21 @@ const IN_PROGRESS_TTL_MS = 60 * 1000;
 // Response headers a client may rely on after a create; replayed along with status and body.
 const REPLAYED_HEADERS = ['location', 'content-location', 'etag'] as const;
 
+// A completed record keeps the response body encrypted (`sealedBody`, FieldCipher, ADR 014): it
+// holds what the endpoint answered, applicant profiles and contracts among it, for 24 hours in a
+// store whose dumps and replicas are not otherwise protected. The cipher's context is the storage
+// key, so a record copied under another caller's or another key's entry does not decrypt.
+// Records written before encryption carry `body` in clear and are replayed as they are; they are
+// gone 24 hours after the upgrade.
 type IdempotencyRecord =
   | { readonly state: 'in_progress'; readonly fingerprint: string }
+  | {
+      readonly state: 'completed';
+      readonly fingerprint: string;
+      readonly status: number;
+      readonly headers: Readonly<Record<string, string>>;
+      readonly sealedBody: string;
+    }
   | {
       readonly state: 'completed';
       readonly fingerprint: string;
@@ -51,6 +65,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
   constructor(
     private readonly reflector: Reflector,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly cipher: FieldCipher,
   ) {}
 
   async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<unknown>> {
@@ -67,7 +82,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     const existing = await this.read(storageKey);
     if (existing) {
-      return this.answerFromExisting(existing, fingerprint, response);
+      return this.answerFromExisting(existing, storageKey, fingerprint, response);
     }
     const locked = await this.redis.set(
       storageKey,
@@ -98,7 +113,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
           fingerprint,
           status: response.statusCode,
           headers: replayableHeaders(response),
-          body: body ?? null,
+          sealedBody: this.cipher.encrypt(JSON.stringify(body ?? null), sealContext(storageKey)),
         });
         return body;
       }),
@@ -143,6 +158,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
   private answerFromExisting(
     existing: IdempotencyRecord,
+    storageKey: string,
     fingerprint: string,
     response: Response,
   ): Observable<unknown> {
@@ -161,7 +177,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
       response.setHeader(name, value);
     }
     response.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
-    return of(existing.body);
+    if ('body' in existing) {
+      return of(existing.body);
+    }
+    const plain = this.cipher.decrypt(existing.sealedBody, sealContext(storageKey));
+    return of(JSON.parse(plain) as unknown);
   }
 
   private async read(storageKey: string): Promise<IdempotencyRecord | null> {
@@ -202,6 +222,10 @@ function replayableHeaders(response: Response): Record<string, string> {
     }
   }
   return headers;
+}
+
+function sealContext(storageKey: string): string {
+  return `idempotency.response:${storageKey}`;
 }
 
 function inProgress(): ProblemException {

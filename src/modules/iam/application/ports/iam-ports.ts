@@ -69,8 +69,12 @@ export interface SessionSettings {
 
 export const CENTER_DIRECTORY = Symbol('CENTER_DIRECTORY');
 
+export interface CenterStanding {
+  readonly suspended: boolean;
+}
+
 // Training centers belong to the catalog module; iam only needs to know that one exists before
-// giving it users or API keys.
+// giving it users or API keys, and whether Tramo has suspended it. Null for an unknown center.
 export interface CenterDirectory {
-  exists(centerId: string): Promise<boolean>;
+  find(centerId: string): Promise<CenterStanding | null>;
 }

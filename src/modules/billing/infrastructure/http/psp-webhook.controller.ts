@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { type Request } from 'express';
 
 import { CLOCK, type Clock } from '@shared/domain';
@@ -56,6 +57,10 @@ export class PspSignatureGuard implements CanActivate {
 }
 
 @ApiTags('webhooks')
+// Not counted by the per-client rate limit: the provider sends every callback from a few
+// addresses, a burst of them (a billing run, a batch of signatures) is legitimate, and each one
+// is authenticated by its signature before anything else runs.
+@SkipThrottle()
 @Controller('webhooks')
 export class PspWebhookController {
   constructor(private readonly commands: CommandBus) {}

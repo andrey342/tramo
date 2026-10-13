@@ -57,3 +57,13 @@ Paying a center needs its full IBAN outside catalog. Catalog answers `GetPayoutA
 its own file, and a dependency rule (`payout-account-only-for-disbursements`) lets only lending's
 catalog adapter import it. Lending keeps the account a transfer was started with encrypted the same
 way, bound to its disbursement (`lending.disbursements.creditor_iban:<id>`).
+
+### Note (2026-10-13)
+
+The idempotency store keeps the response of every `@Idempotent()` request in Redis for 24 hours,
+applicant profiles and contracts among them, where a Redis dump or replica would show them in
+clear. The stored body is now encrypted with `FieldCipher`, bound to its storage key
+(`idempotency.response:<hash of caller and Idempotency-Key>`), and decrypted when a retry is
+replayed; the fingerprint and the replayed headers stay in clear. A change of
+`FIELD_ENCRYPTION_KEY` makes stored responses unreadable as well, so a retry within 24 hours of
+the change fails instead of replaying.

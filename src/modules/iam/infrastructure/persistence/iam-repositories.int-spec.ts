@@ -72,7 +72,7 @@ describe('iam repositories (integration)', () => {
     const copyA = await users.findById(student.id);
     const copyB = await users.findById(student.id);
 
-    copyA?.disable();
+    copyA?.disable(new Date('2026-10-09T10:00:00Z'));
     await uow.run(() => users.save(copyA!));
     copyB?.replacePasswordHash('fake:new');
 
@@ -94,7 +94,7 @@ describe('iam repositories (integration)', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     const loaded = await users.findById(student.id);
-    loaded?.disable();
+    loaded?.disable(new Date('2026-10-09T10:00:00Z'));
     await uow.run(() => users.save(loaded!));
 
     expect((await updatedAt()).getTime()).toBeGreaterThan(created.getTime());

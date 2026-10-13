@@ -1,11 +1,4 @@
-export {
-  API_KEY_SCOPES,
-  type ApiKeyScope,
-  isApiKeyScope,
-  isRole,
-  type Role,
-  ROLES,
-} from './access';
+export { API_KEY_SCOPES, type ApiKeyScope, isRole, type Role, ROLES } from './access';
 export { AggregateRoot } from './aggregate-root';
 export { annualPercentageRate, annuityPayment, monthlyRate } from './annuity';
 export { CalendarDate } from './calendar-date';

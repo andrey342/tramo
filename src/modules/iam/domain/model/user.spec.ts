@@ -121,12 +121,30 @@ describe('User', () => {
       now: NOW,
     });
     user.replacePasswordHash('new');
-    user.disable();
+    user.disable(NOW);
 
     expect(user.passwordHash).toBe('new');
     expect(user.canSignIn).toBe(false);
     expect(user.status).toBe('disabled');
     expect(user.email.value).toBe('ana@example.com');
     expect(user.createdAt).toEqual(NOW);
+  });
+
+  it('should announce a disabled account once when it is disabled again', () => {
+    const user = User.registerStudent({
+      id: 'u-10',
+      email: email('ana@example.com'),
+      passwordHash: 'hash',
+      now: NOW,
+    });
+    user.pullEvents();
+
+    user.disable(NOW);
+    user.disable(NOW);
+
+    expect(user.status).toBe('disabled');
+    expect(user.pullEvents()).toEqual([
+      expect.objectContaining({ eventType: IamEvents.UserDisabled, payload: { userId: 'u-10' } }),
+    ]);
   });
 });

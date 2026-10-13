@@ -3,6 +3,7 @@ export {
   PROBLEM_CONTENT_TYPE,
   type ProblemDetails,
   problemType,
+  statusCode,
   statusTitle,
 } from './problem-details';
 export { ProblemDetailsFilter } from './problem-details.filter';

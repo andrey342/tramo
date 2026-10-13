@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
+import { maskEmail } from '@shared/infrastructure/logging';
 import { REDIS_CLIENT } from '@shared/infrastructure/redis';
 
 import { type LoginAttemptTracker } from '../../application/ports/iam-ports';
@@ -15,7 +16,8 @@ const FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
 // is counted. The attempt that reaches the threshold sets the lock before its password is
 // verified; a success clears it again.
 //   KEYS: lock, failures   ARGV: maxFailures, baseLockMs, maxLockMs, failureWindowMs
-//   Returns the remaining lock in ms, or 0 when the attempt may proceed.
+//   Returns the remaining lock in ms when locked; otherwise the attempt may proceed and the answer
+//   is 0, or minus the lock in ms when this attempt reached the threshold and set the lock.
 const BEGIN_ATTEMPT_SCRIPT = `
 local remaining = redis.call('PTTL', KEYS[1])
 if remaining > 0 then
@@ -27,15 +29,19 @@ local maxFailures = tonumber(ARGV[1])
 if count >= maxFailures then
   local lockMs = math.min(tonumber(ARGV[2]) * 2 ^ (count - maxFailures), tonumber(ARGV[3]))
   redis.call('SET', KEYS[1], '1', 'PX', math.floor(lockMs))
+  return -math.floor(lockMs)
 end
 return 0
 `;
 
 // After `maxFailures` consecutive failed attempts the account is locked for `baseLockSeconds`,
 // doubling with each further failure up to `maxLockSeconds`. Keys hold a hash of the email, not
-// the email.
+// the email. Locks and refusals are logged with the email masked, so operations see an account
+// under attack (or locked on purpose) without the log naming it.
 @Injectable()
 export class RedisLoginAttemptTracker implements LoginAttemptTracker {
+  private readonly logger = new Logger(RedisLoginAttemptTracker.name);
+
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -43,7 +49,7 @@ export class RedisLoginAttemptTracker implements LoginAttemptTracker {
 
   async begin(account: string): Promise<number> {
     const { maxFailures, baseLockSeconds, maxLockSeconds } = this.config.auth.lockout;
-    const remainingMs = (await this.redis.eval(
+    const answer = (await this.redis.eval(
       BEGIN_ATTEMPT_SCRIPT,
       2,
       this.key('lock', account),
@@ -53,7 +59,21 @@ export class RedisLoginAttemptTracker implements LoginAttemptTracker {
       maxLockSeconds * 1000,
       FAILURE_WINDOW_MS,
     )) as number;
-    return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+    if (answer > 0) {
+      const retryAfterSeconds = Math.ceil(answer / 1000);
+      this.logger.warn(
+        { account: maskEmail(account), retryAfterSeconds },
+        'Sign-in refused: the account is locked after repeated failures',
+      );
+      return retryAfterSeconds;
+    }
+    if (answer < 0) {
+      this.logger.warn(
+        { account: maskEmail(account), lockSeconds: Math.ceil(-answer / 1000) },
+        'Failed sign-in limit reached: the account is locked unless this attempt succeeds',
+      );
+    }
+    return 0;
   }
 
   async succeeded(account: string): Promise<void> {
