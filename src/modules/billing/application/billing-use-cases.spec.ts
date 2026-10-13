@@ -648,6 +648,29 @@ describe('billing use cases', () => {
       );
     });
 
+    // Asking again about a collection under way (same key) debits nothing new.
+    it('should still ask again about a charge in collection when a payoff exists', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const inCollection = await t.charge({ contractId });
+      await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12'), contractId));
+      await t.payoff.execute(
+        new CreatePayoffChargeCommand({
+          requestId: uuidv7(),
+          planId: uuidv7(),
+          contractId,
+          amountCents: 6_000_00,
+          asOf: day('2026-11-20'),
+        }),
+      );
+
+      const asked = await t.retry.execute(new RetryChargeCommand(OPS, inCollection.id));
+
+      expect(asked.status).toBe('pending');
+      expect(asked.attempts).toBe(1);
+    });
+
     // Collections decide on the payoff and the mandate in force under the contract's lock; every
     // path that changes either takes it too.
     it('should take the contract lock wherever payoffs or mandates decide a collection', async () => {

@@ -50,7 +50,13 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
       }
       await this.charges.lockContract(found.contractId);
       const charge = (await this.charges.findById(command.chargeId)) ?? found;
-      if (charge.kind !== 'payoff' && (await this.charges.hasPayoff(charge.contractId))) {
+      // A new attempt would debit again what a payoff covers; asking again about one in
+      // collection (same key) debits nothing new.
+      if (
+        charge.status !== 'pending' &&
+        charge.kind !== 'payoff' &&
+        (await this.charges.hasPayoff(charge.contractId))
+      ) {
         throw new PayoffInProgressError(charge.contractId);
       }
       const contract = await this.plans.findContract(charge.contractId);
