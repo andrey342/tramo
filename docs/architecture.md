@@ -134,9 +134,12 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 
 - **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
   all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Credential
-  routes marked `@AuthRateLimited()` (every `/auth/*` route and `POST /applications`)
-  also count against `THROTTLE_AUTH_LIMIT` per minute; health checks and `/metrics` are exempt.
-  Exceeding either limit returns 429 with `Retry-After`.
+  routes marked `@AuthRateLimited()` (every `/auth/*` route and `POST /applications`) also count
+  against `THROTTLE_AUTH_LIMIT` per minute. Health checks, `/metrics` and the provider callbacks
+  (`POST /webhooks/psp`, `POST /webhooks/esign`) are exempt: a provider sends its callbacks from
+  a few addresses and in bursts (a billing run, a batch of signatures), each one is authenticated
+  by its HMAC signature before anything runs, and its volume follows what Tramo asked of the
+  provider. Exceeding either limit returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with

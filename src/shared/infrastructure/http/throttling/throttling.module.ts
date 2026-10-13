@@ -38,7 +38,8 @@ export class RetryAfterThrottlerGuard extends ThrottlerGuard {
 }
 
 // Global per-client limit for every route; credential routes get the stricter auth limit on top
-// with @AuthRateLimited(). Health checks opt out with @SkipThrottle.
+// with @AuthRateLimited(). Health checks, metrics and the signed provider callbacks opt out with
+// @SkipThrottle.
 @Module({
   imports: [
     ThrottlerModule.forRootAsync({

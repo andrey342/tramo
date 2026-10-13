@@ -401,7 +401,8 @@ future billing runs and private webhook targets by default. The compose stack ru
 
 - **Per client**: `THROTTLE_LIMIT` (120) requests per `THROTTLE_TTL_MS` (60 s) per client and
   route, counted in Redis so every api instance shares the counters. A client is an IPv4 address
-  or an IPv6 /64; behind proxies set `TRUST_PROXY_HOPS`. Health checks and `/metrics` are exempt.
+  or an IPv6 /64; behind proxies set `TRUST_PROXY_HOPS`. Health checks, `/metrics` and the
+  provider callbacks (`/webhooks/psp`, `/webhooks/esign`, signed) are exempt.
 - **Credential routes** (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and
   `POST /applications`): `THROTTLE_AUTH_LIMIT` (10) per minute per client on top.
 - What the caller sees: 429 with `Retry-After` and Problem Details code `too_many_requests`.
