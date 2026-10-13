@@ -23,7 +23,9 @@ The first start builds the application image and pulls the base images, which ta
 minutes. Later starts take seconds. The stack is ready when `api-1` logs
 `Nest application successfully started` and `http://localhost:3000/health/ready` answers
 `{"status":"ok",...}`. Add `--wait -d` to the last command to block until every container
-reports healthy and get the terminal back.
+reports healthy and get the terminal back. Once the api is healthy, the one-shot `seed` container
+loads the demo data set (accounts below) and exits; it runs on every `up` and leaves what exists
+alone.
 
 ### Where to look
 
@@ -42,6 +44,21 @@ If a port is already taken on your machine, override it in `.env` (`API_PORT`, `
 
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
 
+## Try it in 2 minutes
+
+```bash
+docker compose exec api node dist/scripts/demo.js   # or `pnpm demo` with Node and pnpm installed
+```
+
+The demo drives the API like a client would and prints each step: a new student registers,
+applies for the full stack bootcamp in 24 instalments and submits; the worker runs the identity,
+employment and credit checks and scores the application (the decision lists each factor); the
+student accepts the offer and signs the contract (the demo plays the e-signature provider's
+signed callback) and authorises the direct debit; the worker pays the center its share and the
+contract becomes active; operations run billing as of the first due date and the simulated
+payment provider collects it; then the statement, the center's dashboard, the emails in Mailpit
+and the signed webhooks the sink received. It takes about fifteen seconds and can be run again.
+
 ## Local development
 
 Requirements: Node.js 24 (see `.nvmrc`), pnpm through Corepack, Docker.
@@ -58,31 +75,42 @@ pnpm worker:dev                      # worker, health on :3100
 The `dev` profile on the command line takes precedence over `COMPOSE_PROFILES=demo` from `.env`,
 so the api and worker containers are not started and the host processes own ports 3000 and 3100.
 
-| Script                                     | What it does                                                                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                                                                                                 |
-| `pnpm build`                               | Compile to `dist/`                                                                                                                             |
-| `pnpm start`                               | Run the compiled api                                                                                                                           |
-| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                                                                                                 |
-| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                                                                                                 |
-| `pnpm arch:check`                          | Dependency rules between layers and modules                                                                                                    |
-| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                                                                                                     |
-| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers)                                                                        |
-| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                                                                                         |
-| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                                                                                            |
-| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                                                                                           |
-| `pnpm seed`                                | Build, then create the demo accounts, a verified training center, its published programs and two applications of the demo student (idempotent) |
+| Script                                     | What it does                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| `pnpm start:dev` / `pnpm worker:dev`       | Run the api / worker with `nest start --watch`                          |
+| `pnpm build`                               | Compile to `dist/`                                                      |
+| `pnpm start`                               | Run the compiled api                                                    |
+| `pnpm lint` / `pnpm format`                | ESLint (type-aware) / Prettier                                          |
+| `pnpm typecheck`                           | `tsc --noEmit` over sources, tests and scripts                          |
+| `pnpm arch:check`                          | Dependency rules between layers and modules                             |
+| `pnpm test` / `pnpm test:cov`              | Unit tests / with coverage                                              |
+| `pnpm test:int`                            | Repository and outbox tests against Postgres and Redis (Testcontainers) |
+| `pnpm test:e2e`                            | HTTP tests against Postgres and Redis (Testcontainers)                  |
+| `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                     |
+| `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                    |
+| `pnpm seed`                                | Build, then create the demo data set described below (idempotent)       |
+| `pnpm demo`                                | Walk the happy path against the running stack (see Try it in 2 minutes) |
 
-Demo accounts, created by `pnpm seed` against the database in `.env`. All share the password
-`tramo demo password`; local use only. The student has one approved application and one waiting
-in the ops review queue.
+`pnpm seed` writes the demo data set to the database in `.env`: two training centers verified
+through the VIES test service (Codeworks Barcelona and Berlin Code Academy, three published
+programs each, from a 4,200 EUR cybersecurity course to a 9,900 EUR data science master), a third
+whose VAT number the registry refuses (it stays pending), Codeworks' webhook pointed at the
+compose sink, and five students whose applications have run through verification and scoring.
+The simulated providers answer from the national id: a number ending in 7 is in the default
+registry and one ending in 9 fails the identity check. All accounts share the password
+`tramo demo password`; local use only.
 
-| Role                               | Email                    |
-| ---------------------------------- | ------------------------ |
-| admin                              | `admin@tramo.test`       |
-| ops                                | `ops@tramo.test`         |
-| center admin (Codeworks Barcelona) | `admin@codeworks.test`   |
-| student                            | `ana.garcia@example.com` |
+| Role                               | Email                      | Scenario                                                    |
+| ---------------------------------- | -------------------------- | ----------------------------------------------------------- |
+| admin                              | `admin@tramo.test`         |                                                             |
+| ops                                | `ops@tramo.test`           | Works the review queue                                      |
+| center admin (Codeworks Barcelona) | `admin@codeworks.test`     |                                                             |
+| center admin (Berlin Code Academy) | `admin@berlin-code.test`   |                                                             |
+| student                            | `ana.garcia@example.com`   | Instalments approved (bootcamp); a second one in review     |
+| student                            | `bruno.silva@example.com`  | Income share agreement approved                             |
+| student                            | `carla.moreno@example.com` | In the ops review queue                                     |
+| student                            | `diego.lopez@example.com`  | Rejected: listed in the default registry (national id ...7) |
+| student                            | `elena.ruiz@example.com`   | Rejected: identity check failed (national id ...9)          |
 
 Configuration is read from the environment and validated with zod at startup; an invalid or
 missing variable stops the process with a message naming it. A local `.env` is loaded if present,
