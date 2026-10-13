@@ -1,6 +1,7 @@
 import {
   type CallHandler,
   type ExecutionContext,
+  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -16,7 +17,7 @@ import { principalId } from '@shared/application';
 import { CLOCK, type Clock, DomainError } from '@shared/domain';
 
 import { principalOf, type RequestWithPrincipal } from '../http/principal';
-import { ProblemException } from '../http/problem-details';
+import { ProblemException, statusCode, ValidationProblemException } from '../http/problem-details';
 
 import { AUDITED, type AuditedOptions } from './audited.decorator';
 import { ClsAuditTrail } from './cls-audit-trail';
@@ -84,7 +85,7 @@ export class AuditInterceptor implements NestInterceptor {
           options.resource,
           resourceId(options, request, result),
           result.outcome,
-          result.outcome === 'failed' ? errorCode(result.error) : null,
+          result.outcome === 'failed' ? auditErrorCode(result.error) : null,
           typeof requestId === 'string' ? requestId : null,
           result.outcome === 'succeeded' ? (this.trail.collected() ?? null) : null,
           { method: request.method, path: request.originalUrl.split('?', 1)[0] },
@@ -112,9 +113,19 @@ function resourceId(
   return null;
 }
 
-function errorCode(error: unknown): string {
-  if (error instanceof DomainError || error instanceof ProblemException) {
+// The code the client was given in its Problem Details, so an audit entry and a support ticket
+// name the same failure. Errors the filter renders as 500 keep their class name, which says more
+// than "internal_server_error" to whoever reads the log.
+export function auditErrorCode(error: unknown): string {
+  if (
+    error instanceof DomainError ||
+    error instanceof ProblemException ||
+    error instanceof ValidationProblemException
+  ) {
     return error.code;
+  }
+  if (error instanceof HttpException) {
+    return statusCode(error.getStatus());
   }
   return error instanceof Error ? error.name : 'unknown';
 }

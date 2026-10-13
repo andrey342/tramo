@@ -63,7 +63,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         title: 'Validation failed',
         status: HttpStatus.BAD_REQUEST,
         detail: exception.message,
-        code: 'validation_error',
+        code: exception.code,
         errors: exception.errors,
       };
     }

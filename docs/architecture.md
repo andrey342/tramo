@@ -149,8 +149,9 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   a success, the record is left to expire instead of being released: an immediate retry gets 409
   rather than running the operation a second time.
 - **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
-  `shared.audit_log` per call: actor, action, resource, outcome, error code, request id and the
-  changes the handler described through the `AuditTrail` port. The row is written after the
+  `shared.audit_log` per call: actor, action, resource, outcome, error code (the Problem Details
+  `code` the client got, `validation_error` for a refused body), request id and the changes the
+  handler described through the `AuditTrail` port. The row is written after the
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do

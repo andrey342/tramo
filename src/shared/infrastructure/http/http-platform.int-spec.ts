@@ -68,6 +68,12 @@ class ProbeController {
   activate(): never {
     throw new InvalidStateTransitionError('TrainingCenter', 'suspended', 'active');
   }
+
+  @Post('centers/:id/fee')
+  @Audited({ action: 'center.change_fee', resource: 'center' })
+  changeFee(@Param('id') id: string, @Body() body: PaymentDto): { id: string; cents: number } {
+    return { id, cents: body.amountCents };
+  }
 }
 
 const OPS_USER: Principal = { kind: 'user', userId: 'ops-1', roles: ['ops'], centerId: null };
@@ -259,6 +265,19 @@ describe('HTTP platform (integration)', () => {
       expect(response.status).toBe(409);
       expect(await entriesFor('center-2')).toEqual([
         expect.objectContaining({ outcome: 'failed', error_code: 'invalid_state_transition' }),
+      ]);
+    });
+
+    it('should record a request refused by validation with the code the client saw', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/probe/centers/center-3/fee')
+        .set('x-test-user', 'ops-7')
+        .send({ amountCents: 0 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('validation_error');
+      expect(await entriesFor('center-3')).toEqual([
+        expect.objectContaining({ outcome: 'failed', error_code: 'validation_error' }),
       ]);
     });
   });
