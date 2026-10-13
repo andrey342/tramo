@@ -9,8 +9,9 @@ import { type Principal } from '@shared/application';
 
 import { type AppConfig } from '../../config';
 import { FieldCipher } from '../../crypto';
+import { ProblemException } from '../problem-details';
 
-import { IdempotencyInterceptor } from './idempotency.interceptor';
+import { IDEMPOTENCY_STORE_TIMEOUT_MS, IdempotencyInterceptor } from './idempotency.interceptor';
 import { IDEMPOTENT } from './idempotent.decorator';
 
 // Only the commands the interceptor uses, kept in a map; the real store is covered by
@@ -58,19 +59,36 @@ const PROFILE = {
   declaredMonthlyIncomeCents: 180000,
 };
 
+// Redis down: ioredis rejects once it has given up reconnecting.
+class DownRedis extends MapRedis {
+  override get(): Promise<string | null> {
+    return Promise.reject(new Error('Reached the max retries per request limit (which is 3).'));
+  }
+}
+
+// Redis unreachable without an answer: the command waits for a connection.
+class HangingRedis extends MapRedis {
+  override get(): Promise<string | null> {
+    return new Promise(() => undefined);
+  }
+}
+
+const cipher = new FieldCipher({
+  crypto: { fieldEncryptionKey: randomBytes(32).toString('base64') },
+} as AppConfig);
+
 describe('IdempotencyInterceptor', () => {
   const redis = new MapRedis();
   const interceptor = new IdempotencyInterceptor(
     new Reflector(),
     redis as unknown as Redis,
-    new FieldCipher({
-      crypto: { fieldEncryptionKey: randomBytes(32).toString('base64') },
-    } as AppConfig),
+    cipher,
   );
 
   function call(
     key: string,
     handler: () => unknown,
+    through: IdempotencyInterceptor = interceptor,
   ): Promise<{ body: unknown; replayed: boolean }> {
     const headers: Record<string, string> = {};
     const request = {
@@ -96,7 +114,7 @@ describe('IdempotencyInterceptor', () => {
       switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }),
     } as unknown as ExecutionContext;
     const next: CallHandler = { handle: () => of(handler()) };
-    return interceptor
+    return through
       .intercept(context, next)
       .then((observable) => lastValueFrom(observable))
       .then((body) => ({ body, replayed: headers['idempotent-replayed'] === 'true' }));
@@ -129,5 +147,38 @@ describe('IdempotencyInterceptor', () => {
     });
 
     expect(retry).toEqual({ body: { id: 'application-2' }, replayed: true });
+  });
+
+  describe('when Redis is unavailable', () => {
+    const through = (store: MapRedis): IdempotencyInterceptor =>
+      new IdempotencyInterceptor(new Reflector(), store as unknown as Redis, cipher);
+    const handler = jest.fn(() => PROFILE);
+
+    afterEach(() => {
+      handler.mockClear();
+      jest.useRealTimers();
+    });
+
+    it('should refuse with 503 and Retry-After, without running the handler, when Redis fails', async () => {
+      const refused = await call('key-3', handler, through(new DownRedis())).catch(
+        (error: unknown) => error,
+      );
+
+      expect(refused).toBeInstanceOf(ProblemException);
+      expect((refused as ProblemException).getStatus()).toBe(503);
+      expect(refused).toMatchObject({ code: 'idempotency_unavailable', retryAfterSeconds: 5 });
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('should refuse with 503 when Redis does not answer in time', async () => {
+      jest.useFakeTimers();
+      const refused = call('key-4', handler, through(new HangingRedis()));
+      const outcome = refused.catch((error: unknown) => error);
+
+      await jest.advanceTimersByTimeAsync(IDEMPOTENCY_STORE_TIMEOUT_MS);
+
+      expect(await outcome).toMatchObject({ code: 'idempotency_unavailable' });
+      expect(handler).not.toHaveBeenCalled();
+    });
   });
 });

@@ -148,7 +148,10 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   Failed requests are not stored, so a client can fix the request and retry with the same key.
   The in-progress record is renewed while the handler runs; if the response cannot be stored after
   a success, the record is left to expire instead of being released: an immediate retry gets 409
-  rather than running the operation a second time.
+  rather than running the operation a second time. The interceptor fails closed: when Redis
+  cannot be read or the key cannot be taken within two seconds (an outage, a host that does not
+  answer), the request is not executed and answers 503 `idempotency_unavailable` with
+  `Retry-After: 5`; a key taken just as Redis came back may answer 409 for up to a minute.
 - **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
   `shared.audit_log` per call: actor, action, resource, outcome, error code (the Problem Details
   `code` the client got, `validation_error` for a refused body), request id and the changes the

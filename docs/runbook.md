@@ -335,7 +335,10 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 - **Action**: after a projector fix, on a database that had activity before reporting existed, or
   when facts are suspect: `pnpm api:call POST /ops/reporting/rebuild --as ops`. It answers
   `{"queued": true}`, or `false` when a rebuild is already queued or running (one at a time; the
-  request joins it); 503 `queue_unavailable` means Redis did not answer within two seconds. The job deletes the facts and replays the outbox in one REPEATABLE READ
+  request joins it). The route is idempotent, so while Redis is down it answers 503
+  `idempotency_unavailable` (with `Retry-After`) within two seconds, before anything is queued;
+  503 `queue_unavailable` only appears when Redis goes away between the idempotency check and
+  queueing the job. Retry once `GET /health/ready` reports Redis up. The job deletes the facts and replays the outbox in one REPEATABLE READ
   transaction: dashboards show the old figures until it commits, and live projections wait for it
   holding worker connections, so run it when the stack is quiet. The worker logs
   `Reporting read models rebuilt` with the number of events applied.
@@ -462,6 +465,17 @@ future billing runs and private webhook targets by default. The compose stack ru
 - **Bull Board**: ten failed sign-ins from one client within 15 minutes refuse every attempt from
   it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
   counted, however many the dashboard sends at once, and clear the failures below the limit.
+
+## Idempotent requests refused
+
+- **Symptom**: POSTs that create or move money (`POST /applications`, payoffs, ops runs, the
+  reporting rebuild...) answer 503 `idempotency_unavailable` with `Retry-After: 5`; the api logs
+  `Idempotency store unavailable; request refused`.
+- **Cause**: the idempotency records live in Redis, and a request whose key cannot be checked is
+  not executed (a retry could otherwise pay or create twice). Reads and other routes keep working.
+- **Action**: `curl -s localhost:3000/health/ready` and bring Redis back; clients retry with the
+  same key. A request whose key was taken just as Redis returned answers 409
+  `idempotency_request_in_progress` for up to a minute, then runs.
 
 ## Sessions and accounts
 

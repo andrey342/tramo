@@ -46,7 +46,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     const retryAfter =
-      exception instanceof DomainError ? exception.details?.retryAfterSeconds : undefined;
+      exception instanceof DomainError
+        ? exception.details?.retryAfterSeconds
+        : exception instanceof ProblemException
+          ? exception.retryAfterSeconds
+          : undefined;
     if (typeof retryAfter === 'number') {
       response.setHeader('Retry-After', String(retryAfter));
     }
