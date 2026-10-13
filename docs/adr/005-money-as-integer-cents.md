@@ -12,8 +12,9 @@ JavaScript numbers are binary floating point (`0.1 + 0.2 !== 0.3`).
 ## Decision outcome
 
 - `Money` stores an integer number of cents plus a currency. Addition, subtraction, comparison
-  and allocation are integer operations. Postgres columns are `bigint` with `CHECK (... >= 0)`
-  where negative values make no sense.
+  and allocation are integer operations. A row's amount is an `integer` column (up to 21 million
+  euros, which `pg` reads back as a number); sums that can grow past that, such as the reporting
+  facts, are `bigint`. Both carry `CHECK (... >= 0)` where negative values make no sense.
 - Multiplying by a rate goes through `decimal.js` and rounds back to the cent explicitly. The
   default is half-up, the common commercial rule; callers can choose `down` or `up` where a rule
   requires it.
