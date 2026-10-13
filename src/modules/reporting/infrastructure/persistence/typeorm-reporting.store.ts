@@ -158,7 +158,15 @@ export class TypeOrmReportingStore implements ReportingStore {
     }
   }
 
-  async centerRows(centerId: string): Promise<CenterRows> {
+  // Four reads of one snapshot, so a rebuild committing between them cannot mix old and new facts
+  // (inside a caller's transaction they join it).
+  centerRows(centerId: string): Promise<CenterRows> {
+    return this.txHost.withTransaction({ isolationLevel: 'REPEATABLE READ' }, () =>
+      this.readCenterRows(centerId),
+    );
+  }
+
+  private async readCenterRows(centerId: string): Promise<CenterRows> {
     const tx = this.txHost.tx;
     // Applications in the funnel are those submitted: a draft has no program in its facts.
     const applications = await tx.query<{ status: string; total: string }[]>(
@@ -184,15 +192,19 @@ export class TypeOrmReportingStore implements ReportingStore {
       [centerId],
     );
     // A charge whose events never named the center (only a failure arrived yet) is placed by its
-    // contract's.
+    // contract's. Two branches, not an OR across the join, so each one can use an index.
     const charges = await tx.query<
       { product: Product | null; kind: string | null; status: string; total: string | null }[]
     >(
       `SELECT k.product, c.kind, c.status, SUM(c.amount_cents) AS total
-         FROM reporting.charge_facts c
+         FROM (SELECT contract_id, kind, status, amount_cents FROM reporting.charge_facts
+                WHERE center_id = $1 AND status IS NOT NULL
+               UNION ALL
+               SELECT contract_id, kind, status, amount_cents FROM reporting.charge_facts
+                WHERE center_id IS NULL AND status IS NOT NULL
+                  AND contract_id IN (SELECT contract_id FROM reporting.contract_facts
+                                       WHERE center_id = $1)) c
          LEFT JOIN reporting.contract_facts k ON k.contract_id = c.contract_id
-        WHERE (c.center_id = $1 OR (c.center_id IS NULL AND k.center_id = $1))
-          AND c.status IS NOT NULL
         GROUP BY k.product, c.kind, c.status`,
       [centerId],
     );
