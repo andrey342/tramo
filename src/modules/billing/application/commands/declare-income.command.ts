@@ -44,8 +44,10 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  // Under the contract's lock: the open month is read after any cycle assessing it has finished.
+  // The caller is authorised first, so nobody else can hold the contract's lock. Under it, the
+  // contract is read again: the open month is read after any cycle assessing it has finished.
   async execute(command: DeclareIncomeCommand): Promise<IncomeDeclarationDto> {
+    await findOwnContract(this.plans, command.actor, command.contractId);
     return this.uow.run(async () => {
       await this.charges.lockContract(command.contractId);
       const contract = await findOwnContract(this.plans, command.actor, command.contractId);

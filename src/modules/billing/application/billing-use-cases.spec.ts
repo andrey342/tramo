@@ -206,6 +206,24 @@ describe('billing use cases', () => {
       ).rejects.toThrow(NotAnIncomeShareError);
     });
 
+    // Only the student holds up the cycle of their contract.
+    it('should not lock the contract when someone other than its student declares', async () => {
+      const t = setup();
+      const contractId = t.contract('isa');
+
+      await expect(
+        t.declare.execute(new DeclareIncomeCommand(OPS, contractId, '2026-11', 2_000_00)),
+      ).rejects.toThrow(BillingAccessDeniedError);
+      await expect(
+        t.declare.execute(
+          new DeclareIncomeCommand({ ...t.student, userId: uuidv7() }, contractId, '2026-11', 1),
+        ),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect(t.charges.locked).toEqual([]);
+      await t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00));
+      expect(t.charges.locked).toEqual([contractId]);
+    });
+
     // A salary paid on the 1st or 2nd is declared in time; from the 5th the month is closed,
     // even if the cycle has not assessed it yet.
     it('should take the previous month until the 4th and refuse it from the 5th', async () => {
