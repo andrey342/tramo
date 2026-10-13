@@ -18,8 +18,14 @@ import {
 
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
-// Why a contract was cancelled before it took effect.
-export type CancellationReason = 'signature_declined' | 'signature_expired';
+// Why a contract was cancelled before it took effect: the student declined or never signed, or
+// once signed the payment to the center failed for good.
+export const CANCELLATION_REASONS = [
+  'signature_declined',
+  'signature_expired',
+  'disbursement_failed',
+] as const;
+export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
 
 // The envelope sent to the e-signature provider and, once the student signs, when they did.
 export interface Signature {
@@ -55,6 +61,7 @@ export interface ContractProps {
 //
 //   draft → sent_for_signature → signed → active → completed
 //   draft | sent_for_signature → cancelled        (the student declined, or never signed)
+//   signed → cancelled                            (ops: the disbursement failed for good)
 //   active ⇄ in_arrears                           (billing: a charge 30 days overdue, then paid)
 //   active | in_arrears → defaulted               (billing, after dunning runs out)
 //   in_arrears → completed                        (the plan ended while a charge was overdue)
@@ -234,13 +241,17 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // Before signing only: a signed contract is undone by paying it off, not by cancelling it.
-  // Idempotent for a contract already cancelled.
+  // Only before the contract took effect; an active one is undone by paying it off. Before
+  // signing, for the signature's outcome; once signed, for a disbursement that failed for good
+  // (the caller checks it failed: the center was never paid, so nothing is owed). Idempotent for
+  // a contract already cancelled.
   cancel(reason: CancellationReason, now: Date): void {
     if (this.props.status === 'cancelled') {
       return;
     }
-    if (this.props.status !== 'draft' && this.props.status !== 'sent_for_signature') {
+    const from: readonly ContractStatus[] =
+      reason === 'disbursement_failed' ? ['signed'] : ['draft', 'sent_for_signature'];
+    if (!from.includes(this.props.status)) {
       throw new InvalidStateTransitionError('Contract', this.props.status, 'cancelled');
     }
     this.props = { ...this.props, cancellationReason: reason };

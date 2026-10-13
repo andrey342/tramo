@@ -2,7 +2,7 @@ import { AggregateRoot, type Iban, InvalidStateTransitionError, type Money } fro
 
 import { LendingEvents } from '../events/lending-events';
 
-export const DISBURSEMENT_STATUSES = ['pending', 'sent', 'settled', 'failed'] as const;
+export const DISBURSEMENT_STATUSES = ['pending', 'sent', 'settled', 'failed', 'cancelled'] as const;
 export type DisbursementStatus = (typeof DISBURSEMENT_STATUSES)[number];
 
 const MAX_REASON_LENGTH = 200;
@@ -37,6 +37,7 @@ export interface DisbursementProps {
 //
 //   pending → sent → settled
 //   pending (transfer not started) | sent → failed → pending   (ops retries, as a new attempt)
+//   failed → cancelled                                          (ops give up and cancel the contract)
 export class Disbursement extends AggregateRoot {
   private constructor(
     id: string,
@@ -225,6 +226,29 @@ export class Disbursement extends AggregateRoot {
     this.moveTo('pending', now);
     this.record({
       eventType: LendingEvents.DisbursementRetried,
+      aggregateType: 'Disbursement',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        disbursementId: this.id,
+        contractId: this.props.contractId,
+        centerId: this.props.centerId,
+        attempt: this.props.attempt,
+      },
+    });
+  }
+
+  // Ops give up on a failed payment: nothing reached the center, and the contract is cancelled
+  // with it. Final: a cancelled disbursement is never retried. The failure reason is kept.
+  // Idempotent.
+  cancel(now: Date): void {
+    if (this.props.status === 'cancelled') {
+      return;
+    }
+    this.assertStatus(['failed'], 'cancelled');
+    this.moveTo('cancelled', now);
+    this.record({
+      eventType: LendingEvents.DisbursementCancelled,
       aggregateType: 'Disbursement',
       aggregateId: this.id,
       occurredAt: now,

@@ -125,4 +125,37 @@ describe('Disbursement', () => {
       disbursement.fail('again', LATER);
     }).toThrow(InvalidStateTransitionError);
   });
+
+  it('should be cancelled once when it failed, keeping the reason, and never be retried after', () => {
+    const disbursement = aDisbursement();
+    disbursement.fail('center_not_active', LATER);
+    disbursement.pullEvents();
+
+    disbursement.cancel(LATER);
+    disbursement.cancel(LATER);
+
+    expect(disbursement).toMatchObject({ status: 'cancelled', failureReason: 'center_not_active' });
+    expect(disbursement.pullEvents()).toEqual([
+      expect.objectContaining({
+        eventType: LendingEvents.DisbursementCancelled,
+        payload: expect.objectContaining({ contractId: disbursement.contractId, attempt: 1 }),
+      }),
+    ]);
+    expect(() => {
+      disbursement.retry(LATER);
+    }).toThrow(InvalidStateTransitionError);
+  });
+
+  it('should not be cancelled when it may still pay the center', () => {
+    const pending = aDisbursement();
+    const sent = aDisbursement();
+    sent.startTransfer(A_CREDITOR);
+    sent.markSent('tr_1', LATER);
+
+    for (const disbursement of [pending, sent]) {
+      expect(() => {
+        disbursement.cancel(LATER);
+      }).toThrow(InvalidStateTransitionError);
+    }
+  });
 });

@@ -190,9 +190,41 @@ describe('Contract', () => {
       expect(eventTypes(contract)).toEqual([LendingEvents.ContractCancelled]);
     });
 
-    it('should not be cancelled once signed', () => {
+    it('should not be cancelled for its signature once signed', () => {
       expect(() => {
         aSignedContract().cancel('signature_expired', LATER);
+      }).toThrow(InvalidStateTransitionError);
+    });
+
+    it('should be cancelled once signed when its disbursement failed, keeping the signature', () => {
+      const contract = aSignedContract();
+
+      contract.cancel('disbursement_failed', LATER);
+      contract.cancel('disbursement_failed', LATER);
+
+      expect(contract).toMatchObject({
+        status: 'cancelled',
+        cancellationReason: 'disbursement_failed',
+        activatedOn: null,
+      });
+      expect(contract.signature?.signedAt).toEqual(NOW);
+      expect(contract.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: LendingEvents.ContractCancelled,
+          payload: expect.objectContaining({
+            applicationId: contract.applicationId,
+            reason: 'disbursement_failed',
+          }),
+        }),
+      ]);
+    });
+
+    it('should refuse a failed disbursement as the reason when the contract is not signed or took effect', () => {
+      expect(() => {
+        aContractSentForSignature().cancel('disbursement_failed', LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        anActiveContract().cancel('disbursement_failed', LATER);
       }).toThrow(InvalidStateTransitionError);
     });
   });

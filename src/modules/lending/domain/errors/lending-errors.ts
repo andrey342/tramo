@@ -32,6 +32,17 @@ export class EnvelopeNotRecordedError extends DomainError {
   }
 }
 
+// A signed contract is cancelled only once its disbursement failed: while it is pending or sent
+// money may be on its way to the center, and once settled the contract is in force.
+export class DisbursementNotFailedError extends DomainError {
+  readonly code = 'disbursement_not_failed';
+  readonly category = 'conflict';
+
+  constructor(status: string | null) {
+    super('Only a contract whose disbursement failed can be cancelled.', { status });
+  }
+}
+
 export class ContractAccessDeniedError extends DomainError {
   readonly code = 'contract_access_denied';
   readonly category = 'forbidden';

@@ -23,6 +23,7 @@ import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shar
 import {
   ContractAccessDeniedError,
   type ContractProduct,
+  DisbursementNotFailedError,
   type DisbursementSettledPayload,
   EnvelopeNotRecordedError,
   LendingEvents,
@@ -35,6 +36,10 @@ import {
   ActivateContractCommand,
   ActivateContractHandler,
 } from './commands/activate-contract.command';
+import {
+  CancelUndisbursedContractCommand,
+  CancelUndisbursedContractHandler,
+} from './commands/cancel-undisbursed-contract.command';
 import {
   CheckDisbursementSettlementCommand,
   CheckDisbursementSettlementHandler,
@@ -142,6 +147,13 @@ function setup() {
     check,
     reconcile: new ReconcileDisbursementHandler(disbursements, execute, check),
     retry: new RetryDisbursementHandler(uow, disbursements, clock),
+    cancelUndisbursed: new CancelUndisbursedContractHandler(
+      uow,
+      contracts,
+      disbursements,
+      audit,
+      clock,
+    ),
     activate: new ActivateContractHandler(uow, contracts, clock),
     openPlan: new OpenFinancingPlanHandler(uow, contracts, plans, clock),
     complete: new CompleteContractHandler(uow, contracts, clock),
@@ -592,6 +604,84 @@ describe('lending use cases', () => {
       await expect(
         t.reconcile.execute(new ReconcileDisbursementCommand(t.student, id)),
       ).rejects.toThrow(ContractAccessDeniedError);
+    });
+
+    // The center closed: its disbursement cannot be paid, and the contract would hold the
+    // student's application for ever.
+    it('should let ops cancel a signed contract when its disbursement failed for good', async () => {
+      const t = setup();
+      t.catalog.addCenter(t.centerId, { active: false });
+      const contractId = await t.signed();
+      const { id } = await t.disbursementOf(contractId);
+      await t.execute.execute(new ExecuteDisbursementCommand(id));
+      t.audited.length = 0;
+
+      const cancelled = await t.cancelUndisbursed.execute(
+        new CancelUndisbursedContractCommand(OPS, contractId),
+      );
+      const again = await t.cancelUndisbursed.execute(
+        new CancelUndisbursedContractCommand(OPS, contractId),
+      );
+
+      expect(cancelled).toMatchObject({
+        status: 'cancelled',
+        cancellationReason: 'disbursement_failed',
+        payout: { disbursementStatus: 'cancelled' },
+      });
+      expect(again).toEqual(cancelled);
+      expect(await t.disbursementOf(contractId)).toMatchObject({
+        status: 'cancelled',
+        failureReason: 'center_not_active',
+      });
+      expect(t.events.ofType(LendingEvents.ContractCancelled)).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ reason: 'disbursement_failed' }),
+        }),
+      ]);
+      expect(t.events.ofType(LendingEvents.DisbursementCancelled)).toHaveLength(1);
+      expect(t.audited).toEqual([{ status: { before: 'signed', after: 'cancelled' } }]);
+      expect(t.plans.all()).toHaveLength(0);
+      await expect(t.retry.execute(new RetryDisbursementCommand(OPS, id))).rejects.toThrow(
+        InvalidStateTransitionError,
+      );
+    });
+
+    it('should not cancel a signed contract when its disbursement may still pay the center', async () => {
+      const t = setup();
+      const settledId = await t.active();
+      t.bank.settleImmediately = false;
+      const pendingId = await t.signed();
+      const sentId = await t.signed();
+      await t.execute.execute(new ExecuteDisbursementCommand((await t.disbursementOf(sentId)).id));
+      await t.check.execute(
+        new CheckDisbursementSettlementCommand((await t.disbursementOf(sentId)).id),
+      );
+
+      for (const contractId of [pendingId, sentId, settledId]) {
+        await expect(
+          t.cancelUndisbursed.execute(new CancelUndisbursedContractCommand(OPS, contractId)),
+        ).rejects.toThrow(DisbursementNotFailedError);
+      }
+      expect((await t.disbursementOf(sentId)).status).toBe('sent');
+      expect((await t.disbursementOf(settledId)).status).toBe('settled');
+      expect((await t.contracts.findById(pendingId))?.status).toBe('signed');
+    });
+
+    it('should let only staff cancel a contract, and report one that does not exist', async () => {
+      const t = setup();
+      t.catalog.addCenter(t.centerId, { active: false });
+      const contractId = await t.signed();
+      await t.execute.execute(
+        new ExecuteDisbursementCommand((await t.disbursementOf(contractId)).id),
+      );
+
+      await expect(
+        t.cancelUndisbursed.execute(new CancelUndisbursedContractCommand(t.student, contractId)),
+      ).rejects.toThrow(ContractAccessDeniedError);
+      await expect(
+        t.cancelUndisbursed.execute(new CancelUndisbursedContractCommand(OPS, uuidv7())),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect((await t.contracts.findById(contractId))?.status).toBe('signed');
     });
 
     it('should let only staff retry a disbursement', async () => {

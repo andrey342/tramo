@@ -16,6 +16,7 @@ import {
   anActiveContract,
   anIsa,
   aPlan,
+  aSignedContract,
   LATER,
   NOW,
 } from '../factories/lending';
@@ -115,6 +116,31 @@ export function lendingRepositoriesContract(
       await expect(
         run(() => disbursements.save(aDisbursement({ contractId: contract.id }))),
       ).rejects.toThrow(LendingRecordExistsError);
+    });
+
+    it('should store a signed contract cancelled with its failed disbursement', async () => {
+      const { contracts, disbursements, run } = await create();
+      const contract = aSignedContract();
+      const disbursement = aDisbursement({ contractId: contract.id, centerId: contract.centerId });
+      disbursement.fail('center_not_active', LATER);
+      await run(async () => {
+        await contracts.save(contract);
+        await disbursements.save(disbursement);
+      });
+      disbursement.cancel(LATER);
+      contract.cancel('disbursement_failed', LATER);
+      await run(async () => {
+        await disbursements.save(disbursement);
+        await contracts.save(contract);
+      });
+
+      const found = await run(() => contracts.findById(contract.id));
+      expect(found && contractState(found)).toEqual(contractState(contract));
+      expect(found?.signature?.signedAt).toEqual(NOW);
+      expect(await run(() => disbursements.findByContractId(contract.id))).toMatchObject({
+        status: 'cancelled',
+        failureReason: 'center_not_active',
+      });
     });
 
     it('should store both kinds of plan with their state', async () => {
