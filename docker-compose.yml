@@ -40,7 +40,7 @@ x-app: &app
     BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-ops}
     # Default only when unset; an empty value in .env disables the dashboard.
     BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD-tramo-queues}
-    METRICS_TOKEN: ${METRICS_TOKEN-tramo-metrics-token}
+    METRICS_TOKEN: ${METRICS_TOKEN-tramo-local-metrics-token-change-me}
     # Read only by the demo script when it runs inside the api container.
     MAILPIT_URL: http://mailpit:8025
     WEBHOOK_SINK_URL: http://webhook-sink:9099

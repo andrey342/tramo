@@ -63,9 +63,9 @@ describe('parseConfig', () => {
     expect(() => parseConfig({ ...production, BULL_BOARD_PASSWORD: 'tramo-queues' })).toThrow(
       /BULL_BOARD_PASSWORD/,
     );
-    expect(() => parseConfig({ ...production, METRICS_TOKEN: 'tramo-metrics-token' })).toThrow(
-      /METRICS_TOKEN/,
-    );
+    expect(() =>
+      parseConfig({ ...production, METRICS_TOKEN: 'tramo-local-metrics-token-change-me' }),
+    ).toThrow(/METRICS_TOKEN/);
     expect(() =>
       parseConfig({
         ...production,

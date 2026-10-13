@@ -149,12 +149,17 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010); later pages do not shift when new rows arrive.
-- **Metrics.** `GET /metrics` (Prometheus text, for a bearer of `METRICS_TOKEN`; not served
-  without one) reports `tramo_http_request_duration_seconds` by method, route template and
-  status (requests no route matched share `route="unmatched"`), `tramo_queue_jobs` by queue and
-  state, `tramo_outbox_pending_events` and `tramo_outbox_lag_seconds` (age of the oldest event
-  not yet handed to the queues), plus the process defaults. The backlog is read from Redis and
-  Postgres when scraped, so the api's one target covers the worker's queues too.
+- **Metrics.** `GET /metrics` (Prometheus text) answers a bearer of `METRICS_TOKEN` (32 characters
+  or more; production refuses the published one); without a configured token it is a 404, and a
+  wrong token a logged 401. Bare statuses, not Problem Details: its only client is a scraper. It
+  counts toward the rate limit like any route. It reports `tramo_http_request_duration_seconds`
+  by method, route template and status (requests no Nest route took, including Bull Board, share
+  `route="unmatched"`), `tramo_queue_jobs` by queue and state, `tramo_outbox_pending_events`
+  (counted up to 10,000) and `tramo_outbox_lag_seconds` (age of the oldest event not yet handed
+  to the queues), plus the process defaults. The backlog is read from Redis and Postgres when
+  scraped, at most every five seconds, so the api's one target covers the worker's queues too; a
+  source that does not answer within five seconds is left out of that scrape instead of holding
+  it.
 - **Query budget.** A list page costs the same statements whatever its size: one query for the
   page, plus one batched lookup where rows need names from elsewhere (the catalog's center
   names); `test/e2e/query-budget.e2e-spec.ts` counts them. Every filter and cursor has an index.

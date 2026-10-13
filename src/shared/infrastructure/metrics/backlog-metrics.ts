@@ -3,53 +3,62 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { type Queue } from 'bullmq';
 import { Gauge, type Registry } from 'prom-client';
-import { DataSource } from 'typeorm';
 
+import { type OutboxBacklog, OutboxBacklogReader } from '../messaging/outbox-backlog';
 import { ALL_QUEUES } from '../queues';
 
 import { METRICS_REGISTRY } from './metrics-registry';
 
 const JOB_STATES = ['waiting', 'active', 'delayed', 'failed'] as const;
+// The queue connection waits for Redis to come back instead of failing, so each source is given
+// up after this long; a scrape then still answers, without that source's series.
+const SOURCE_TIMEOUT_MS = 5_000;
+// Scrapes within this window share one read of Redis and Postgres.
+const CACHE_MS = 5_000;
 
-interface OutboxBacklog {
-  readonly pending: number;
-  readonly lagSeconds: number;
+type JobCounts = readonly [queue: string, counts: Readonly<Record<string, number>>][];
+
+interface Backlog {
+  readonly jobs: JobCounts | null;
+  readonly outbox: OutboxBacklog | null;
 }
 
 // Read when Prometheus scrapes, from where the work waits: the jobs of every queue by state, and
 // the events the outbox has not handed to the queues yet with the age of the oldest one (the
-// publisher's lag). A source that cannot be read leaves its series out of that scrape.
+// publisher's lag). A source that cannot be read in time leaves its series out of that scrape.
 @Injectable()
 export class BacklogMetrics {
   private readonly logger = new Logger(BacklogMetrics.name);
-  // Both outbox gauges are collected in the same scrape; they share one query.
-  private outboxRead: Promise<OutboxBacklog | null> | null = null;
+  private cached: { readonly at: number; readonly backlog: Promise<Backlog> } | null = null;
 
   constructor(
     @Inject(METRICS_REGISTRY) registry: Registry,
     private readonly modules: ModuleRef,
-    private readonly db: DataSource,
+    private readonly outboxBacklog: OutboxBacklogReader,
   ) {
+    // Each gauge is filled from one finished read, in one synchronous pass, so overlapping
+    // scrapes never see it half written.
     const jobs: Gauge<'queue' | 'state'> = new Gauge({
       name: 'tramo_queue_jobs',
       help: 'Jobs in each queue by state.',
       labelNames: ['queue', 'state'],
       registers: [registry],
       collect: async () => {
+        const counts = (await this.backlog()).jobs;
         jobs.reset();
-        for (const [queue, counts] of await this.jobCounts()) {
-          for (const state of JOB_STATES) jobs.set({ queue, state }, counts[state] ?? 0);
+        for (const [queue, byState] of counts ?? []) {
+          for (const state of JOB_STATES) jobs.set({ queue, state }, byState[state] ?? 0);
         }
       },
     });
     const pending: Gauge = new Gauge({
       name: 'tramo_outbox_pending_events',
-      help: 'Events recorded in the outbox and not yet published to the queues.',
+      help: 'Events recorded in the outbox and not yet published to the queues (up to 10000).',
       registers: [registry],
       collect: async () => {
+        const outbox = (await this.backlog()).outbox;
         pending.reset();
-        const backlog = await this.outbox();
-        if (backlog) pending.set(backlog.pending);
+        if (outbox) pending.set(outbox.pending);
       },
     });
     const lag: Gauge = new Gauge({
@@ -57,47 +66,54 @@ export class BacklogMetrics {
       help: 'Age of the oldest unpublished outbox event; 0 when none waits.',
       registers: [registry],
       collect: async () => {
+        const outbox = (await this.backlog()).outbox;
         lag.reset();
-        const backlog = await this.outbox();
-        if (backlog) lag.set(backlog.lagSeconds);
+        if (outbox) lag.set(outbox.lagSeconds);
       },
     });
   }
 
-  private async jobCounts(): Promise<[string, Record<string, number>][]> {
-    try {
-      return await Promise.all(
-        ALL_QUEUES.map(async (name): Promise<[string, Record<string, number>]> => {
-          const queue = this.modules.get<Queue>(getQueueToken(name), { strict: false });
-          return [name, await queue.getJobCounts(...JOB_STATES)];
-        }),
-      );
-    } catch (error) {
-      this.logger.warn({ err: error }, 'Queue metrics unavailable');
-      return [];
+  private backlog(): Promise<Backlog> {
+    const now = Date.now();
+    if (!this.cached || now - this.cached.at >= CACHE_MS) {
+      this.cached = { at: now, backlog: this.read() };
     }
+    return this.cached.backlog;
   }
 
-  private outbox(): Promise<OutboxBacklog | null> {
-    this.outboxRead ??= this.readOutbox().finally(() => {
-      this.outboxRead = null;
+  private async read(): Promise<Backlog> {
+    const [jobs, outbox] = await Promise.all([
+      this.withinTimeout('Queue', this.jobCounts()),
+      this.withinTimeout('Outbox', this.outboxBacklog.read()),
+    ]);
+    return { jobs, outbox };
+  }
+
+  private jobCounts(): Promise<JobCounts> {
+    return Promise.all(
+      ALL_QUEUES.map(async (name) => {
+        const queue = this.modules.get<Queue>(getQueueToken(name), { strict: false });
+        return [name, await queue.getJobCounts(...JOB_STATES)] as const;
+      }),
+    );
+  }
+
+  private async withinTimeout<T>(source: string, read: Promise<T>): Promise<T | null> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => {
+        resolve(null);
+      }, SOURCE_TIMEOUT_MS);
     });
-    return this.outboxRead;
-  }
-
-  private async readOutbox(): Promise<OutboxBacklog | null> {
     try {
-      const [row] = await this.db.query<{ pending: string; lag: string | null }[]>(
-        `SELECT COUNT(*) AS pending, EXTRACT(EPOCH FROM now() - MIN(occurred_at)) AS lag
-           FROM shared.outbox_messages WHERE published_at IS NULL`,
-      );
-      return {
-        pending: Number(row?.pending ?? 0),
-        lagSeconds: Math.max(0, Number(row?.lag ?? 0)),
-      };
+      const value = await Promise.race([read, timeout]);
+      if (value === null) this.logger.warn(`${source} metrics timed out`);
+      return value;
     } catch (error) {
-      this.logger.warn({ err: error }, 'Outbox metrics unavailable');
+      this.logger.warn({ err: error }, `${source} metrics unavailable`);
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

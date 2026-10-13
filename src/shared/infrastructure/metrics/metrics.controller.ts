@@ -1,8 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-import { Controller, Get, Headers, Inject, Res, VERSION_NEUTRAL } from '@nestjs/common';
+import { Controller, Get, Headers, Inject, Logger, Res, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
 import { type Response } from 'express';
 import { type Registry } from 'prom-client';
 
@@ -14,12 +13,14 @@ import { METRICS_REGISTRY } from './metrics-registry';
 const digest = (value: string): Buffer => createHash('sha256').update(value).digest();
 
 // Prometheus scrapes with `Authorization: Bearer <METRICS_TOKEN>`. Without a configured token the
-// route answers 404, as if it did not exist; a wrong one gets 401 with no body.
+// route answers 404, as if it did not exist; a wrong one gets 401 with no body, is logged, and
+// counts toward the rate limit like any other request (a scrape every few seconds stays far below
+// it). Bare statuses rather than Problem Details: the only client is a scraper.
 @ApiExcludeController()
-@SkipThrottle()
 @Public()
 @Controller({ path: 'metrics', version: VERSION_NEUTRAL })
 export class MetricsController {
+  private readonly logger = new Logger(MetricsController.name);
   private readonly expected: Buffer | undefined;
 
   constructor(
@@ -42,6 +43,7 @@ export class MetricsController {
       ? authorization.slice('Bearer '.length)
       : '';
     if (!timingSafeEqual(digest(supplied), this.expected)) {
+      this.logger.warn('Metrics scrape refused: wrong or missing token');
       res.setHeader('WWW-Authenticate', 'Bearer realm="tramo-metrics"');
       res.status(401).end();
       return;

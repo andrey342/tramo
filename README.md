@@ -48,15 +48,15 @@ alone.
 
 ### Where to look
 
-| What                                 | URL                                                                         |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| API (versioned)                      | http://localhost:3000/api/v1                                                |
-| OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`)                     |
-| Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                                          |
-| Bull Board (queues, dead letters)    | http://localhost:3000/admin/queues (user `ops`, password `tramo-queues`)    |
-| Prometheus metrics                   | http://localhost:3000/metrics (`Authorization: Bearer tramo-metrics-token`) |
-| Mailpit (captured email)             | http://localhost:8025                                                       |
-| Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                                            |
+| What                                 | URL                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------- |
+| API (versioned)                      | http://localhost:3000/api/v1                                                                |
+| OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`)                                     |
+| Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                                                          |
+| Bull Board (queues, dead letters)    | http://localhost:3000/admin/queues (user `ops`, password `tramo-queues`)                    |
+| Prometheus metrics                   | http://localhost:3000/metrics (`Authorization: Bearer tramo-local-metrics-token-change-me`) |
+| Mailpit (captured email)             | http://localhost:8025                                                                       |
+| Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                                                            |
 
 If a port is already taken on your machine, override it in `.env` (`API_PORT`, `POSTGRES_PORT`,
 `REDIS_PORT`, `MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`, `WEBHOOK_SINK_PORT`).

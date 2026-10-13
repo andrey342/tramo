@@ -69,7 +69,7 @@ contract id is in the `contractId` environment variable after step 7.
 ## The other folders
 
 - **Health**: liveness, readiness and Prometheus metrics (outside `/api/v1`; metrics take the
-  bearer `tramo-metrics-token`).
+  bearer `tramo-local-metrics-token-change-me`).
 - **Catalog**: an admin registers a center and checks its VAT number; the Codeworks admin creates
   and publishes a program. With `VIES_MODE=test` only 100 is a valid VAT number and the seed
   already uses it, so the new center stays pending; the program requests use Codeworks.
