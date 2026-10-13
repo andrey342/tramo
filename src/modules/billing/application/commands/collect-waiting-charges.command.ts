@@ -40,9 +40,8 @@ export class CollectWaitingChargesHandler implements ICommandHandler<CollectWait
         return 0;
       }
       let submitted = 0;
-      for (const id of await this.charges.findOpenIds(command.contractId)) {
-        const charge = await this.charges.findById(id);
-        if (!charge?.collectible || charge.dueDate.isAfter(command.asOf)) {
+      for (const charge of await this.charges.findOpen(command.contractId)) {
+        if (!charge.collectible || charge.dueDate.isAfter(command.asOf)) {
           continue;
         }
         charge.submitCollection(mandate.id, this.clock.now());

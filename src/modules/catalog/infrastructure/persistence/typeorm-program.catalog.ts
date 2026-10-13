@@ -13,8 +13,9 @@ import { type FinancingProduct } from '../../domain';
 import { ProgramOrmEntity } from './program.orm-entity';
 import { TrainingCenterOrmEntity } from './training-center.orm-entity';
 
-// One query per page, served by ix_catalog_programs_published_created_at_id: keyset pagination on
-// (created_at, id) among published programs, and the center names in a second query.
+// One query per page, served by ix_catalog_programs_published_created_at_id (or, for one center,
+// ix_catalog_programs_center_id_created_at_id): keyset pagination on (created_at, id) among
+// published programs, and the center names in a second query.
 @Injectable()
 export class TypeOrmProgramCatalog implements ProgramCatalog {
   constructor(private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>) {}

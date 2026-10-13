@@ -27,8 +27,8 @@ export interface ChargeRepository {
     contractId?: string | null,
   ): Promise<string[]>;
   // Charges of a contract not collected and not being collected (scheduled, failed, overdue):
-  // what a payoff makes unowed.
-  findOpenIds(contractId: string): Promise<string[]>;
+  // what a payoff makes unowed. Oldest first, loaded together.
+  findOpen(contractId: string): Promise<Charge[]>;
   // Whether a contract has charges in arrears other than `exceptChargeId`.
   hasOtherChargesInArrears(contractId: string, exceptChargeId: string): Promise<boolean>;
   // Whether a payoff of the contract is scheduled, being collected or paid: it covers what is

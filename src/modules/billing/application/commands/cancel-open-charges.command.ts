@@ -31,9 +31,8 @@ export class CancelOpenChargesHandler implements ICommandHandler<CancelOpenCharg
     return this.uow.run(async () => {
       await this.charges.lockContract(command.contractId);
       let cancelled = 0;
-      for (const id of await this.charges.findOpenIds(command.contractId)) {
-        const charge = await this.charges.findById(id);
-        if (!charge || (command.scope === 'scheduled' && charge.status !== 'scheduled')) {
+      for (const charge of await this.charges.findOpen(command.contractId)) {
+        if (command.scope === 'scheduled' && charge.status !== 'scheduled') {
           continue;
         }
         charge.cancel(this.clock.now());

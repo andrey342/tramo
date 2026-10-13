@@ -87,13 +87,12 @@ export class TypeOrmChargeRepository implements ChargeRepository {
     return rows.map((row) => row.id);
   }
 
-  async findOpenIds(contractId: string): Promise<string[]> {
+  async findOpen(contractId: string): Promise<Charge[]> {
     const rows = await this.txHost.tx.find(ChargeOrmEntity, {
-      select: { id: true },
       where: { contractId, status: In(['scheduled', 'failed', 'overdue']) },
       order: { id: 'ASC' },
     });
-    return rows.map((row) => row.id);
+    return rows.map((row) => ChargeMapper.toDomain(row));
   }
 
   async hasOtherChargesInArrears(contractId: string, exceptChargeId: string): Promise<boolean> {

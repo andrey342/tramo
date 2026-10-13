@@ -90,7 +90,7 @@ export function billingRepositoriesContract(
       expect(ours(await run(() => charges.findUnsettledIds(10_000, null)))).toEqual(
         [due.id, later.id, collecting.id].sort(),
       );
-      expect((await run(() => charges.findOpenIds(contractId))).sort()).toEqual(
+      expect((await run(() => charges.findOpen(contractId))).map((charge) => charge.id)).toEqual(
         [due.id, later.id].sort(),
       );
       expect(
@@ -151,7 +151,9 @@ export function billingRepositoriesContract(
       expect(await run(() => charges.hasPayoff(payingOff))).toBe(true);
       expect(await run(() => charges.hasPayoff(paidOff))).toBe(true);
       expect(await run(() => charges.hasPayoff(refusedPayoff))).toBe(false);
-      expect(await run(() => charges.findOpenIds(paidOff))).toEqual([overdue.id]);
+      expect((await run(() => charges.findOpen(paidOff))).map((charge) => charge.id)).toEqual([
+        overdue.id,
+      ]);
       await run(() => charges.lockContract(payingOff));
     });
 

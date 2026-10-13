@@ -76,8 +76,8 @@ export class TypeOrmContractQueries implements ContractQueries {
     };
   }
 
-  // Served by ux_lending_financing_plans_contract_id (order and cursor) and the contract's primary
-  // key for the join.
+  // Served by ix_lending_financing_plans_active_contract_id (order and cursor) and the contract's
+  // primary key for the join.
   async billablePlans(
     afterContractId: string | null,
     limit: number,

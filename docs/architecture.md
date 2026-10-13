@@ -76,6 +76,11 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   state, `tramo_outbox_pending_events` and `tramo_outbox_lag_seconds` (age of the oldest event
   not yet handed to the queues), plus the process defaults. The backlog is read from Redis and
   Postgres when scraped, so the api's one target covers the worker's queues too.
+- **Query budget.** A list page costs the same statements whatever its size: one query for the
+  page, plus one batched lookup where rows need names from elsewhere (the catalog's center
+  names); `test/e2e/query-budget.e2e-spec.ts` counts them. Every filter and cursor has an index.
+  Batch jobs (billing run, dunning, collection) work one charge per transaction on purpose, so
+  one failure does not undo or block the others.
 
 ## Authentication
 
