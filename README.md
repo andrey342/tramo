@@ -23,7 +23,9 @@ The first start builds the application image and pulls the base images, which ta
 minutes. Later starts take seconds. The stack is ready when `api-1` logs
 `Nest application successfully started` and `http://localhost:3000/health/ready` answers
 `{"status":"ok",...}`. Add `--wait -d` to the last command to block until every container
-reports healthy and get the terminal back.
+reports healthy and get the terminal back. Once the api is healthy, the one-shot `seed` container
+loads the demo data set (accounts below) and exits; it runs on every `up` and leaves what exists
+alone.
 
 ### Where to look
 
@@ -41,6 +43,21 @@ If a port is already taken on your machine, override it in `.env` (`API_PORT`, `
 `REDIS_PORT`, `MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`, `WEBHOOK_SINK_PORT`).
 
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
+
+## Try it in 2 minutes
+
+```bash
+docker compose exec api node dist/scripts/demo.js   # or `pnpm demo` with Node and pnpm installed
+```
+
+The demo drives the API like a client would and prints each step: a new student registers,
+applies for the full stack bootcamp in 24 instalments and submits; the worker runs the identity,
+employment and credit checks and scores the application (the decision lists each factor); the
+student accepts the offer and signs the contract (the demo plays the e-signature provider's
+signed callback) and authorises the direct debit; the worker pays the center its share and the
+contract becomes active; operations run billing as of the first due date and the simulated
+payment provider collects it; then the statement, the center's dashboard, the emails in Mailpit
+and the signed webhooks the sink received. It takes about fifteen seconds and can be run again.
 
 ## Local development
 
@@ -72,6 +89,7 @@ so the api and worker containers are not started and the host processes own port
 | `pnpm migration:run` / `:revert` / `:show` | Build, then apply / undo the last / list migrations                     |
 | `pnpm migration:generate <path>`           | Build, then generate a migration from entity changes                    |
 | `pnpm seed`                                | Build, then create the demo data set described below (idempotent)       |
+| `pnpm demo`                                | Walk the happy path against the running stack (see Try it in 2 minutes) |
 
 `pnpm seed` writes the demo data set to the database in `.env`: two training centers verified
 through the VIES test service (Codeworks Barcelona and Berlin Code Academy, three published

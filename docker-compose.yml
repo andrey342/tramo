@@ -41,6 +41,9 @@ x-app: &app
     # Default only when unset; an empty value in .env disables the dashboard.
     BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD-tramo-queues}
     METRICS_TOKEN: ${METRICS_TOKEN-tramo-metrics-token}
+    # Read only by the demo script when it runs inside the api container.
+    MAILPIT_URL: http://mailpit:8025
+    WEBHOOK_SINK_URL: http://webhook-sink:9099
 
 services:
   postgres:
@@ -151,6 +154,16 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 6
+
+  # Loads the demo data set (scripts/seed.ts) once the api has migrated the database, then exits.
+  # Idempotent: every `up` runs it again and it leaves what exists alone.
+  seed:
+    <<: *app
+    restart: 'no'
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ['node', '--enable-source-maps', 'dist/scripts/seed.js']
 
 volumes:
   pgdata:
