@@ -48,9 +48,17 @@ export class InMemoryRefreshTokenRepository
   // Mirrors the bulk UPDATE of the real repository: every non-revoked token of the family is
   // stored again as revoked.
   revokeFamily(familyId: string, now: Date): Promise<number> {
+    return Promise.resolve(this.revokeWhere((token) => token.familyId === familyId, now));
+  }
+
+  revokeAllOfUser(userId: string, now: Date): Promise<number> {
+    return Promise.resolve(this.revokeWhere((token) => token.userId === userId, now));
+  }
+
+  private revokeWhere(matches: (token: RefreshToken) => boolean, now: Date): number {
     let revoked = 0;
     for (const token of this.all()) {
-      if (token.familyId === familyId && token.status !== 'revoked') {
+      if (matches(token) && token.status !== 'revoked') {
         this.items.set(
           token.id,
           RefreshToken.reconstitute(token.id, {
@@ -67,7 +75,7 @@ export class InMemoryRefreshTokenRepository
         revoked += 1;
       }
     }
-    return Promise.resolve(revoked);
+    return revoked;
   }
 }
 

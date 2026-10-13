@@ -115,6 +115,26 @@ export function iamRepositoriesContract(
         expect(first?.usedAt).toEqual(later(1_000));
         expect((await t.refreshTokens.findByTokenHash(other.tokenHash))?.status).toBe('active');
       });
+
+      it("should revoke every family of one user and leave other users' sessions alone", async () => {
+        const [student, other] = [await saved(aStudent()), await saved(aStudent())];
+        const tokens = [issue(student.id, uuidv7()), issue(student.id, uuidv7())];
+        const foreign = issue(other.id, uuidv7());
+        await t.run(async () => {
+          for (const token of [...tokens, foreign]) await t.refreshTokens.save(token);
+        });
+
+        const revoked = await t.run(() =>
+          t.refreshTokens.revokeAllOfUser(student.id, later(1_000)),
+        );
+        const again = await t.run(() => t.refreshTokens.revokeAllOfUser(student.id, later(2_000)));
+
+        expect([revoked, again]).toEqual([2, 0]);
+        for (const token of tokens) {
+          expect((await t.refreshTokens.findByTokenHash(token.tokenHash))?.status).toBe('revoked');
+        }
+        expect((await t.refreshTokens.findByTokenHash(foreign.tokenHash))?.status).toBe('active');
+      });
     });
 
     describe('ApiKeyRepository', () => {

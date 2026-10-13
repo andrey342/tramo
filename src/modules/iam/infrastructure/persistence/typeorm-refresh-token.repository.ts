@@ -51,4 +51,27 @@ export class TypeOrmRefreshTokenRepository implements RefreshTokenRepository {
     );
     return revoked;
   }
+
+  // Each family is locked as revokeFamily does, in id order so two revocations of the same user
+  // queue behind each other instead of deadlocking. A family the user opens meanwhile (a sign-in
+  // that read the account before it was disabled) is not seen here; its first refresh finds the
+  // account disabled and revokes it.
+  async revokeAllOfUser(userId: string, now: Date): Promise<number> {
+    const families: { family_id: string }[] = await this.txHost.tx.query(
+      `SELECT DISTINCT family_id FROM iam.refresh_tokens
+        WHERE user_id = $1 AND status <> 'revoked'
+        ORDER BY family_id`,
+      [userId],
+    );
+    for (const { family_id: familyId } of families) {
+      await this.lockFamily(familyId);
+    }
+    const [, revoked]: [unknown[], number] = await this.txHost.tx.query(
+      `UPDATE iam.refresh_tokens
+          SET status = 'revoked', used_at = COALESCE(used_at, $2), version = version + 1
+        WHERE user_id = $1 AND status <> 'revoked'`,
+      [userId, now],
+    );
+    return revoked;
+  }
 }

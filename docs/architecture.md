@@ -191,6 +191,12 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   progressive and capped at an hour, the auth routes are rate limited per client, and the attempts
   are visible in the logs. A per-IP and device-cookie scheme would reduce that risk at the price of
   more state.
+- **Disabling an account.** An admin disables an account with `POST /users/:id/disable`
+  (audited, `UserDisabled`): it can no longer sign in, and every refresh token of every family it
+  has is revoked in the same transaction, each family under its lock (ADR 013). Disabling it again
+  answers 204 and changes nothing; an admin cannot disable their own account. A sign-in that read
+  the account just before it was disabled can still open a session, which ends at its first
+  refresh, since refreshing checks the account again.
 - **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
   Routes opened to API keys are not implicitly open to users; they must also name roles.
 - **Roles.** Users only reach routes that name their roles with `@Roles`; a route that forgets it
@@ -210,6 +216,12 @@ Known gaps, accepted for now:
   its own credentials) therefore hold it until completed jobs expire after seven days.
 - An admin sets a new center administrator's first password. Production needs an invitation
   link, or a forced change on first sign-in, so the admin does not keep a working password.
+- Requests are authenticated from the access token alone (`JwtStrategy` does not read the user
+  row), so a disabled account keeps the access tokens it already holds until they expire, at most
+  15 minutes. Its refresh tokens stop working at once. Closing that window needs a revocation
+  list or a user lookup on every request.
+- There is no password change or reset. A user who loses their password, or whose password
+  leaked, can only be disabled by an admin.
 
 ## Catalog
 

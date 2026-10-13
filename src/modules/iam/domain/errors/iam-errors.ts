@@ -53,3 +53,22 @@ export class CenterAccessDeniedError extends DomainError {
     super(`You cannot manage training center ${centerId}.`, { centerId });
   }
 }
+
+export class UserAdministrationDeniedError extends DomainError {
+  readonly code = 'user_administration_denied';
+  readonly category = 'forbidden';
+
+  constructor() {
+    super('Only Tramo admins manage user accounts.');
+  }
+}
+
+// An admin who disables their own account loses the only session that could undo it.
+export class CannotDisableOwnAccountError extends DomainError {
+  readonly code = 'cannot_disable_own_account';
+  readonly category = 'rule_violation';
+
+  constructor() {
+    super('You cannot disable your own account; ask another admin.');
+  }
+}

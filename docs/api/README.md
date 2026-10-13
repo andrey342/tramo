@@ -82,8 +82,10 @@ contract id is in the `contractId` environment variable after step 7.
 - **Notifications**: the center's webhook (pointed at the compose sink; received deliveries at
   http://localhost:9099/deliveries), its delivery log and redelivery.
 - **Reporting**: center dashboard, program performance, ops overview and a read model rebuild.
-- **Operations**: disbursements to centers, and the center's integration API keys (issue, call
-  `/me` with `X-Api-Key`, list, revoke).
+- **Operations**: disbursements to centers, the center's integration API keys (issue, call
+  `/me` with `X-Api-Key`, list, revoke), and disabling an account (the student registered by
+  Auth).
 
 Some requests are not part of the happy path and change its data: "Cancel application",
-"Request payoff", "Remove webhook" and "Revise risk policy". Each one says so in its Docs tab.
+"Request payoff", "Remove webhook", "Revise risk policy" and "Disable user". Each one says so in
+its Docs tab.

@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import { CreateCenterUserHandler } from './application/commands/create-center-user.command';
+import { DisableUserHandler } from './application/commands/disable-user.command';
 import { IssueApiKeyHandler } from './application/commands/issue-api-key.command';
 import { LoginHandler } from './application/commands/login.command';
 import { LogoutHandler } from './application/commands/logout.command';
@@ -64,6 +65,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     LogoutHandler,
     GetCurrentPrincipalHandler,
     CreateCenterUserHandler,
+    DisableUserHandler,
     IssueApiKeyHandler,
     RevokeApiKeyHandler,
     ListApiKeysHandler,

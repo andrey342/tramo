@@ -1,4 +1,5 @@
-import { FixedClock } from '@shared/domain';
+import { type Principal } from '@shared/application';
+import { EntityNotFoundError, FixedClock } from '@shared/domain';
 
 import { aStaffUser, aStudent } from '../../../../test/factories/iam';
 import {
@@ -12,12 +13,15 @@ import {
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
 import {
   AccountTemporarilyLockedError,
+  CannotDisableOwnAccountError,
   EmailAlreadyRegisteredError,
   IamEvents,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
+  UserAdministrationDeniedError,
 } from '../domain';
 
+import { DisableUserCommand, DisableUserHandler } from './commands/disable-user.command';
 import { LoginCommand, LoginHandler } from './commands/login.command';
 import { LogoutCommand, LogoutHandler } from './commands/logout.command';
 import { RefreshSessionCommand, RefreshSessionHandler } from './commands/refresh-session.command';
@@ -51,12 +55,21 @@ function setup() {
     refreshTokenTtlMs: 30 * DAY_MS,
     sessionMaxLifetimeMs: 45 * DAY_MS,
   });
+  const changes: unknown[] = [];
   return {
     clock,
     events,
     users,
     refreshTokens,
     hasher,
+    changes,
+    disable: new DisableUserHandler(
+      uow,
+      users,
+      refreshTokens,
+      { describeChanges: (change) => changes.push(change) },
+      clock,
+    ),
     register: new RegisterStudentHandler(uow, users, hasher, clock),
     login: new LoginHandler(uow, users, hasher, attempts, clock, sessions),
     refresh: new RefreshSessionHandler(
@@ -190,7 +203,7 @@ describe('session use cases', () => {
     it('should not let a disabled user in', async () => {
       const t = setup();
       const student = aStudent({ email: 'ana@example.com' });
-      student.disable();
+      student.disable(new Date('2026-10-09T10:00:00Z'));
       await t.users.save(student);
 
       await expect(t.login.execute(new LoginCommand('ana@example.com', PASSWORD))).rejects.toThrow(
@@ -283,7 +296,7 @@ describe('session use cases', () => {
 
     it('should end the session when the user was disabled meanwhile', async () => {
       const t = await signedIn();
-      t.student.disable();
+      t.student.disable(t.clock.now());
       await t.users.save(t.student);
 
       await expect(
@@ -306,6 +319,72 @@ describe('session use cases', () => {
       await expect(
         t.refresh.execute(new RefreshSessionCommand(session.refreshToken)),
       ).rejects.toThrow(InvalidRefreshTokenError);
+    });
+  });
+
+  describe('DisableUser', () => {
+    const asUser = (user: { id: string; roles: readonly string[] }): Principal =>
+      ({ kind: 'user', userId: user.id, roles: user.roles, centerId: null }) as Principal;
+
+    async function signedInTwice() {
+      const t = setup();
+      const admin = aStaffUser('admin');
+      const student = aStudent({ email: 'ana@example.com' });
+      await t.users.save(admin);
+      await t.users.save(student);
+      const sessions = [
+        await t.login.execute(new LoginCommand('ana@example.com', PASSWORD)),
+        await t.login.execute(new LoginCommand('ana@example.com', PASSWORD)),
+      ];
+      return { ...t, admin, student, sessions };
+    }
+
+    it('should end every session of the user and refuse the next sign-in when an admin disables it', async () => {
+      const t = await signedInTwice();
+
+      await t.disable.execute(new DisableUserCommand(asUser(t.admin), t.student.id));
+
+      for (const session of t.sessions) {
+        await expect(
+          t.refresh.execute(new RefreshSessionCommand(session.refreshToken)),
+        ).rejects.toThrow(InvalidRefreshTokenError);
+      }
+      await expect(t.login.execute(new LoginCommand('ana@example.com', PASSWORD))).rejects.toThrow(
+        InvalidCredentialsError,
+      );
+      expect(t.events.ofType(IamEvents.UserDisabled)).toEqual([
+        expect.objectContaining({ payload: { userId: t.student.id } }),
+      ]);
+      expect(t.changes).toEqual([{ status: { before: 'active', after: 'disabled' } }]);
+    });
+
+    it('should change nothing more when the user is disabled again', async () => {
+      const t = await signedInTwice();
+      await t.disable.execute(new DisableUserCommand(asUser(t.admin), t.student.id));
+
+      await t.disable.execute(new DisableUserCommand(asUser(t.admin), t.student.id));
+
+      expect(t.events.ofType(IamEvents.UserDisabled)).toHaveLength(1);
+      expect(t.changes).toHaveLength(1);
+      expect((await t.users.findById(t.student.id))?.status).toBe('disabled');
+    });
+
+    it('should refuse anyone but an admin, an admin disabling themselves and unknown users', async () => {
+      const t = await signedInTwice();
+      const ops = aStaffUser('ops');
+
+      await expect(
+        t.disable.execute(new DisableUserCommand(asUser(ops), t.student.id)),
+      ).rejects.toThrow(UserAdministrationDeniedError);
+      await expect(
+        t.disable.execute(new DisableUserCommand(asUser(t.admin), t.admin.id)),
+      ).rejects.toThrow(CannotDisableOwnAccountError);
+      await expect(
+        t.disable.execute(
+          new DisableUserCommand(asUser(t.admin), '0199a000-0000-7000-8000-0000000000ff'),
+        ),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect((await t.users.findById(t.student.id))?.canSignIn).toBe(true);
     });
   });
 

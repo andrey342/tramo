@@ -55,7 +55,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 ## iam
 
 - **`User`**: an account with roles of one kind only: a student, a center user (`center_admin`,
-  always bound to one center) or staff. `UserStatus`: `active | disabled`.
+  always bound to one center) or staff. `UserStatus`: `active | disabled`; an admin disables an
+  account, which also revokes every refresh token family it has.
 - **`RefreshToken`** and family: refresh tokens are opaque, stored hashed and single use; each
   refresh rotates the presented token into the next one of the same family. `RefreshTokenStatus`:
   `active → rotated` (used) or `revoked`. A rotated token presented again more than 10 s
@@ -65,8 +66,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 - **`ApiKey`**: a center's integration credential, `tramo_<8 hex prefix>_<secret>`, shown once,
   stored as a hash, with at least one scope. Revoked keys keep `revokedAt`.
 - **Lockout**: failed sign-ins counted per account in Redis. See the runbook for durations.
-- Events: `StudentRegistered`, `CenterUserCreated`, `ApiKeyIssued`, `ApiKeyRevoked`,
-  `RefreshTokenReuseDetected`.
+- Events: `StudentRegistered`, `CenterUserCreated`, `UserDisabled`, `ApiKeyIssued`,
+  `ApiKeyRevoked`, `RefreshTokenReuseDetected`.
 
 ## catalog
 
