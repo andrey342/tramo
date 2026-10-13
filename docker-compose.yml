@@ -6,6 +6,8 @@ x-app: &app
   build:
     context: .
     dockerfile: docker/Dockerfile
+    # The application plus the seed and demo scripts; the default target leaves them out.
+    target: demo
   image: tramo:local
   profiles: [demo]
   restart: unless-stopped
@@ -59,7 +61,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tramo}
       POSTGRES_DB: ${POSTGRES_DB:-tramo}
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -76,7 +78,7 @@ services:
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes']
     ports:
-      - '${REDIS_PORT:-6379}:6379'
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
     volumes:
       - redisdata:/data
     healthcheck:
@@ -117,7 +119,7 @@ services:
       # Only the api migrates; replicas take turns through a Postgres advisory lock.
       DATABASE_RUN_MIGRATIONS: 'true'
     ports:
-      - '${API_PORT:-3000}:3000'
+      - '127.0.0.1:${API_PORT:-3000}:3000'
     healthcheck:
       test:
         [

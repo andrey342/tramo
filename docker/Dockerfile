@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# One image for both runtime processes; docker-compose picks the entry point per service.
+# One image for both runtime processes; docker-compose picks the entry point per service. Two
+# targets: `runtime` (the default, last stage) carries only the application; `demo`, which compose
+# builds, adds the seed and the demo script, which create accounts with a published password and
+# sign e-signature callbacks, so they never ship in the production image.
 FROM node:24.19.0-trixie-slim AS base
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
@@ -16,7 +19,6 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 FROM deps AS build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
-# The seed and the demo run inside the image too (`docker compose exec api node dist/scripts/demo.js`).
 COPY scripts/seed.ts scripts/demo.ts scripts/demo-users.ts ./scripts/
 RUN pnpm build
 
@@ -27,11 +29,18 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts
 
-FROM base AS runtime
+FROM base AS app
 ENV NODE_ENV=production
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/dist/src ./dist/src
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 3000
 CMD ["node", "--enable-source-maps", "dist/src/main.api.js"]
+
+# The local stack: the application plus `dist/scripts`, so
+# `docker compose exec api node dist/scripts/demo.js` works.
+FROM app AS demo
+COPY --from=build --chown=node:node /app/dist/scripts ./dist/scripts
+
+FROM app AS runtime

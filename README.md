@@ -58,7 +58,8 @@ alone.
 | Mailpit (captured email)             | http://localhost:8025                                                                       |
 | Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                                                            |
 
-If a port is already taken on your machine, override it in `.env` (`API_PORT`, `POSTGRES_PORT`,
+Every port is bound to 127.0.0.1, so the demo accounts and development secrets are not reachable
+from the network. If a port is already taken on your machine, override it in `.env` (`API_PORT`, `POSTGRES_PORT`,
 `REDIS_PORT`, `MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`, `WEBHOOK_SINK_PORT`).
 
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
