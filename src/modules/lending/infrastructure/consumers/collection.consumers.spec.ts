@@ -95,7 +95,11 @@ describe('RecordReturnOnChargeReturned', () => {
     await consumer.handle(returned(isa, 'isa', null));
 
     expect(executed).toEqual([
-      new RecordRepaymentCommand(repaying, { kind: 'installment_returned', installmentNumber: 3 }),
+      new RecordRepaymentCommand(repaying, {
+        kind: 'installment_returned',
+        installmentNumber: 3,
+        attempt: 1,
+      }),
       new RecordRepaymentCommand(paidOff, { kind: 'payoff_returned' }),
     ]);
   });

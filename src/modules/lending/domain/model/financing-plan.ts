@@ -44,6 +44,9 @@ export interface InstallmentPlanTerms {
   // The numbers of the instalments billing has collected, in any order (a retried one may be
   // collected after the next).
   readonly paidInstallments: readonly number[];
+  // Which collection attempt paid each one, when billing said: a return of an earlier attempt,
+  // delivered late (a dead letter retried), is not about the payment that stands.
+  readonly paidByAttempt: Readonly<Record<number, number>>;
   readonly payoffRequest: PayoffRequest | null;
 }
 
@@ -121,6 +124,7 @@ export class FinancingPlan extends AggregateRoot {
           firstDueDate: firstDueDate(activatedOn),
         }),
         paidInstallments: [],
+        paidByAttempt: {},
         payoffRequest: null,
       };
     } else {
@@ -293,13 +297,15 @@ export class FinancingPlan extends AggregateRoot {
 
   // As billing collects them, in any order; a repeated notice of one already counted changes
   // nothing. The plan ends when every instalment is paid; a defaulted one stays defaulted.
-  recordInstallmentPaid(number: number, now: Date): void {
+  recordInstallmentPaid(number: number, now: Date, attempt: number | null = null): void {
     const terms = this.repaidInstallmentTerms(number);
     if (terms.paidInstallments.includes(number)) {
       return;
     }
     const paidInstallments = [...terms.paidInstallments, number].sort((a, b) => a - b);
-    this.props = { ...this.props, terms: { ...terms, paidInstallments } };
+    const paidByAttempt =
+      attempt === null ? terms.paidByAttempt : { ...terms.paidByAttempt, [number]: attempt };
+    this.props = { ...this.props, terms: { ...terms, paidInstallments, paidByAttempt } };
     if (this.props.status === 'active' && paidInstallments.length === terms.termMonths) {
       this.complete('repaid', now);
     }
@@ -307,14 +313,19 @@ export class FinancingPlan extends AggregateRoot {
 
   // The student's bank sent back the payment of an instalment: it is unpaid again, and billing
   // duns it. A return found before its payment waits for it (billing's notices are applied in
-  // order).
-  recordInstallmentReturned(number: number): void {
+  // order). A return of an attempt older than the one that paid it now changes nothing.
+  recordInstallmentReturned(number: number, attempt: number | null = null): void {
     const terms = this.repaidInstallmentTerms(number);
+    const paidBy = terms.paidByAttempt[number];
+    if (attempt !== null && paidBy !== undefined && attempt < paidBy) {
+      return;
+    }
     if (!terms.paidInstallments.includes(number)) {
       throw new InstallmentNotPaidError(number);
     }
     const paidInstallments = terms.paidInstallments.filter((paid) => paid !== number);
-    this.props = { ...this.props, terms: { ...terms, paidInstallments } };
+    const { [number]: _returned, ...paidByAttempt } = terms.paidByAttempt;
+    this.props = { ...this.props, terms: { ...terms, paidInstallments, paidByAttempt } };
   }
 
   // The contract defaulted: what is owed goes to recovery and nothing more is billed or assessed.

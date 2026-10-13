@@ -37,6 +37,8 @@ export type PlanTermsJson =
       readonly termMonths: number;
       readonly schedule: InstallmentRowJson[];
       readonly paidInstallments: number[];
+      // Absent in plans saved before it was recorded.
+      readonly paidByAttempt?: Record<string, number>;
       readonly payoffRequest: {
         readonly amountCents: number;
         readonly asOf: string;

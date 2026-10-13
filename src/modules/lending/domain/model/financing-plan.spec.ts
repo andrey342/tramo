@@ -175,6 +175,20 @@ describe('FinancingPlan', () => {
       expect(plan.hasPendingEvents).toBe(false);
     });
 
+    // Attempt 1 was returned, its notice dead-lettered, and attempt 2 collected; the old notice
+    // replayed days later is not about the payment that stands.
+    it('should ignore a late return of an attempt older than the one that paid', () => {
+      const plan = aPlan();
+      plan.recordInstallmentPaid(3, LATER, 2);
+
+      plan.recordInstallmentReturned(3, 1);
+      const afterStale = plan.terms.kind === 'installments' && plan.terms.paidInstallments;
+      plan.recordInstallmentReturned(3, 2);
+
+      expect(afterStale).toEqual([3]);
+      expect(plan.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([]);
+    });
+
     it('should refuse a return when the payment of the instalment is not recorded yet', () => {
       const plan = aPlan();
 
