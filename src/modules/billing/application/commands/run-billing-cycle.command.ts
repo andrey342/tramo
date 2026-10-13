@@ -104,12 +104,15 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
   }
 
   // Every month of income whose declarations have closed and lending has not assessed yet, in
-  // order; under the contract's lock, so the declarations read are the last ones. A month is due
-  // on the day its declarations close, or on the day of the run when billed late.
+  // order; under the contract's lock, so the declarations read are the last ones. The plan is
+  // read again under the lock too: the page was read before it, and a run at the same time may
+  // have assessed months since, or ended the plan. A month is due on the day its declarations
+  // close, or on the day of the run when billed late.
   private async billIncomeShare(plan: BillablePlan, asOf: CalendarDate): Promise<number> {
     await this.charges.lockContract(plan.contractId);
+    const [current] = await this.plans.billablePlans(null, 1, plan.contractId);
     let created = 0;
-    let period = plan.nextIsaPeriod;
+    let period = current?.nextIsaPeriod ?? null;
     while (period !== null) {
       const closesOn = isaPeriodClosesOn(period);
       if (asOf.isBefore(closesOn)) {

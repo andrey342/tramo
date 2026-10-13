@@ -399,6 +399,37 @@ describe('billing use cases', () => {
       ).rejects.toThrow(PeriodNotOpenError);
     });
 
+    // Another run takes the contract's lock first and assesses July while this one waits for it:
+    // this one reads the plan again under the lock and finds July done.
+    it('should not fail an ISA when a run at the same time assessed its month first', async () => {
+      const t = setup();
+      const contractId = uuidv7();
+      t.plans.addContract(
+        {
+          id: contractId,
+          studentId: t.studentId,
+          centerId: t.centerId,
+          product: 'isa',
+          status: 'active',
+        },
+        { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-07' },
+      );
+      const lock = t.charges.lockContract.bind(t.charges);
+      let concurrent = true;
+      t.charges.lockContract = async (id) => {
+        await lock(id);
+        if (concurrent) {
+          concurrent = false;
+          await t.plans.assessIsaPeriod(contractId, '2026-07', null);
+        }
+      };
+
+      const result = await t.cycle.execute(new RunBillingCycleCommand(day('2026-08-05')));
+
+      expect(result).toEqual({ plansBilled: 1, chargesCreated: 0, failedContractIds: [] });
+      expect(t.plans.assessed.map((assessed) => assessed.period)).toEqual(['2026-07']);
+    });
+
     it('should go on with the other plans when one fails, and report it', async () => {
       const t = setup();
       const healthy = withInstallments(t);
