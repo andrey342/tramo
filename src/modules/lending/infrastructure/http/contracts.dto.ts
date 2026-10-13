@@ -302,7 +302,7 @@ export class ScheduleResponse {
 
   @ApiProperty({
     nullable: true,
-    enum: ['repaid', 'paid_off', 'cap_reached', 'max_payments', 'window_expired'],
+    enum: ['repaid', 'paid_off', 'cap_reached', 'max_payments', 'window_expired', 'defaulted'],
   })
   completionReason!: CompletionReason | null;
 

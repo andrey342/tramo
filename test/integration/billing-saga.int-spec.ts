@@ -199,6 +199,14 @@ describe('billing saga (integration)', () => {
     expect((await charges.findByReference(contractId, 'installment:1'))?.status).toBe(
       'written_off',
     );
+    // The plan closes with the default (lending.close-plan), and the contract stays defaulted.
+    await until(
+      () => plans.findByContractId(contractId),
+      (plan) => {
+        expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
+      },
+    );
+    expect((await contracts.findById(contractId))?.status).toBe('defaulted');
   }, 60_000);
 
   // The payoff charge being collected for a contract (one per request).

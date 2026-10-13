@@ -47,7 +47,14 @@ describe('CancelChargesOnPlanCompleted', () => {
     const [paidOff, capped] = [uuidv7(), uuidv7()];
 
     await consumer.handle(completed(paidOff, 'paid_off'));
-    for (const reason of ['repaid', 'cap_reached', 'max_payments', 'window_expired'] as const) {
+    const reasons = [
+      'repaid',
+      'cap_reached',
+      'max_payments',
+      'window_expired',
+      'defaulted',
+    ] as const;
+    for (const reason of reasons) {
       await consumer.handle(completed(capped, reason));
     }
 

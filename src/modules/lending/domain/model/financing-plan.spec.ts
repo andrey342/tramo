@@ -47,6 +47,41 @@ describe('FinancingPlan', () => {
     expect(loaded.hasPendingEvents).toBe(false);
   });
 
+  describe('default', () => {
+    it('should close an active plan once when the contract defaults, so nothing more is billed', () => {
+      const plan = aPlan();
+      plan.pullEvents();
+
+      plan.closeOnDefault(LATER);
+      plan.closeOnDefault(LATER);
+
+      expect(plan).toMatchObject({
+        status: 'completed',
+        completionReason: 'defaulted',
+        completedAt: LATER,
+      });
+      expect(plan.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: LendingEvents.PlanCompleted,
+          payload: expect.objectContaining({ reason: 'defaulted' }),
+        }),
+      ]);
+      expect(() => plan.payoffQuote(plan.startsOn)).toThrow(PlanEndedError);
+    });
+
+    it('should keep the reason of a plan that ended before the default', () => {
+      const plan = aPlan();
+      plan.requestPayoff(plan.startsOn, plan.principal, LATER);
+      plan.settlePayoff(LATER);
+      plan.pullEvents();
+
+      plan.closeOnDefault(LATER);
+
+      expect(plan.completionReason).toBe('paid_off');
+      expect(plan.hasPendingEvents).toBe(false);
+    });
+  });
+
   describe('instalments', () => {
     it('should open with the table of the contract, from the month after activation', () => {
       const plan = aPlan({ activatedOn: '2026-10-12' });

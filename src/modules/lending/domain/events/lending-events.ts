@@ -139,10 +139,12 @@ export type IsaDeclarationOverduePayload = {
   readonly missingSince: string;
 };
 
+// `defaulted`: the contract defaulted first; the plan is closed so nothing more is billed.
 export type PlanCompletedPayload = {
   readonly planId: string;
   readonly contractId: string;
   readonly studentId: string;
   readonly centerId: string;
-  readonly reason: 'repaid' | 'paid_off' | 'cap_reached' | 'max_payments' | 'window_expired';
+  readonly reason:
+    'repaid' | 'paid_off' | 'cap_reached' | 'max_payments' | 'window_expired' | 'defaulted';
 };

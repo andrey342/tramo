@@ -300,6 +300,14 @@ export class FinancingPlan extends AggregateRoot {
     }
   }
 
+  // The contract defaulted: what is owed goes to recovery and nothing more is billed or assessed.
+  // Idempotent; a plan that ended before (an ISA at its cap) keeps its reason.
+  closeOnDefault(now: Date): void {
+    if (this.props.status === 'active') {
+      this.complete('defaulted', now);
+    }
+  }
+
   // One billing month of an ISA, assessed in order, given the income the graduate declared for
   // it (null if they did not). At or above the threshold they pay the share of it, never past the
   // cap; below it, or without a declaration, the month is paused and owes nothing. Two months in
