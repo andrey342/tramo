@@ -4,8 +4,9 @@ import { uuidv7 } from 'uuidv7';
 
 import { registerCenter } from '../helpers/centers';
 import { createApiApp } from '../helpers/create-api-app';
+import { publishProgram } from '../helpers/programs';
 import { countQueries } from '../helpers/query-counter';
-import { accessTokenFor, createStaffUser, TEST_PASSWORD } from '../helpers/users';
+import { accessTokenFor, createStaffUser, registerStudent } from '../helpers/users';
 
 // A list costs the same number of statements whatever the size of its page: no query per row.
 describe('Query budget of lists (e2e)', () => {
@@ -28,34 +29,13 @@ describe('Query budget of lists (e2e)', () => {
     const centerId = await registerCenter(app, adminToken);
     const ids: string[] = [];
     for (let n = 0; n < count; n += 1) {
-      const program = await api()
-        .post(`/api/v1/centers/${centerId}/programs`)
-        .set(...bearer(adminToken))
-        .set('Idempotency-Key', uuidv7())
-        .send({
-          name: `Bootcamp ${String(n)}`,
-          modality: 'online',
-          priceCents: 6_000_00,
-          durationWeeks: 12,
-          startDates: ['2027-01-11'],
-          employabilityRateBasisPoints: 8_000,
-          avgStartingSalaryCents: 26_000_00,
-          financing: { installments: { allowedTerms: [12], annualRateBasisPoints: 900 } },
-        });
-      const id = (program.body as { id: string }).id;
-      await api()
-        .patch(`/api/v1/programs/${id}`)
-        .set(...bearer(adminToken))
-        .send({ status: 'published' });
-      ids.push(id);
+      ids.push(await publishProgram(app, adminToken, centerId, `Bootcamp ${String(n)}`));
     }
     return { centerId, ids };
   }
 
   async function studentWithApplications(programIds: readonly string[]): Promise<string> {
-    const email = `budget-${uuidv7().slice(-12)}@example.com`;
-    await api().post('/api/v1/auth/register').send({ email, password: TEST_PASSWORD });
-    const token = await accessTokenFor(app, { email, password: TEST_PASSWORD });
+    const token = await registerStudent(app);
     for (const programId of programIds) {
       await api()
         .post('/api/v1/applications')
