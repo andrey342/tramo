@@ -69,6 +69,8 @@ export type ChargePaidPayload = {
   // Instalments: which one of the plan's table.
   readonly installmentNumber: number | null;
   readonly amountCents: number;
+  // The attempt that collected it: a return of an earlier attempt is not about this payment.
+  readonly attempt: number;
   readonly paidAt: string;
 };
 

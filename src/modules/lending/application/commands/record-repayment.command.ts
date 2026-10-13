@@ -15,8 +15,17 @@ import {
 // it had collected (ChargeReturned). An ISA charge needs nothing more, its amount counted when the
 // month was assessed.
 export type Repayment =
-  | { readonly kind: 'installment'; readonly installmentNumber: number }
-  | { readonly kind: 'installment_returned'; readonly installmentNumber: number }
+  | {
+      readonly kind: 'installment';
+      readonly installmentNumber: number;
+      // The collection attempt that paid it (absent in notices recorded before it was sent).
+      readonly attempt?: number;
+    }
+  | {
+      readonly kind: 'installment_returned';
+      readonly installmentNumber: number;
+      readonly attempt?: number;
+    }
   | { readonly kind: 'payoff' }
   | { readonly kind: 'payoff_returned' }
   | { readonly kind: 'payoff_failed' };
@@ -65,10 +74,10 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
       const now = this.clock.now();
       switch (repayment.kind) {
         case 'installment':
-          plan.recordInstallmentPaid(repayment.installmentNumber, now);
+          plan.recordInstallmentPaid(repayment.installmentNumber, now, repayment.attempt ?? null);
           break;
         case 'installment_returned':
-          plan.recordInstallmentReturned(repayment.installmentNumber);
+          plan.recordInstallmentReturned(repayment.installmentNumber, repayment.attempt ?? null);
           break;
         case 'payoff':
           plan.settlePayoff(now);

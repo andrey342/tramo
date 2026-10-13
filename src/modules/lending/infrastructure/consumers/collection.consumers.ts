@@ -24,9 +24,15 @@ export class RecordRepaymentOnChargePaid implements EventHandler<ChargePaidPaylo
 
   async handle(event: IntegrationEvent<ChargePaidPayload>): Promise<void> {
     const { contractId, kind, installmentNumber } = event.payload;
+    // Optional in the type: ChargePaid notices recorded before it carried the attempt.
+    const attempt = (event.payload as Partial<ChargePaidPayload>).attempt;
     if (kind === 'installment' && installmentNumber !== null) {
       await this.commands.execute(
-        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber }),
+        new RecordRepaymentCommand(contractId, {
+          kind: 'installment',
+          installmentNumber,
+          ...(attempt !== undefined && { attempt }),
+        }),
       );
     } else if (kind === 'payoff') {
       await this.commands.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
@@ -43,10 +49,14 @@ export class RecordReturnOnChargeReturned implements EventHandler<ChargeReturned
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<ChargeReturnedPayload>): Promise<void> {
-    const { contractId, kind, installmentNumber } = event.payload;
+    const { contractId, kind, installmentNumber, attempt } = event.payload;
     if (kind === 'installment' && installmentNumber !== null) {
       await this.commands.execute(
-        new RecordRepaymentCommand(contractId, { kind: 'installment_returned', installmentNumber }),
+        new RecordRepaymentCommand(contractId, {
+          kind: 'installment_returned',
+          installmentNumber,
+          attempt,
+        }),
       );
     } else if (kind === 'payoff') {
       await this.commands.execute(

@@ -335,6 +335,7 @@ export class Charge extends AggregateRoot {
         kind: this.props.kind,
         installmentNumber: this.props.installmentNumber,
         amountCents: this.props.amount.cents,
+        attempt: attempt.number,
         paidAt: now.toISOString(),
       },
     });
