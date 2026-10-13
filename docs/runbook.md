@@ -323,6 +323,17 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   it: read `docker compose logs api`.
 - A revert on the compose database is undone at the api's next start, which applies pending
   migrations again.
+- Two downs need care:
+  - `202610130515-allow-isa-declaration-overdue-emails` (notifications) deletes every
+    `notifications.notification_log` row of the `isa_declaration_overdue` template, sent or not,
+    since the CHECK it restores no longer allows them: that email history is lost. Export the rows
+    first if it matters.
+  - `202610102245-allow-invalid-vat-on-active-centers` (catalog) brings back the CHECK that an
+    active center has a valid VAT number, so it fails while an active center has
+    `vat_status = 'invalid'`. List them first
+    (`SELECT id, name FROM catalog.training_centers WHERE status = 'active' AND vat_status = 'invalid'`)
+    and suspend each (`PATCH /centers/:id` with `status: suspended` and a `suspensionReason`),
+    then revert.
 - Never edit a migration that has been applied (or reached `main`); write a new one. New ones are
   verified with `pnpm migration:verify check`, which runs, reverts and runs them again comparing
   schema dumps. `synchronize` and `schema:sync` are never used.
