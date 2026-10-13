@@ -6,8 +6,27 @@ Backend for an education financing platform: students apply for financing of a t
 the platform verifies and scores them, signs a contract, pays the training center up front and
 collects monthly instalments or income-share payments afterwards.
 
-> Status: bootstrap. The runtime, infrastructure and quality gates are in place; the business
-> modules land incrementally (see [Roadmap](#roadmap)).
+## What it does
+
+- **Catalog.** Training centers are registered and verified against the EU VAT registry (VIES);
+  they publish programs with their price, employability figures and the financing they accept:
+  monthly instalments and income share agreements (ISA).
+- **Application.** A student applies for a program; a saga checks identity, employment history
+  and the credit bureau, and a versioned risk policy scores the result into an explainable
+  decision: approved with an offer, rejected, or sent to an analyst.
+- **Contract.** An accepted offer becomes a contract signed through an e-signature provider;
+  once signed, the center is paid the principal less the platform fee.
+- **Repayment.** Instalments follow a French amortisation schedule; an ISA charges a share of
+  the income the student declares each month, with a minimum income, a cap and a maximum number
+  of payments. A payoff settles a contract early.
+- **Collection.** A monthly billing run turns what is due into charges collected by SEPA direct
+  debit through a payment provider; dunning retries failed charges, puts contracts in arrears and
+  writes off what is not recovered. The student sees a statement.
+- **Notifications and reporting.** Emails to students and centers, signed webhooks to centers
+  with retries, and dashboards built from the events for centers and operations.
+
+Identity, employment, bureau, e-signature, bank and payment providers are simulated behind ports
+and answer deterministically (see the demo data below); VAT checks use the VIES test service.
 
 ## Quickstart
 
@@ -179,7 +198,29 @@ their domain events are committed together to a transactional outbox; the worker
 per-module BullMQ queues, and consumers apply each event exactly once. Each bounded
 context is a hexagonal module; layer and module boundaries are enforced by `pnpm arch:check`.
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
-[`docs/architecture.md`](docs/architecture.md).
+[`docs/architecture.md`](docs/architecture.md), next to the diagrams and the rules each module
+enforces. The terms of the domain are in [`docs/domain-glossary.md`](docs/domain-glossary.md);
+operating the stack (health, metrics, dead letters, retries, rebuilds) is in
+[`docs/runbook.md`](docs/runbook.md).
+
+```mermaid
+flowchart LR
+  student([Student]) -->|HTTPS| api
+  center([Training center]) -->|HTTPS + API key| api
+  ops([Operations]) -->|HTTPS| api
+
+  subgraph tramo [Tramo]
+    api[api<br/>NestJS HTTP]
+    worker[worker<br/>queues, outbox publisher]
+  end
+
+  api --> pg[(PostgreSQL<br/>schema per module)]
+  worker --> pg
+  api --> redis[(Redis<br/>queues, rate limits, idempotency)]
+  worker --> redis
+  worker -->|SMTP| mail[Mailpit]
+  worker -->|signed webhooks| sink[Center webhook endpoint]
+```
 
 | Module          | Responsibility                                                                                                        | Main endpoints                                                                                                                        |
 | --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -193,8 +234,10 @@ Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 
 ## API overview
 
-The OpenAPI document at `/docs` lists every endpoint with its schemas and error responses.
-Errors are `application/problem+json` (RFC 9457) with a stable `code`.
+The OpenAPI document at `/docs` lists every endpoint with its schemas and error responses, and
+[`docs/api`](docs/api) holds a [Bruno](https://www.usebruno.com) collection that walks the main
+flows against the local stack with the demo accounts. Errors are `application/problem+json`
+(RFC 9457) with a stable `code`.
 
 The program catalog (`GET /api/v1/programs`, `GET /api/v1/programs/:id`) is public. Every other
 route requires authentication unless documented otherwise. Two ways in:
@@ -334,9 +377,35 @@ volume catches up with:
 docker compose exec postgres psql -U tramo -d tramo -f /docker-entrypoint-initdb.d/02-diagnostics.sql
 ```
 
-## Roadmap
+## Project layout
 
-- Notifications (email and center webhooks) and reporting.
-- Real KYC, employment history, credit bureau, e-signature, bank and payment providers behind the
-  existing ports.
-- Seed data, an end-to-end demo script and an API collection.
+```text
+src/
+  main.api.ts, main.worker.ts   entry points of the two processes
+  app.module.ts, worker.module.ts
+  shared/                       kernel: Money, Percentage, Clock, errors (domain); unit of work,
+                                event bus, outbox, queues, HTTP pipeline, config (infrastructure)
+  modules/<module>/             iam, catalog, origination, lending, billing, notifications, reporting
+    domain/                     aggregates, value objects, events, repository ports; plain TypeScript
+    application/                commands, queries, ports, DTOs: the module's public surface
+    infrastructure/             TypeORM persistence and migrations, adapters, HTTP, jobs, consumers
+test/                           factories, fakes, contract suites, integration and e2e tests
+scripts/                        seed, demo, coverage gate, e-signature callback for local use
+docs/                           architecture, ADRs, runbook, domain glossary, Bruno collection
+docker/                         Dockerfile, Postgres image with extensions, webhook sink
+```
+
+## Roadmap and known limitations
+
+- The identity, employment, bureau, e-signature, bank and payment providers are simulated; real
+  ones go behind the existing ports, each with its contract suite. Production refuses to start
+  with the simulated ones.
+- Centers can be signed in Spain and Germany only (the VAT number rules of other countries are
+  not modelled).
+- Reporting computes figures per request from fact tables, and a rebuild replays the whole outbox
+  in one transaction; at volume both would move to summary tables and a shadow rebuild (ADR 019).
+- The outbox is never pruned, since reporting replays it; it needs an archive at volume.
+- One currency (EUR). Days (due dates, the ISA window) are taken from instants in UTC, which a
+  center or student in another timezone may see shifted around midnight.
+- No tracing backend: correlation ids join logs, jobs and webhooks, and `/metrics` serves
+  Prometheus, but no collector or dashboards ship with the stack.
