@@ -28,7 +28,8 @@ const domainFolders = [
 module.exports = {
   rootDir: '.',
   testEnvironment: 'node',
-  roots: ['<rootDir>/src'],
+  // scripts/ holds the seed's helpers, tested like the application.
+  roots: ['<rootDir>/src', '<rootDir>/scripts'],
   testRegex: '\\.spec\\.ts$',
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: { '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }] },

@@ -62,6 +62,7 @@ import { APP_CONFIG, type AppConfig, loadDotEnv } from '../src/shared/infrastruc
 import { CoreModule } from '../src/shared/infrastructure/core.module';
 
 import { DEMO_PASSWORD, DEMO_USERS } from './demo-users';
+import { awaitingVat, retryWhile, SEED_TAX_IDS, VAT_RETRY_DELAYS_MS } from './seed-vat';
 
 @Module({
   imports: [
@@ -82,16 +83,11 @@ const WEBHOOK_URL = process.env['SEED_WEBHOOK_URL'] ?? 'http://webhook-sink:9099
 // Admin of the second center; the first center's admin is the demo account in DEMO_USERS.
 const OTHER_CENTER_ADMIN = 'admin@berlin-code.test';
 
-// The VIES test service answers 100 as valid and 200 as invalid in every country, so in `test`
-// mode (the compose default) each active center has 100 in its own country; `fake` accepts the
-// realistic numbers too and refuses 200 as well.
-const testOr = (realistic: string) => (mode: string) => (mode === 'test' ? '100' : realistic);
-
 const CENTERS = [
   {
     name: 'Codeworks Barcelona',
     country: 'ES',
-    taxId: testOr('B66079911'),
+    taxId: SEED_TAX_IDS.codeworks,
     payoutIban: 'ES9121000418450200051332',
     platformFeeBasisPoints: 500,
     admin: DEMO_USERS.center,
@@ -140,7 +136,7 @@ const CENTERS = [
   {
     name: 'Berlin Code Academy',
     country: 'DE',
-    taxId: testOr('DE811569869'),
+    taxId: SEED_TAX_IDS.berlin,
     payoutIban: 'DE89370400440532013000',
     platformFeeBasisPoints: 450,
     admin: OTHER_CENTER_ADMIN,
@@ -199,7 +195,7 @@ const CENTERS = [
   {
     name: 'Nova Cyber Institute',
     country: 'ES',
-    taxId: () => '200',
+    taxId: SEED_TAX_IDS.nova,
     payoutIban: 'ES7921000813610123456789',
     platformFeeBasisPoints: 550,
     admin: null,
@@ -311,7 +307,8 @@ const STUDENTS: readonly {
 const DECIDED: readonly string[] = ['approved', 'rejected', 'needs_review'];
 const UNFINISHED: readonly string[] = ['draft', 'submitted', 'verifying', 'scoring'];
 
-async function seed(): Promise<void> {
+// Answers the centers left inactive, whose programs (and the applications to them) are missing.
+async function seed(): Promise<string[]> {
   loadDotEnv();
   // Checked before the application connects (and possibly migrates) anything.
   if (process.env['NODE_ENV'] === 'production') {
@@ -335,6 +332,7 @@ async function seed(): Promise<void> {
     await ensureStaff('ops', DEMO_USERS.ops);
     const admin: Principal = { kind: 'user', userId: adminId, roles: ['admin'], centerId: null };
 
+    const inactive: string[] = [];
     for (const center of CENTERS) {
       const vatNumber = unwrap(VatNumber.create(center.country, center.taxId(config.vies.mode)));
       let existing = await centers.findByVatNumber(vatNumber);
@@ -352,11 +350,32 @@ async function seed(): Promise<void> {
         existing = await centers.findById(centerId);
       }
       // Checked right away so the demo does not depend on the worker being up; a center left
-      // pending by an earlier run (VIES down) is checked again.
+      // pending by an earlier run (VIES down) is checked again. A registry that cannot answer
+      // (VIES_MODE=test or live) is asked a few more times before the center is left pending.
       if (existing?.status === 'pending_verification') {
-        await commands.execute(new VerifyCenterVatCommand('system', existing.id));
-        existing = await centers.findById(existing.id);
+        const centerId = existing.id;
+        const attempts = VAT_RETRY_DELAYS_MS.length + 1;
+        const checked = await retryWhile(
+          () => commands.execute(new VerifyCenterVatCommand('system', centerId)),
+          awaitingVat,
+          {
+            delaysMs: VAT_RETRY_DELAYS_MS,
+            onRetry: (_dto, attempt, delayMs) => {
+              log(
+                `center ${center.name}: VAT registry did not answer (attempt ${String(attempt)}` +
+                  ` of ${String(attempts)}), asking again in ${String(delayMs / 1_000)} s`,
+              );
+            },
+          },
+        );
+        existing = await centers.findById(centerId);
         log(`center ${center.name}: ${existing?.status ?? '?'}`);
+        if (awaitingVat(checked)) {
+          log(
+            `center ${center.name}: VAT registry did not answer after ${String(attempts)}` +
+              ` attempts (VIES_MODE=${config.vies.mode}); the center stays pending`,
+          );
+        }
       }
       if (existing && center.admin && !(await users.findByEmail(center.admin))) {
         await commands.execute(
@@ -370,7 +389,8 @@ async function seed(): Promise<void> {
         continue;
       }
       if (existing?.status !== 'active') {
-        log(`center ${center.name} is not active yet; run the seed again to add its programs`);
+        log(`center ${center.name} is not active yet; its programs are skipped`);
+        inactive.push(center.name);
         continue;
       }
       for (const program of center.programs) {
@@ -451,6 +471,7 @@ async function seed(): Promise<void> {
         log(`application of ${student.email} for ${outcome}`);
       }
     }
+    return inactive;
 
     // The verification saga runs here so the seed does not depend on the worker; its steps do
     // nothing when already done, so an application left halfway is picked up where it stopped.
@@ -519,8 +540,17 @@ function log(message: string): void {
 }
 
 seed().then(
-  () => {
-    log('done');
+  (inactive) => {
+    if (inactive.length === 0) {
+      log('done');
+      return;
+    }
+    // A non-zero exit, so `docker compose ps -a` shows the seed did not finish its job.
+    process.stderr.write(
+      `seed incomplete: ${inactive.join(', ')} not active, so the demo has no programs to` +
+        ' apply for. Run it again (docker compose run --rm seed); VIES_MODE=fake works offline.\n',
+    );
+    process.exitCode = 1;
   },
   (error: unknown) => {
     process.stderr.write(

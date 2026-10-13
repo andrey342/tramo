@@ -3,6 +3,12 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/seed.ts", "scripts/demo.ts", "scripts/demo-users.ts"],
+  "include": [
+    "src/**/*.ts",
+    "scripts/seed.ts",
+    "scripts/seed-vat.ts",
+    "scripts/demo.ts",
+    "scripts/demo-users.ts"
+  ],
   "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.int-spec.ts"]
 }
