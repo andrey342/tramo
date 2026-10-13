@@ -9,6 +9,17 @@ export class CenterAlreadyRegisteredError extends DomainError {
   }
 }
 
+// An active center's VAT number is the one the registry confirmed; a center is suspended before
+// its number is corrected.
+export class CenterVatNumberLockedError extends DomainError {
+  readonly code = 'center_vat_number_locked';
+  readonly category = 'conflict';
+
+  constructor(centerId: string) {
+    super('The VAT number of an active training center cannot be changed.', { centerId });
+  }
+}
+
 export class CenterAccessDeniedError extends DomainError {
   readonly code = 'center_access_denied';
   readonly category = 'forbidden';

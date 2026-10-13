@@ -152,7 +152,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   | Queue                       | Job id                                              | After the job ran out                                              |
   | --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
   | `events.<module>`           | `<eventId>.<consumer>`                              | Retry the job                                                      |
-  | `catalog.vat-checks`        | `<centerId>`                                        | `POST /centers/:id/verify-vat` (admin, ops)                        |
+  | `catalog.vat-checks`        | `<centerId>`, later checks `<centerId>.<eventId>`   | `POST /centers/:id/verify-vat` (admin, ops)                        |
   | `origination.verifications` | `<applicationId>.<kyc\|employment\|bureau>`         | Retry the job                                                      |
   | `lending.signatures`        | `<contractId>.send`                                 | Retry the job                                                      |
   | `lending.disbursements`     | `<disbursementId>.<attempt>.<transfer\|settlement>` | `POST /ops/disbursements/:id/reconcile`                            |

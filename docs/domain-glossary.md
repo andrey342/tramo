@@ -77,10 +77,13 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   pending_verification → active            a VAT check answers valid
   any but suspended → suspended            an admin, with a reason (CenterSuspended)
   suspended → active                       reinstated with a valid VAT number (CenterActivated)
-  suspended → pending_verification         reinstated without one
+  suspended → pending_verification         reinstated without one (CenterReturnedToVerification,
+                                           which queues a new VAT check)
   ```
 
-  Only an active center publishes programs and receives disbursements.
+  Only an active center publishes programs and receives disbursements. An admin corrects the VAT
+  number of a center that is not active (`CenterVatNumberChanged`): its validation is dropped and
+  the new number is checked as on registration.
 
 - **`VatValidation`** / **`VatCheckResult`**: the latest VAT check kept on the center, with status
   `valid | invalid | unverified`. A check answers `valid`, `invalid` or `unavailable` (VIES could
@@ -111,7 +114,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
     offered when `employabilityRate` is at least 60 %.
 - Events: `CenterRegistered`, `CenterActivated`, `CenterSuspended`, `CenterRenamed`,
   `CenterPlatformFeeChanged`, `CenterPayoutAccountChanged`, `CenterVatInvalidated`,
-  `ProgramPublished`, `ProgramDetailsChanged`, `ProgramFinancingChanged`, `ProgramArchived`.
+  `CenterVatNumberChanged`, `CenterReturnedToVerification`, `ProgramPublished`, `ProgramDetailsChanged`, `ProgramFinancingChanged`, `ProgramArchived`.
 
 ## origination
 

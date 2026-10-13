@@ -40,7 +40,7 @@ export class VerifyCenterVatHandler implements ICommandHandler<VerifyCenterVatCo
     const result = await this.vat.check(before.vatNumber);
     return this.uow.run(async () => {
       const center = await this.load(command.centerId);
-      center.recordVatCheck(result, this.clock.now());
+      center.recordVatCheck(result, this.clock.now(), before.vatNumber);
       await this.centers.save(center);
       return toTrainingCenterDto(center);
     });

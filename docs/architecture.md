@@ -220,6 +220,14 @@ Training centers and the programs students finance.
   center active and emits `CenterVatInvalidated` for ops to decide. Only an admin changes a
   center's fee, payout account or status, and each change is an event (`CenterRenamed`,
   `CenterPlatformFeeChanged`, `CenterPayoutAccountChanged`, `CenterSuspended`...).
+- **Correcting a VAT number.** A center registered with a wrong number is not stuck: while it is
+  not active an admin sends `country` and `taxId` in `PATCH /centers/:id`. The number must not
+  belong to another center (409 `center_already_registered`), the previous validation is dropped
+  and `CenterVatNumberChanged` queues a check of the new number, as registration does. An active
+  center's number is the one VIES confirmed (409 `center_vat_number_locked`): suspend it first.
+  Reinstating a suspended center without a valid number returns it to `pending_verification` and
+  `CenterReturnedToVerification` queues a new check, since a check that ended `invalid` is not
+  retried on its own. A check answered for a number the center no longer has is dropped.
 - **VIES client.** Each attempt has a timeout; transient failures and timeouts are retried twice
   with backoff, and a circuit breaker stops calling for 30 s after five failures in a row. Every
   failure becomes an `unavailable` answer: a registry outage never fails a request. `VIES_MODE`

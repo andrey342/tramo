@@ -30,12 +30,21 @@ export class VatRegistryUnavailableError extends Error {
 export class VatCheckScheduler {
   constructor(@InjectQueue(QueueNames.VAT_CHECKS) private readonly queue: Queue<VatCheckJob>) {}
 
-  // One job per center: a redelivered CenterRegistered event does not queue a second check.
-  async schedule(centerId: string, correlationId: string | null): Promise<void> {
+  // One job per center and cause: a redelivered event does not queue a second check. The check
+  // on registration is `<centerId>`; a later one (a corrected number, a reinstated center) is
+  // `<centerId>.<eventId>`, since BullMQ ignores an id it still holds, completed jobs included.
+  async schedule(
+    centerId: string,
+    correlationId: string | null,
+    causeEventId?: string,
+  ): Promise<void> {
     await this.queue.add(
       'verify-center-vat',
       { centerId, correlationId },
-      { ...VAT_CHECK_JOB_OPTIONS, jobId: centerId },
+      {
+        ...VAT_CHECK_JOB_OPTIONS,
+        jobId: causeEventId === undefined ? centerId : `${centerId}.${causeEventId}`,
+      },
     );
   }
 }
