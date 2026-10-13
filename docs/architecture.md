@@ -482,8 +482,9 @@ through a payment provider, dunning, ISA income declarations and the account sta
   cancelled, overdue ones included; a defaulted contract has only those not yet due cancelled,
   and a plan that ends on its last instalment or ISA payment keeps its last charge. Refused, or
   impossible without a mandate, the charge is cancelled and lending withdraws the payoff
-  (`PayoffWithdrawn`): billing bills and collects the contract that same day and the student
-  may ask again, which is a new charge.
+  (`PayoffWithdrawn`): a job on `billing.cycle` bills and collects the contract as of that day,
+  one plan and one charge per transaction as in the scheduled runs (the job fails and is retried
+  while any of them fails), and the student may ask again, which is a new charge.
 - **Statement.** `GET /contracts/:id/statement`: a projection of the charge events (charge,
   payment, write-off, cancellation), one line per event, with the running balance; charges in
   `GET /contracts/:id/charges`. The student and staff see them; centers see their portfolio in

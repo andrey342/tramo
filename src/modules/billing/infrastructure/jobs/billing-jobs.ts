@@ -18,8 +18,15 @@ export interface CollectionJob extends CorrelatedJobData {
   readonly attemptKey: string;
 }
 
+// One contract billed and collected as of a day, outside the scheduled runs.
+export interface RebillJob extends CorrelatedJobData {
+  readonly contractId: string;
+  readonly asOf: string;
+}
+
 const COLLECT_DUE = 'collect.due';
 const COLLECT_CHARGE = 'charge.collect';
+const REBILL_CONTRACT = 'contract.rebill';
 
 // A provider outage is retried for about two hours (exponential from 30 s over nine attempts),
 // then dead-lettered; the charge stays pending with its key (dunning leaves it alone) until ops
@@ -93,18 +100,52 @@ export class CollectionJobs {
   }
 }
 
-// Each scheduled run works as of the day it runs.
+// Queues the billing of one contract that the cycle skipped while a payoff was being collected
+// (its PayoffWithdrawn), keyed by the event: a redelivery queues nothing new while BullMQ holds
+// the job, and billing and collecting again find the work done. The job runs outside the
+// event's transaction, so each plan and charge gets its own, as in the scheduled runs.
+@Injectable()
+export class BillingCycleJobs {
+  constructor(@InjectQueue(QueueNames.BILLING_CYCLE) private readonly queue: Queue<RebillJob>) {}
+
+  async rebill(
+    request: { readonly contractId: string; readonly asOf: CalendarDate; readonly eventId: string },
+    correlationId: string | null,
+  ): Promise<void> {
+    const { contractId, asOf, eventId } = request;
+    await this.queue.add(
+      REBILL_CONTRACT,
+      { contractId, asOf: asOf.toString(), correlationId },
+      { jobId: `${contractId}.rebill.${eventId}` },
+    );
+  }
+}
+
+// Each scheduled run works as of the day it runs; a rebill as of the day it was asked for, then
+// collects what it charged. A failed plan or charge fails the job, which is retried.
 @Processor(QueueNames.BILLING_CYCLE)
-export class BillingCycleProcessor extends QueueProcessor {
+export class BillingCycleProcessor extends QueueProcessor<RebillJob | CorrelatedJobData> {
   constructor(private readonly commands: CommandBus) {
     super();
   }
 
-  protected async handle(): Promise<unknown> {
+  protected async handle(job: Job<RebillJob | CorrelatedJobData>): Promise<unknown> {
+    if (job.name === REBILL_CONTRACT && 'contractId' in job.data) {
+      return this.rebill(job.data);
+    }
     const result = await this.commands.execute(
       new RunBillingCycleCommand(CalendarDate.fromInstant(this.clock.now())),
     );
     return failIfAny(result, result.failedContractIds, 'plans not billed');
+  }
+
+  private async rebill({ contractId, asOf }: RebillJob): Promise<unknown> {
+    const day = CalendarDate.parse(asOf);
+    const billed = await this.commands.execute(new RunBillingCycleCommand(day, contractId));
+    failIfAny(billed, billed.failedContractIds, 'plans not billed');
+    const collected = await this.commands.execute(new CollectDueChargesCommand(day, contractId));
+    failIfAny(collected, collected.failedChargeIds, 'charges not submitted');
+    return { billed, collected };
   }
 }
 

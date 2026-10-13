@@ -50,7 +50,7 @@ import {
   LedgerOnChargePaid,
   LedgerOnChargeWrittenOff,
 } from './infrastructure/consumers/billing.consumers';
-import { CollectionJobs } from './infrastructure/jobs/billing-jobs';
+import { BillingCycleJobs, CollectionJobs } from './infrastructure/jobs/billing-jobs';
 import { PaymentMandateMapper } from './infrastructure/persistence/billing.mappers';
 import {
   ChargeOrmEntity,
@@ -125,6 +125,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     ListChargesHandler,
     GetStatementHandler,
     CollectionJobs,
+    BillingCycleJobs,
     CollectOnChargeSubmitted,
     CollectOnMandateSigned,
     ChargeOnPayoffRequested,

@@ -152,6 +152,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   | `billing.collect`           | `<chargeId>.<attempt>.collect.<eventId>`            | `POST /charges/:id/retry`                                          |
   | `billing.psp-simulator`     | `<chargeId>.<attempt>.callback`                     | Retry the job once the worker reaches the api (`PSP_CALLBACK_URL`) |
   | `billing.cycle`, `.dunning` | scheduled                                           | `POST /ops/billing/run`, `POST /ops/dunning/run`                   |
+  | `billing.cycle` (rebill)    | `<contractId>.rebill.<eventId>`                     | `POST /ops/billing/run?contractId=` (a payoff was withdrawn)       |
   | `notifications.emails`      | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
   | `notifications.webhooks`    | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
   | `reporting.rebuild`         | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
