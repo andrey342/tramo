@@ -13,6 +13,7 @@ import { PurgeEndedSessionsHandler } from './application/commands/purge-ended-se
 import { RefreshSessionHandler } from './application/commands/refresh-session.command';
 import { RegisterStudentHandler } from './application/commands/register-student.command';
 import { RevokeApiKeyHandler } from './application/commands/revoke-api-key.command';
+import { RevokeCenterApiKeysHandler } from './application/commands/revoke-center-api-keys.command';
 import {
   ACCESS_TOKEN_ISSUER,
   CENTER_DIRECTORY,
@@ -37,6 +38,7 @@ import { CatalogCenterDirectory } from './infrastructure/adapters/catalog-center
 import { CryptoCredentialGenerator } from './infrastructure/adapters/crypto-credential.generator';
 import { JwtAccessTokenIssuer } from './infrastructure/adapters/jwt-access-token.issuer';
 import { RedisLoginAttemptTracker } from './infrastructure/adapters/redis-login-attempt.tracker';
+import { RevokeKeysOnCenterSuspended } from './infrastructure/consumers/iam.consumers';
 import { ApiKeyOrmEntity } from './infrastructure/persistence/api-key.orm-entity';
 import { RefreshTokenOrmEntity } from './infrastructure/persistence/refresh-token.orm-entity';
 import { TypeOrmApiKeyRepository } from './infrastructure/persistence/typeorm-api-key.repository';
@@ -70,6 +72,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     DisableUserHandler,
     IssueApiKeyHandler,
     RevokeApiKeyHandler,
+    RevokeCenterApiKeysHandler,
+    RevokeKeysOnCenterSuspended,
     ListApiKeysHandler,
     AuthenticateApiKeyHandler,
     FindStudentHandler,

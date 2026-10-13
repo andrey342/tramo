@@ -5,7 +5,12 @@ import { uuidv7 } from 'uuidv7';
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { type ApiKeyScope, CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
-import { API_KEY_REPOSITORY, ApiKey, type ApiKeyRepository } from '../../domain';
+import {
+  API_KEY_REPOSITORY,
+  ApiKey,
+  type ApiKeyRepository,
+  CenterSuspendedError,
+} from '../../domain';
 import { actorId, assertCanManageCenter } from '../center-access';
 import { type IssuedApiKeyDto } from '../dto/api-key.dto';
 import {
@@ -41,8 +46,14 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
 
   async execute(command: IssueApiKeyCommand): Promise<IssuedApiKeyDto> {
     assertCanManageCenter(command.actor, command.centerId);
-    if (!(await this.centers.exists(command.centerId))) {
+    const center = await this.centers.find(command.centerId);
+    if (!center) {
       throw new EntityNotFoundError('TrainingCenter', command.centerId);
+    }
+    // Suspension revoked the center's keys (RevokeCenterApiKeys); new ones wait until it is
+    // reinstated.
+    if (center.suspended) {
+      throw new CenterSuspendedError(command.centerId);
     }
     const secret = await this.uniqueSecret();
     const apiKey = ApiKey.issue({

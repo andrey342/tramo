@@ -64,7 +64,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `RefreshTokenReuseDetected`; within those 10 s it is only rejected (`superseded`). A family
   ends `SESSION_MAX_DAYS` after sign-in.
 - **`ApiKey`**: a center's integration credential, `tramo_<8 hex prefix>_<secret>`, shown once,
-  stored as a hash, with at least one scope. Revoked keys keep `revokedAt`.
+  stored as a hash, with at least one scope. Revoked keys keep `revokedAt`. Suspending a center
+  revokes all its keys, and a suspended center gets no new ones.
 - **Lockout**: failed sign-ins counted per account in Redis. See the runbook for durations.
 - Events: `StudentRegistered`, `CenterUserCreated`, `UserDisabled`, `ApiKeyIssued`,
   `ApiKeyRevoked`, `RefreshTokenReuseDetected`.

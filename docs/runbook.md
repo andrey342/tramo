@@ -426,6 +426,10 @@ future billing runs and private webhook targets by default. The compose stack ru
   `iam.session-sweep`; a failed run is not retried, the next day's catches up. Like the hourly
   sweeps of emails (`notifications.emails`) and of stale applications (`origination.expiry`), it
   is a job scheduler re-registered at every worker start.
+- **A suspended center's integrations**: suspending a center revokes all its API keys within
+  seconds (the `iam.revoke-suspended-center-keys` consumer on `events.iam`), and no key can be
+  issued while it is suspended. After reinstating it, its admins issue new keys; the old ones stay
+  revoked. Its users can still sign in.
 - **Signing someone out everywhere**: `pnpm api:call POST /users/<userId>/disable --as admin`
   (204, also when already disabled). The account can no longer sign in and its refresh tokens
   stop working at once; access tokens it holds keep working until they expire, at most 15

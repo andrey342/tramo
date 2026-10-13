@@ -52,7 +52,7 @@ export class CreateCenterUserHandler implements ICommandHandler<CreateCenterUser
 
   async execute(command: CreateCenterUserCommand): Promise<{ userId: string }> {
     assertIsAdmin(command.actor, command.centerId);
-    if (!(await this.centers.exists(command.centerId))) {
+    if (!(await this.centers.find(command.centerId))) {
       throw new EntityNotFoundError('TrainingCenter', command.centerId);
     }
     const email = unwrap(Email.create(command.email));

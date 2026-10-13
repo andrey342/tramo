@@ -4,6 +4,13 @@ import { centerDirectoryContract } from '../../../../../test/contracts/center-di
 import { FakeCenterDirectory } from '../../../../../test/fakes/iam';
 
 centerDirectoryContract('FakeCenterDirectory', () => {
-  const existingCenterId = uuidv7();
-  return { directory: new FakeCenterDirectory(new Set([existingCenterId])), existingCenterId };
+  const [existingCenterId, suspendedCenterId] = [uuidv7(), uuidv7()];
+  return {
+    directory: new FakeCenterDirectory(
+      new Set([existingCenterId, suspendedCenterId]),
+      new Set([suspendedCenterId]),
+    ),
+    existingCenterId,
+    suspendedCenterId,
+  };
 });

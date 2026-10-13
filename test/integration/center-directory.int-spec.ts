@@ -28,9 +28,17 @@ describe('CatalogCenterDirectory (integration)', () => {
   });
 
   centerDirectoryContract('CatalogCenterDirectory over the query bus', async () => {
-    const center = aTrainingCenter();
+    const [center, suspended] = [aTrainingCenter(), aTrainingCenter()];
+    suspended.suspend('Unpaid fees', new Date('2026-10-09T10:00:00Z'));
     const centers = app.get<TrainingCenterRepository>(TRAINING_CENTER_REPOSITORY);
-    await app.get<UnitOfWork>(UNIT_OF_WORK).run(() => centers.save(center));
-    return { directory: app.get(CatalogCenterDirectory), existingCenterId: center.id };
+    await app.get<UnitOfWork>(UNIT_OF_WORK).run(async () => {
+      await centers.save(center);
+      await centers.save(suspended);
+    });
+    return {
+      directory: app.get(CatalogCenterDirectory),
+      existingCenterId: center.id,
+      suspendedCenterId: suspended.id,
+    };
   });
 });

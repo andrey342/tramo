@@ -203,6 +203,13 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   refresh, since refreshing checks the account again.
 - **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
   Routes opened to API keys are not implicitly open to users; they must also name roles.
+- **Suspended centers.** iam consumes `CenterSuspended` (`iam.revoke-suspended-center-keys`) and
+  revokes every active key of the center, each with its `ApiKeyRevoked`; a redelivery finds
+  nothing left to revoke. No key is issued for a suspended center (`center_suspended`), and the
+  revoked ones stay revoked after it is reinstated: its admins issue new ones. Its users keep
+  signing in, on purpose: they still follow their contracts, payouts and the suspension itself,
+  and the catalog refuses what a suspended center may not change. Shutting one of them out is
+  `POST /users/:id/disable`.
 - **Roles.** Users only reach routes that name their roles with `@Roles`; a route that forgets it
   refuses every user, since anyone can register as a student.
 - **Rate limits.** Clients are counted per IPv4 address and per IPv6 /64 network. The queue

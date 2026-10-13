@@ -54,6 +54,16 @@ export class CenterAccessDeniedError extends DomainError {
   }
 }
 
+// Same code as the catalog's refusal, so clients handle a suspended center one way.
+export class CenterSuspendedError extends DomainError {
+  readonly code = 'center_suspended';
+  readonly category = 'forbidden';
+
+  constructor(centerId: string) {
+    super('The training center is suspended; it cannot be given new API keys.', { centerId });
+  }
+}
+
 export class UserAdministrationDeniedError extends DomainError {
   readonly code = 'user_administration_denied';
   readonly category = 'forbidden';

@@ -4,6 +4,7 @@ import {
   type AccessTokenClaims,
   type AccessTokenIssuer,
   type CenterDirectory,
+  type CenterStanding,
   type CredentialGenerator,
   type GeneratedApiKey,
   type GeneratedSecret,
@@ -221,11 +222,16 @@ export class InMemoryLoginAttemptTracker implements LoginAttemptTracker {
   }
 }
 
-// Without a list every center exists, which is what most handler tests want.
+// Without a list every center exists, which is what most handler tests want. Centers are active
+// unless listed as suspended.
 export class FakeCenterDirectory implements CenterDirectory {
-  constructor(private readonly known?: ReadonlySet<string>) {}
+  constructor(
+    private readonly known?: ReadonlySet<string>,
+    private readonly suspended: ReadonlySet<string> = new Set(),
+  ) {}
 
-  exists(centerId: string): Promise<boolean> {
-    return Promise.resolve(this.known?.has(centerId) ?? true);
+  find(centerId: string): Promise<CenterStanding | null> {
+    const exists = this.known?.has(centerId) ?? true;
+    return Promise.resolve(exists ? { suspended: this.suspended.has(centerId) } : null);
   }
 }
