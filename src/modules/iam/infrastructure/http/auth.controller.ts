@@ -35,7 +35,7 @@ export class AuthController {
   constructor(private readonly commands: CommandBus) {}
 
   @Post('register')
-  @ApiProblems(400, 409, 429)
+  @ApiProblems(400, 409, 422, 429)
   @ApiCreatedResponse({ type: RegisteredResponse })
   @ApiOperation({ summary: 'Create a student account' })
   register(@Body() body: RegisterStudentRequest): Promise<RegisteredResponse> {

@@ -47,7 +47,7 @@ export class CenterAccessController {
   ) {}
 
   @Post('users')
-  @ApiProblems(400, 401, 403, 409)
+  @ApiProblems(400, 401, 403, 404, 409, 422)
   @ApiCreatedResponse({ type: CenterUserCreatedResponse })
   @Roles('admin')
   @Audited({ action: 'center_user.create', resource: 'center', resourceIdParam: 'centerId' })
@@ -63,7 +63,7 @@ export class CenterAccessController {
   }
 
   @Post('api-keys')
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 404, 422)
   @ApiCreatedResponse({ type: IssuedApiKeyResponse })
   @Roles('center_admin', 'admin')
   @Audited({ action: 'api_key.issue', resource: 'center', resourceIdParam: 'centerId' })
