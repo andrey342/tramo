@@ -1,0 +1,23 @@
+meta {
+  name: Retry charge (ops)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/charges/{{chargeId}}/retry
+  body: none
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  Collects a failed or overdue charge again. On the happy path the charge is already paid, so this answers 409; it is meant for a charge whose collection failed.
+}

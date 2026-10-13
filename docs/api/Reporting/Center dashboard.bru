@@ -1,0 +1,19 @@
+meta {
+  name: Center dashboard
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/centers/{{centerId}}/dashboard
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+docs {
+  The center's portfolio: application funnel, contracts by status, money disbursed, collected, outstanding and written off, by product. A read model filled from events, so it trails the writes by a moment. Center admin, ops, admin or an API key with `portfolio:read`.
+}

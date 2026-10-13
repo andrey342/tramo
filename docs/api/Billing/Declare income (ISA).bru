@@ -1,0 +1,30 @@
+meta {
+  name: Declare income (ISA)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/contracts/{{contractId}}/income-declarations
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+body:json {
+  {
+    "period": "2026-11",
+    "grossMonthlyIncomeCents": 215000
+  }
+}
+
+docs {
+  Income share agreements only: the student declares the gross income of a month (`period` as YYYY-MM; 0 when none). The happy path contract is an instalment loan, so this answers an error there; apply with `"product": { "kind": "isa" }` to try it.
+}

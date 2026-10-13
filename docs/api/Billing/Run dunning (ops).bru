@@ -1,0 +1,28 @@
+meta {
+  name: Run dunning (ops)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/ops/dunning/run?contractId={{contractId}}
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~asOf: {{firstDueDate}}
+  contractId: {{contractId}}
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  Ops or admin. Runs dunning (reminders, notices, retries, arrears) as of a day, by default today, for one contract or all of them. Enable `asOf` to run it for another day.
+}

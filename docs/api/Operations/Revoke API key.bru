@@ -1,0 +1,19 @@
+meta {
+  name: Revoke API key
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/centers/{{centerId}}/api-keys/{{apiKeyId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+docs {
+  Revokes the key from "Issue API key" (204). "Me (API key)" answers 401 afterwards.
+}

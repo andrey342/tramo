@@ -1,0 +1,48 @@
+meta {
+  name: Sign contract (e-signature callback)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/webhooks/esign
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "eventId": "set by the pre-request script",
+    "type": "envelope.completed",
+    "envelopeId": "{{envelopeId}}",
+    "documentHash": "{{documentHash}}",
+    "occurredAt": "set by the pre-request script"
+  }
+}
+
+script:pre-request {
+  // Plays the e-signature provider: signs the raw body with ESIGN_WEBHOOK_SECRET.
+  // Needs Bruno's Developer Mode (JavaScript sandbox) for require("crypto").
+  const crypto = require("crypto");
+  const body = JSON.stringify({
+    eventId: crypto.randomUUID(),
+    type: "envelope.completed",
+    envelopeId: bru.getEnvVar("envelopeId"),
+    documentHash: bru.getEnvVar("documentHash"),
+    occurredAt: new Date().toISOString(),
+  });
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = crypto
+    .createHmac("sha256", bru.getEnvVar("esignSecret"))
+    .update(`${timestamp}.${body}`)
+    .digest("hex");
+  req.setHeader("Content-Type", "application/json");
+  req.setHeader("X-Esign-Signature", `t=${timestamp},v1=${signature}`);
+  req.setBody(body);
+}
+
+docs {
+  The provider's callback, normally sent by the simulated e-signature service when the student signs. It is authenticated by `X-Esign-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">` with `ESIGN_WEBHOOK_SECRET` (`esignSecret` in the environment, the compose default).
+
+  The script needs Developer Mode (sandbox selector next to the environment). If it answers 401 `invalid_webhook_signature`, sign from a terminal instead: `pnpm esign:sign {{contractId}}` (add `--decline` to decline).
+}

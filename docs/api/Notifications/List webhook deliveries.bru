@@ -1,0 +1,32 @@
+meta {
+  name: List webhook deliveries
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/centers/{{centerId}}/webhook-deliveries
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: delivered
+  ~event: contract.signed
+  ~limit: 20
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.data && res.body.data.length > 0) {
+    bru.setEnvVar("deliveryId", res.body.data[0].id);
+  }
+}
+
+docs {
+  What was posted to the center, newest first. Filters: `status` (pending, delivered, failed) and `event` (application.submitted, application.decided, contract.signed, disbursement.settled, contract.in_arrears, contract.defaulted). Stores the newest delivery in `deliveryId`.
+}

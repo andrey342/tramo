@@ -1,0 +1,23 @@
+meta {
+  name: Rebuild read models (ops)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/ops/reporting/rebuild
+  body: none
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  Queues a job that rebuilds the reporting read models from the event history; answers 202 with `queued`. 409 while a rebuild is already running.
+}

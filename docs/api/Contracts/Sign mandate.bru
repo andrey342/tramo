@@ -1,0 +1,29 @@
+meta {
+  name: Sign mandate
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/contracts/{{contractId}}/mandate
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+body:json {
+  {
+    "iban": "ES7620770024003102575766"
+  }
+}
+
+docs {
+  Student only. Authorises the direct debit of the instalments from this account (SEPA mandate). Answers 201 with the mandate reference and the masked IBAN. Once signed and mandated, the worker pays the center and activates the contract: repeat "Get contract" until `status` is `active`.
+}

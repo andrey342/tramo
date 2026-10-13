@@ -1,0 +1,28 @@
+meta {
+  name: Login admin
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "admin@tramo.test",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("adminToken", res.body.accessToken);
+  }
+}
+
+docs {
+  Platform admin (seeded). Stores the access token in `adminToken`. Access tokens last 15 minutes; run the login again when requests start answering 401.
+}

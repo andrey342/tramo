@@ -1,0 +1,33 @@
+meta {
+  name: Issue API key
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/centers/{{centerId}}/api-keys
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+body:json {
+  {
+    "name": "Admissions system",
+    "scopes": ["applications:read", "applications:write", "programs:write", "portfolio:read"]
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("apiKeyId", res.body.id);
+    bru.setEnvVar("apiKey", res.body.key);
+  }
+}
+
+docs {
+  Center admin or admin. Issues an integration key for the center; the full `key` is shown only in this response (stored in `apiKey`). Scopes: applications:read, applications:write, programs:read, programs:write, portfolio:read.
+}

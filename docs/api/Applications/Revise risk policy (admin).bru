@@ -1,0 +1,35 @@
+meta {
+  name: Revise risk policy (admin)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/risk-policies
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+body:json {
+  {
+    "maxFinanceableCents": 1200000,
+    "minAgeYears": 18,
+    "allowedResidenceCountries": ["ES"],
+    "weightsBasisPoints": {
+      "employability": 4000,
+      "employmentHistory": 2500,
+      "affordability": 2000,
+      "bureau": 1500
+    },
+    "approveThreshold": 70,
+    "reviewThreshold": 50
+  }
+}
+
+docs {
+  Admin only. Publishes the next policy version; past decisions keep theirs. Every field is optional. The body shown matches the default policy, so it only bumps the version; changing it changes how later applications are scored. Check "Current risk policy (ops)" first.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Me (center admin)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.centerId) {
+    bru.setEnvVar("centerId", res.body.centerId);
+  }
+}
+
+docs {
+  Describes the signed-in user. For a center admin it carries `centerId`, stored in `centerId` and used by the catalog, notification, reporting and API key requests.
+}

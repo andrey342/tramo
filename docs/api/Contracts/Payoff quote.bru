@@ -1,0 +1,29 @@
+meta {
+  name: Payoff quote
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/contracts/{{contractId}}/payoff-quote
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+body:json {
+  {}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("payoffAmountCents", String(res.body.totalCents));
+  }
+}
+
+docs {
+  What repaying everything costs today (instalment contracts). Send `{ "asOf": "YYYY-MM-DD" }` for a day in the coming month. Stores `totalCents` in `payoffAmountCents`.
+}

@@ -1,0 +1,38 @@
+meta {
+  name: List contracts
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/contracts
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: active
+  ~centerId: {{centerId}}
+  ~limit: 20
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const contracts = res.body.data || [];
+    const applicationId = bru.getEnvVar("applicationId");
+    const contract =
+      contracts.find((item) => item.applicationId === applicationId) || contracts[0];
+    if (contract) {
+      bru.setEnvVar("contractId", contract.id);
+    }
+  }
+}
+
+docs {
+  A student's contracts, a center's portfolio (`centerToken`), or all of them for staff; newest first. The worker draws up the contract a few seconds after "Accept offer": repeat until it shows up. Stores the contract of `applicationId` (or the newest one) in `contractId`.
+}

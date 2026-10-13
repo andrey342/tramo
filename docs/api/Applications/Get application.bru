@@ -1,0 +1,21 @@
+meta {
+  name: Get application
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/applications/{{applicationId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  The worker verifies and scores the application within seconds of "Submit application". Repeat until `status` is `approved` (or `rejected` / `needs_review`). An approved application carries the offer in `terms` (monthly payment and TAE as `aprBasisPoints`).
+
+  Readable by the student, the center (without personal data) and staff.
+}

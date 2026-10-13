@@ -1,0 +1,19 @@
+meta {
+  name: Program performance
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/centers/{{centerId}}/programs/{{programId}}/performance
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+docs {
+  How a program converts: applications, approval rate, mean ticket and score. Uses `programId` from "List programs" (the Full Stack bootcamp at Codeworks).
+}

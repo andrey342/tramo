@@ -1,0 +1,19 @@
+meta {
+  name: Me (API key)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/me
+  body: none
+  auth: none
+}
+
+headers {
+  X-Api-Key: {{apiKey}}
+}
+
+docs {
+  An integration authenticates with `X-Api-Key` instead of a bearer token. Keys work only on endpoints that declare the scopes they need; `/me` accepts any key.
+}

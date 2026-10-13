@@ -1,0 +1,15 @@
+meta {
+  name: Liveness
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{rootUrl}}/health/live
+  body: none
+  auth: none
+}
+
+docs {
+  Outside the `/api/v1` prefix. Answers 200 while the event loop runs; it does not check dependencies.
+}

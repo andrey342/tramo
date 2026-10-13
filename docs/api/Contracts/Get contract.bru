@@ -1,0 +1,26 @@
+meta {
+  name: Get contract
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/contracts/{{contractId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.signature) {
+    bru.setEnvVar("envelopeId", res.body.signature.envelopeId);
+    bru.setEnvVar("documentHash", res.body.signature.documentHash);
+  }
+}
+
+docs {
+  Repeat until `status` is `sent_for_signature`; then the envelope id and document hash are stored for "Sign contract (e-signature callback)". After signing and the mandate the worker pays the center and the status becomes `active`. The payout to the center (`payout`) is hidden from the student; read it with `centerToken` or `opsToken`.
+}

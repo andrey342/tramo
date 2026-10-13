@@ -1,0 +1,28 @@
+meta {
+  name: Login center admin
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "admin@codeworks.test",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("centerToken", res.body.accessToken);
+  }
+}
+
+docs {
+  Administrator of Codeworks Barcelona (seeded). Stores the access token in `centerToken`. Run "Me (center admin)" next to store the center id. `admin@berlin-code.test` is the administrator of Berlin Code Academy.
+}

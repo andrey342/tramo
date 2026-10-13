@@ -1,0 +1,26 @@
+meta {
+  name: Create center user
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/centers/{{newCenterId}}/users
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+body:json {
+  {
+    "email": "admissions-{{$timestamp}}@valencia-tech.test",
+    "password": "{{password}}"
+  }
+}
+
+docs {
+  Admin only. Creates a center administrator account for the center; answers 201 with `userId`.
+}

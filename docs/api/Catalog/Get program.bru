@@ -1,0 +1,15 @@
+meta {
+  name: Get program
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/programs/{{programId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Public for published programs. Signed in as the owning center (bearer `centerToken`), drafts and archived programs are visible too.
+}

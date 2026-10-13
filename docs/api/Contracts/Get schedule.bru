@@ -1,0 +1,25 @@
+meta {
+  name: Get schedule
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/contracts/{{contractId}}/schedule
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.installments && res.body.installments.length > 0) {
+    bru.setEnvVar("firstDueDate", res.body.installments[0].dueDate);
+  }
+}
+
+docs {
+  The instalment table (or where an ISA stands). The worker opens the plan once the contract is active, so this answers 404 for a moment after activation: repeat. Stores the first due date in `firstDueDate` for "Run billing (ops)".
+}

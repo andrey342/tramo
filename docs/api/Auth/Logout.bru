@@ -1,0 +1,21 @@
+meta {
+  name: Logout
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+docs {
+  Ends the session the refresh token belongs to (204). The current access token keeps working until it expires. Run "Login new student" to get a new session.
+}

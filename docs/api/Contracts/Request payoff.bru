@@ -1,0 +1,29 @@
+meta {
+  name: Request payoff
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/contracts/{{contractId}}/payoff
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+body:json {
+  {
+    "amountCents": {{payoffAmountCents}}
+  }
+}
+
+docs {
+  Not part of the happy path: the student repays everything today and billing collects it, which ends the contract early. `amountCents` must equal today's quote ("Payoff quote" stores it).
+}

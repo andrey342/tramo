@@ -1,0 +1,19 @@
+meta {
+  name: Cancel application
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/applications/{{applicationId}}/cancel
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  Not part of the happy path: it withdraws the application in `applicationId`. Only an application that is not final yet can be cancelled (409 otherwise).
+}

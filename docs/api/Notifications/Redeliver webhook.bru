@@ -1,0 +1,23 @@
+meta {
+  name: Redeliver webhook
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/centers/{{centerId}}/webhook-deliveries/{{deliveryId}}/redeliver
+  body: none
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+docs {
+  Posts a delivery again as a new round of attempts (center admin, ops or admin). 409 while the delivery is still pending.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Get statement
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/contracts/{{contractId}}/statement
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  Charges, payments and write-offs in order, with the running balance owed. The ledger records a payment from the charge's event, a moment after the charge is paid.
+}
