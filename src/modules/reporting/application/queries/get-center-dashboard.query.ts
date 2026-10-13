@@ -4,7 +4,7 @@ import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 import { type Principal } from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
-import { shareOf } from '../../domain';
+import { centerFigures, shareOf } from '../../domain';
 import { type CenterDashboardDto } from '../dto/reporting.dto';
 import { REPORTING_STORE, type ReportingStore } from '../ports/reporting-ports';
 import { assertCanSeeCenter } from '../reporting-access';
@@ -29,7 +29,7 @@ export class GetCenterDashboardHandler implements IQueryHandler<GetCenterDashboa
 
   async execute(query: GetCenterDashboardQuery): Promise<CenterDashboardDto> {
     assertCanSeeCenter(query.actor, query.centerId);
-    const figures = await this.store.centerFigures(query.centerId);
+    const figures = centerFigures(await this.store.centerRows(query.centerId));
     const { active, inArrears } = figures.contracts;
     return {
       centerId: query.centerId,

@@ -15,6 +15,7 @@ import {
   type ContractActivatedPayload,
   type ContractCancelledPayload,
   type ContractCompletedPayload,
+  type ContractCreatedPayload,
   type ContractDefaultedPayload,
   type DisbursementFailedPayload,
   type DisbursementRequestedPayload,
@@ -34,6 +35,7 @@ import {
   OriginationEvents,
 } from '@modules/origination/domain/events/origination-events';
 import { type IntegrationEvent } from '@shared/application';
+import { CalendarDate } from '@shared/domain';
 
 import { REPORTING_STORE, type ReportingStore } from './ports/reporting-ports';
 
@@ -112,14 +114,31 @@ const PROJECTIONS: Readonly<Record<string, Project>> = {
       status: 'cancelled',
     });
   },
-  [OriginationEvents.ApplicationExpired]: (store, event, at) => {
+  // A draft that expired was never in the funnel.
+  [OriginationEvents.ApplicationExpired]: async (store, event, at) => {
     const p = event.payload as unknown as ApplicationExpiredPayload;
-    return store.recordApplication({
+    if (p.expiredFrom === 'draft') {
+      return;
+    }
+    await store.recordApplication({
       applicationId: p.applicationId,
       at,
       eventId: event.eventId,
       centerId: p.centerId,
       status: 'expired',
+    });
+  },
+  // What the contract is, for the facts of its charges and disbursements; its status starts
+  // with activation (or cancellation before it).
+  [LendingEvents.ContractCreated]: (store, event, at) => {
+    const p = event.payload as unknown as ContractCreatedPayload;
+    return store.recordContract({
+      contractId: p.contractId,
+      at,
+      eventId: event.eventId,
+      centerId: p.centerId,
+      product: p.product,
+      principalCents: p.principalCents,
     });
   },
   [LendingEvents.ContractActivated]: (store, event, at) => {
@@ -275,7 +294,7 @@ const PROJECTIONS: Readonly<Record<string, Project>> = {
       contractId: p.contractId,
       kind: p.kind,
       status: 'failed',
-      failedOn: at.toISOString().slice(0, 10),
+      failedOn: CalendarDate.fromInstant(at).toString(),
     });
   },
   [BillingEvents.ChargeOverdue]: (store, event, at) => {

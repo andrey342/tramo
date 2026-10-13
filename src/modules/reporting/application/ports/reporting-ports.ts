@@ -1,8 +1,5 @@
-import {
-  type CenterFiguresDto,
-  type OpsFiguresDto,
-  type ProgramFiguresDto,
-} from '../dto/reporting.dto';
+import { type CenterRows } from '../../domain';
+import { type OpsFiguresDto, type ProgramFiguresDto } from '../dto/reporting.dto';
 
 export const REPORTING_STORE = Symbol('REPORTING_STORE');
 export const PROGRAMS = Symbol('PROGRAMS');
@@ -25,8 +22,13 @@ export type ChargeStatus =
 export type Product = 'installments' | 'isa';
 
 // One fact per application, contract, disbursement and charge, built up from the events that
-// mention it: each event sets what it knows (an absent field leaves the stored one), and the
-// status of the most recent event wins, whatever order events arrive in.
+// mention it, so that applying events twice or in any order leaves the same facts:
+// - descriptive fields (center, program, product, amounts) are the same in every event that
+//   carries them; an absent one leaves the stored value;
+// - the status follows the most recent event (time, then event id), except that a final status
+//   (a contract completed, defaulted or cancelled; a charge paid, written off or cancelled; an
+//   application rejected, accepted, cancelled or expired) is never replaced by one that is not;
+// - an application's decision is set once; a charge keeps the day of its latest failure.
 export interface ApplicationFact {
   readonly applicationId: string;
   readonly at: Date;
@@ -77,14 +79,17 @@ export interface ChargeFact {
 }
 
 // The read models: written by the projector, read by the dashboards. Writes are upserts that can
-// be applied twice; reset() empties every read model for a rebuild, inside its transaction.
+// be applied twice and in any order.
 export interface ReportingStore {
   recordApplication(fact: ApplicationFact): Promise<void>;
   recordContract(fact: ContractFact): Promise<void>;
   recordDisbursement(fact: DisbursementFact): Promise<void>;
   recordCharge(fact: ChargeFact): Promise<void>;
-  reset(): Promise<void>;
-  centerFigures(centerId: string): Promise<CenterFiguresDto>;
+  // Opens a rebuild: the first call of its transaction. Reads the history from one snapshot,
+  // keeps writers out until it commits (readers still see the old facts) and empties the facts.
+  beginRebuild(): Promise<void>;
+  // A center's submitted applications, contracts, disbursements and charges, grouped.
+  centerRows(centerId: string): Promise<CenterRows>;
   programFigures(programId: string): Promise<ProgramFiguresDto>;
   // `today`: YYYY-MM-DD, UTC.
   opsFigures(today: string): Promise<OpsFiguresDto>;

@@ -1,43 +1,12 @@
-// What the read models answer, as counts and sums; the use cases add rates and averages.
+import { type CenterFigures } from '../../domain';
 
-export interface ApplicationCountsDto {
-  readonly submitted: number;
-  readonly approved: number;
-  readonly needsReview: number;
-  readonly rejected: number;
-  readonly offerAccepted: number;
-  readonly cancelled: number;
-  readonly expired: number;
-}
-
-export interface ContractCountsDto {
-  readonly active: number;
-  readonly inArrears: number;
-  readonly completed: number;
-  readonly defaulted: number;
-  readonly cancelled: number;
-}
-
-export interface MoneyFiguresDto {
-  readonly disbursedCents: number;
-  readonly collectedCents: number;
-  // Charged and not collected yet: scheduled, failed or overdue.
-  readonly outstandingCents: number;
-  readonly writtenOffCents: number;
-}
-
-export interface ProductFiguresDto extends MoneyFiguresDto {
-  readonly product: 'installments' | 'isa';
-  readonly contracts: ContractCountsDto;
-}
-
-export interface CenterFiguresDto extends MoneyFiguresDto {
-  // Applications by where they are now; one that was approved and then accepted counts as
-  // accepted.
-  readonly applications: ApplicationCountsDto;
-  readonly contracts: ContractCountsDto;
-  readonly byProduct: readonly ProductFiguresDto[];
-}
+export type {
+  ApplicationCounts as ApplicationCountsDto,
+  CenterFigures as CenterFiguresDto,
+  ContractCounts as ContractCountsDto,
+  MoneyFigures as MoneyFiguresDto,
+  ProductFigures as ProductFiguresDto,
+} from '../../domain';
 
 export interface ProgramFiguresDto {
   readonly applications: number;
@@ -56,7 +25,7 @@ export interface OpsFiguresDto {
   readonly contractsInArrears: number;
 }
 
-export interface CenterDashboardDto extends CenterFiguresDto {
+export interface CenterDashboardDto extends CenterFigures {
   readonly centerId: string;
   // Contracts in arrears among those being repaid; null while none is.
   readonly delinquencyRateBasisPoints: number | null;
@@ -73,6 +42,8 @@ export interface ProgramPerformanceDto {
   readonly approvalRateBasisPoints: number | null;
   readonly averageTicketCents: number | null;
   readonly scoredApplications: number;
+  // Shown only from a cohort large enough not to reveal one applicant's score (origination
+  // decides), rounded to a band.
   readonly averageScore: number | null;
   readonly generatedAt: Date;
 }

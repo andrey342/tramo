@@ -14,9 +14,9 @@ import { ReportingProjector } from '../reporting-projector';
 const PAGE = 500;
 
 // The read models thrown away and rebuilt from the whole history of events, in the order they
-// happened (ADR 019). One transaction: the dashboards keep answering with the old figures until
-// it commits, and live consumers wait for it, then apply what they bring on top (idempotent).
-// Returns how many events were applied.
+// happened (ADR 019). One transaction, on one snapshot of the history: dashboards keep answering
+// with the old figures until it commits; live consumers wait for it, then apply what they bring
+// on top (the facts take an event twice). Returns how many events were applied.
 export class RebuildProjectionsCommand extends Command<number> {}
 
 @CommandHandler(RebuildProjectionsCommand)
@@ -30,7 +30,7 @@ export class RebuildProjectionsHandler implements ICommandHandler<RebuildProject
 
   execute(): Promise<number> {
     return this.uow.run(async () => {
-      await this.store.reset();
+      await this.store.beginRebuild();
       let applied = 0;
       let after: string | null = null;
       for (;;) {

@@ -1,8 +1,4 @@
 import {
-  type ApplicationCountsDto,
-  type CenterFiguresDto,
-  type ContractCountsDto,
-  type MoneyFiguresDto,
   type OpsFiguresDto,
   type ProgramFiguresDto,
 } from '../../src/modules/reporting/application/dto/reporting.dto';
@@ -11,23 +7,30 @@ import {
   type ChargeFact,
   type ContractFact,
   type DisbursementFact,
-  type Product,
   type Programs,
   type ProgramScores,
   type QueueHealth,
   type RebuildJobs,
   type ReportingStore,
 } from '../../src/modules/reporting/application/ports/reporting-ports';
+import { type CenterRows, type Product } from '../../src/modules/reporting/domain';
 import { type EventHistory, type IntegrationEvent } from '../../src/shared/application';
 
 type Row<F> = Omit<F, 'at' | 'eventId'> & { lastEventAt: Date; lastEventId: string };
 
-// The same rule as the SQL upserts: descriptive fields keep what an event did not say, status
-// fields follow the most recent event by (time, id).
-function merge<F extends { at: Date; eventId: string }>(
+interface Rules {
+  readonly terminal: readonly string[];
+  // Set once, never replaced.
+  readonly once?: readonly string[];
+  // Kept at their greatest value.
+  readonly greatest?: readonly string[];
+}
+
+// The same rules as the SQL upserts (see the ReportingStore port).
+function merge<F extends { at: Date; eventId: string; status?: string }>(
   existing: Row<F> | undefined,
   fact: F,
-  statuses: readonly string[],
+  rules: Rules,
 ): Row<F> {
   const { at, eventId, ...fields } = fact;
   if (!existing) {
@@ -37,10 +40,17 @@ function merge<F extends { at: Date; eventId: string }>(
     at.getTime() > existing.lastEventAt.getTime() ||
     (at.getTime() === existing.lastEventAt.getTime() && eventId >= existing.lastEventId);
   const merged: Record<string, unknown> = { ...existing };
-  for (const [key, value] of Object.entries(fields)) {
+  for (const [key, value] of Object.entries(fields) as [string, string | number | undefined][]) {
     if (value === undefined) continue;
-    if (statuses.includes(key)) {
-      if (newer) merged[key] = value;
+    const stored = merged[key] as string | number | undefined;
+    if (key === 'status') {
+      const keepsFinal =
+        rules.terminal.includes(String(stored)) && !rules.terminal.includes(String(value));
+      if (newer && !keepsFinal) merged[key] = value;
+    } else if (rules.once?.includes(key)) {
+      merged[key] = stored ?? value;
+    } else if (rules.greatest?.includes(key)) {
+      merged[key] = stored === undefined || String(value) > String(stored) ? value : stored;
     } else {
       merged[key] = value;
     }
@@ -50,21 +60,21 @@ function merge<F extends { at: Date; eventId: string }>(
   return merged as Row<F>;
 }
 
-type Tally<T> = { -readonly [K in keyof T]: T[K] };
-
-const noContracts = (): Tally<ContractCountsDto> => ({
-  active: 0,
-  inArrears: 0,
-  completed: 0,
-  defaulted: 0,
-  cancelled: 0,
-});
-const noMoney = (): Tally<MoneyFiguresDto> => ({
-  disbursedCents: 0,
-  collectedCents: 0,
-  outstandingCents: 0,
-  writtenOffCents: 0,
-});
+function group<R, K extends string>(
+  rows: readonly R[],
+  key: (row: R) => Record<K, string | null>,
+  value: (row: R) => number,
+): (Record<K, string | null> & { value: number })[] {
+  const groups = new Map<string, Record<K, string | null> & { value: number }>();
+  for (const row of rows) {
+    const keys = key(row);
+    const id = JSON.stringify(keys);
+    const current = groups.get(id) ?? { ...keys, value: 0 };
+    current.value += value(row);
+    groups.set(id, current);
+  }
+  return [...groups.values()];
+}
 
 export class InMemoryReportingStore implements ReportingStore {
   readonly applications = new Map<string, Row<ApplicationFact>>();
@@ -75,7 +85,10 @@ export class InMemoryReportingStore implements ReportingStore {
   recordApplication(fact: ApplicationFact): Promise<void> {
     this.applications.set(
       fact.applicationId,
-      merge(this.applications.get(fact.applicationId), fact, ['status', 'decision']),
+      merge(this.applications.get(fact.applicationId), fact, {
+        terminal: ['rejected', 'offer_accepted', 'cancelled', 'expired'],
+        once: ['decision'],
+      }),
     );
     return Promise.resolve();
   }
@@ -83,7 +96,9 @@ export class InMemoryReportingStore implements ReportingStore {
   recordContract(fact: ContractFact): Promise<void> {
     this.contracts.set(
       fact.contractId,
-      merge(this.contracts.get(fact.contractId), fact, ['status']),
+      merge(this.contracts.get(fact.contractId), fact, {
+        terminal: ['completed', 'defaulted', 'cancelled'],
+      }),
     );
     return Promise.resolve();
   }
@@ -91,7 +106,7 @@ export class InMemoryReportingStore implements ReportingStore {
   recordDisbursement(fact: DisbursementFact): Promise<void> {
     this.disbursements.set(
       fact.disbursementId,
-      merge(this.disbursements.get(fact.disbursementId), fact, ['status']),
+      merge(this.disbursements.get(fact.disbursementId), fact, { terminal: ['settled'] }),
     );
     return Promise.resolve();
   }
@@ -99,12 +114,15 @@ export class InMemoryReportingStore implements ReportingStore {
   recordCharge(fact: ChargeFact): Promise<void> {
     this.charges.set(
       fact.chargeId,
-      merge(this.charges.get(fact.chargeId), fact, ['status', 'failedOn']),
+      merge(this.charges.get(fact.chargeId), fact, {
+        terminal: ['paid', 'written_off', 'cancelled'],
+        greatest: ['failedOn'],
+      }),
     );
     return Promise.resolve();
   }
 
-  reset(): Promise<void> {
+  beginRebuild(): Promise<void> {
     this.applications.clear();
     this.contracts.clear();
     this.disbursements.clear();
@@ -112,80 +130,61 @@ export class InMemoryReportingStore implements ReportingStore {
     return Promise.resolve();
   }
 
-  centerFigures(centerId: string): Promise<CenterFiguresDto> {
-    const applications: Tally<ApplicationCountsDto> = {
-      submitted: 0,
-      approved: 0,
-      needsReview: 0,
-      rejected: 0,
-      offerAccepted: 0,
-      cancelled: 0,
-      expired: 0,
-    };
-    const names: Record<string, keyof ApplicationCountsDto> = {
-      submitted: 'submitted',
-      approved: 'approved',
-      needs_review: 'needsReview',
-      rejected: 'rejected',
-      offer_accepted: 'offerAccepted',
-      cancelled: 'cancelled',
-      expired: 'expired',
-    };
-    for (const row of this.applications.values()) {
-      const key = row.status ? names[row.status] : undefined;
-      if (row.centerId === centerId && key) applications[key] += 1;
-    }
-    const totals = { contracts: noContracts(), money: noMoney() };
-    const products = new Map<Product, typeof totals>([
-      ['installments', { contracts: noContracts(), money: noMoney() }],
-      ['isa', { contracts: noContracts(), money: noMoney() }],
-    ]);
-    const targets = (product: Product | undefined) => [
-      totals,
-      ...(product ? [products.get(product)] : []),
-    ];
-    const contractNames: Record<string, keyof ContractCountsDto> = {
-      active: 'active',
-      in_arrears: 'inArrears',
-      completed: 'completed',
-      defaulted: 'defaulted',
-      cancelled: 'cancelled',
-    };
-    for (const row of this.contracts.values()) {
-      const key = row.status ? contractNames[row.status] : undefined;
-      if (row.centerId !== centerId || !key) continue;
-      for (const target of targets(row.product)) if (target) target.contracts[key] += 1;
-    }
-    for (const row of this.disbursements.values()) {
-      if (row.centerId !== centerId || row.status !== 'settled') continue;
-      const product = row.contractId ? this.contracts.get(row.contractId)?.product : undefined;
-      for (const target of targets(product)) {
-        if (target) target.money.disbursedCents += row.amountCents ?? 0;
-      }
-    }
-    const money: Record<string, keyof MoneyFiguresDto> = {
-      paid: 'collectedCents',
-      scheduled: 'outstandingCents',
-      failed: 'outstandingCents',
-      overdue: 'outstandingCents',
-      written_off: 'writtenOffCents',
-    };
-    for (const row of this.charges.values()) {
-      const contract = row.contractId ? this.contracts.get(row.contractId) : undefined;
-      const key = row.status ? money[row.status] : undefined;
-      if ((row.centerId ?? contract?.centerId) !== centerId || !key) continue;
-      for (const target of targets(contract?.product)) {
-        if (target) target.money[key] += row.amountCents ?? 0;
-      }
-    }
+  centerRows(centerId: string): Promise<CenterRows> {
+    const productOf = (contractId: string | undefined): Product | null =>
+      (contractId ? this.contracts.get(contractId)?.product : undefined) ?? null;
+    const applications = [...this.applications.values()].filter(
+      (row) => row.centerId === centerId && row.programId !== undefined && row.status,
+    );
+    const contracts = [...this.contracts.values()].filter(
+      (row) => row.centerId === centerId && row.status,
+    );
+    const disbursements = [...this.disbursements.values()].filter(
+      (row) => row.centerId === centerId && row.status,
+    );
+    const charges = [...this.charges.values()].filter(
+      (row) =>
+        (row.centerId ??
+          (row.contractId ? this.contracts.get(row.contractId)?.centerId : undefined)) ===
+          centerId && row.status,
+    );
     return Promise.resolve({
-      applications,
-      contracts: totals.contracts,
-      ...totals.money,
-      byProduct: (['installments', 'isa'] as const).map((product) => ({
-        product,
-        contracts: products.get(product)?.contracts ?? noContracts(),
-        ...(products.get(product)?.money ?? noMoney()),
+      applications: group(
+        applications,
+        (row) => ({ status: row.status ?? null }),
+        () => 1,
+      ).map((row) => ({ status: row.status ?? '', count: row.value })),
+      contracts: group(
+        contracts,
+        (row) => ({ product: row.product ?? null, status: row.status ?? null }),
+        () => 1,
+      ).map((row) => ({
+        product: row.product as Product | null,
+        status: row.status ?? '',
+        count: row.value,
+      })),
+      disbursements: group(
+        disbursements,
+        (row) => ({ product: productOf(row.contractId), status: row.status ?? null }),
+        (row) => row.amountCents ?? 0,
+      ).map((row) => ({
+        product: row.product as Product | null,
+        status: row.status ?? '',
+        cents: row.value,
+      })),
+      charges: group(
+        charges,
+        (row) => ({
+          product: productOf(row.contractId),
+          kind: row.kind ?? null,
+          status: row.status ?? null,
+        }),
+        (row) => row.amountCents ?? 0,
+      ).map((row) => ({
+        product: row.product as Product | null,
+        kind: row.kind,
+        status: row.status ?? '',
+        cents: row.value,
       })),
     });
   }
@@ -207,7 +206,10 @@ export class InMemoryReportingStore implements ReportingStore {
       [...rows].filter(match).length;
     return Promise.resolve({
       reviewQueue: count(this.applications.values(), (row) => row.status === 'needs_review'),
-      failedChargesToday: count(this.charges.values(), (row) => row.failedOn === today),
+      failedChargesToday: count(
+        this.charges.values(),
+        (row) => row.failedOn === today && (row.status === 'failed' || row.status === 'overdue'),
+      ),
       pendingDisbursements: count(
         this.disbursements.values(),
         (row) => row.status === 'pending' || row.status === 'sent',

@@ -192,14 +192,30 @@ describe('reporting use cases', () => {
     const portfolio = aPortfolio();
     await t.happened(...portfolio.events);
     const live = await t.dashboard.execute(new GetCenterDashboardQuery(OPS, portfolio.centerId));
-    t.store.applications.clear();
-    t.store.charges.clear();
+    await t.store.beginRebuild();
 
     const applied = await t.rebuild.execute();
     const rebuilt = await t.dashboard.execute(new GetCenterDashboardQuery(OPS, portfolio.centerId));
 
     expect(applied).toBe(portfolio.events.length);
     expect(rebuilt).toEqual(live);
+  });
+
+  // Consumers run one job per event: the same events in any order, some twice, give the same
+  // figures.
+  it('should end with the same figures whatever the order of the events, and their repeats', async () => {
+    const inOrder = setup();
+    const shuffled = setup();
+    const portfolio = aPortfolio();
+    await inOrder.happened(...portfolio.events);
+    const reversed = [...portfolio.events].reverse();
+    await shuffled.happened(...reversed, ...portfolio.events.filter((_, index) => index % 2 === 0));
+
+    const query = new GetCenterDashboardQuery(OPS, portfolio.centerId);
+    expect(await shuffled.dashboard.execute(query)).toEqual(await inOrder.dashboard.execute(query));
+    expect(await shuffled.overview.execute(new GetOpsOverviewQuery(OPS))).toEqual(
+      await inOrder.overview.execute(new GetOpsOverviewQuery(OPS)),
+    );
   });
 
   it('should ignore events the read models do not follow', async () => {
