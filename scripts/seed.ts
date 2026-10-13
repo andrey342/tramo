@@ -50,7 +50,14 @@ import {
 import { GetApplicationQuery } from '../src/modules/origination/application/queries/get-application.query';
 import { OriginationModule } from '../src/modules/origination/origination.module';
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '../src/shared/application';
-import { CLOCK, type Clock, Email, unwrap, VatNumber } from '../src/shared/domain';
+import {
+  CLOCK,
+  type Clock,
+  ConcurrentModificationError,
+  Email,
+  unwrap,
+  VatNumber,
+} from '../src/shared/domain';
 import { APP_CONFIG, type AppConfig, loadDotEnv } from '../src/shared/infrastructure/config';
 import { CoreModule } from '../src/shared/infrastructure/core.module';
 
@@ -302,6 +309,7 @@ const STUDENTS: readonly {
 ];
 
 const DECIDED: readonly string[] = ['approved', 'rejected', 'needs_review'];
+const UNFINISHED: readonly string[] = ['draft', 'submitted', 'verifying', 'scoring'];
 
 async function seed(): Promise<void> {
   loadDotEnv();
@@ -367,7 +375,8 @@ async function seed(): Promise<void> {
       }
       for (const program of center.programs) {
         const [found] = await db.query<{ id: string; status: string }[]>(
-          'SELECT id, status FROM catalog.programs WHERE center_id = $1 AND name = $2 LIMIT 1',
+          `SELECT id, status FROM catalog.programs WHERE center_id = $1 AND name = $2
+           ORDER BY (status = 'published') DESC LIMIT 1`,
           [existing.id, program.name],
         );
         if (found?.status === 'published') continue;
@@ -435,25 +444,26 @@ async function seed(): Promise<void> {
       for (const item of student.applications) {
         const programId = programIds.get(item.program);
         if (!programId) continue;
-        // One application per program; a draft left by a run that stopped early is finished.
+        // One application per program; one left halfway by a run that stopped early is finished.
         const found = own.find((application) => application.programId === programId);
-        if (found && found.status !== 'draft') continue;
-        const outcome = await applyAndVerify(actor, programId, found?.id ?? null, item);
+        if (found && !UNFINISHED.includes(found.status)) continue;
+        const outcome = await applyAndVerify(actor, programId, found ?? null, item);
         log(`application of ${student.email} for ${outcome}`);
       }
     }
 
-    // The verification saga runs here so the seed does not depend on the worker. When the worker is
-    // up it runs the same saga on ApplicationSubmitted; if it gets there first, a step here fails
-    // and the seed waits for its decision instead.
+    // The verification saga runs here so the seed does not depend on the worker; its steps do
+    // nothing when already done, so an application left halfway is picked up where it stopped.
+    // When the worker is up it runs the same saga on ApplicationSubmitted; if it saves first, a
+    // step here loses the optimistic lock and the seed waits for the worker's decision instead.
     async function applyAndVerify(
       actor: Principal,
       programId: string,
-      draftId: string | null,
+      found: { readonly id: string; readonly status: string } | null,
       item: { readonly product: RequestedProductDto; readonly profile: ProfileInput },
     ): Promise<string> {
       const id =
-        draftId ??
+        found?.id ??
         (
           await commands.execute(
             new StartApplicationCommand(actor, {
@@ -463,17 +473,21 @@ async function seed(): Promise<void> {
             }),
           )
         ).id;
-      await commands.execute(new SubmitApplicationCommand(actor, id));
+      if (!found || found.status === 'draft') {
+        await commands.execute(new SubmitApplicationCommand(actor, id));
+      }
       const queries = app.get(QueryBus);
       try {
         for (const type of ['kyc', 'employment', 'bureau'] as const) {
           await commands.execute(new RunVerificationCommand(id, type));
         }
         await commands.execute(new ScoreApplicationCommand(id));
-      } catch {
-        for (let waited = 0; waited < 60_000; waited += 500) {
+      } catch (error) {
+        if (!(error instanceof ConcurrentModificationError)) throw error;
+        for (let waited = 0; ; waited += 500) {
           const current = await queries.execute(new GetApplicationQuery(actor, id));
           if (DECIDED.includes(current.status)) break;
+          if (waited >= 60_000) throw error;
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
