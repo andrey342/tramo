@@ -12,6 +12,8 @@ export const OriginationEvents = {
   OfferAccepted: 'OfferAccepted',
   ApplicationCancelled: 'ApplicationCancelled',
   ApplicationExpired: 'ApplicationExpired',
+  ApplicationWithdrawn: 'ApplicationWithdrawn',
+  ApplicationClosed: 'ApplicationClosed',
 } as const;
 
 // Starts the verification saga.
@@ -93,4 +95,18 @@ export type ApplicationExpiredPayload = {
   readonly centerId: string;
   // The state it was left in: an approved offer nobody accepted, or a draft never submitted.
   readonly expiredFrom: ApplicationStatus;
+};
+
+// The contract drawn from the accepted offer was cancelled before it took effect (the student
+// declined or never signed it): the program is free to be financed again.
+export type ApplicationWithdrawnPayload = {
+  readonly applicationId: string;
+  readonly centerId: string;
+};
+
+// The contract drawn from the accepted offer ran its course: the program is free to be financed
+// again.
+export type ApplicationClosedPayload = {
+  readonly applicationId: string;
+  readonly centerId: string;
 };

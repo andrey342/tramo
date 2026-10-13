@@ -2,6 +2,10 @@ import { Query } from '@nestjs/cqrs';
 
 import { type ProgramStatus } from '../../domain';
 
+// The bounds of what a program may offer, so origination validates an application's term against
+// the same limits the catalog publishes programs with.
+export { FINANCING_LIMITS } from '../../domain';
+
 import { type CatalogProgramDto } from './program.dto';
 
 // Part of the module's public surface: origination snapshots the program a student applies for.

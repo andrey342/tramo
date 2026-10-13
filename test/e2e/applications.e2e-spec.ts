@@ -252,6 +252,11 @@ describe('Applications (e2e)', () => {
       programId,
       product: { kind: 'installments', termMonths: 36 },
     });
+    // No program offers more than 48 months: refused as a malformed request, before the program.
+    const termOutOfRange = await start(bearer(ana.token), {
+      programId,
+      product: { kind: 'installments', termMonths: 60 },
+    });
     const noProduct = await start(bearer(ana.token), { programId });
     const opsCannotApply = await start(bearer(opsToken), {
       programId,
@@ -267,6 +272,7 @@ describe('Applications (e2e)', () => {
     expect(nullField.status).toBe(400);
     expect(badTerm.status).toBe(422);
     expect(badTerm.body.code).toBe('product_not_offered');
+    expect(termOutOfRange.status).toBe(400);
     expect(noProduct.status).toBe(400);
     expect(opsCannotApply.status).toBe(403);
   });
@@ -278,15 +284,23 @@ describe('Applications (e2e)', () => {
     const byOps = await api()
       .post('/api/v1/risk-policies')
       .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7())
+      .send({ approveThreshold: 75 });
+    const withoutKey = await api()
+      .post('/api/v1/risk-policies')
+      .set(...bearer(adminToken))
       .send({ approveThreshold: 75 });
     const invalid = await api()
       .post('/api/v1/risk-policies')
       .set(...bearer(adminToken))
+      .set('Idempotency-Key', uuidv7())
       .send({ approveThreshold: 40 });
 
     expect(current.status).toBe(200);
     expect(current.body.maxFinanceableCents).toBe(1_200_000);
     expect(byOps.status).toBe(403);
+    expect(withoutKey.status).toBe(400);
+    expect(withoutKey.body.code).toBe('idempotency_key_missing');
     expect(invalid.status).toBe(422);
     expect(invalid.body.code).toBe('invalid_risk_policy');
   });

@@ -273,7 +273,10 @@ Financing applications, from the student's draft to an accepted offer.
   14 days (no change of status, no edit of the draft) expires, through an hourly sweep in the
   worker; one waiting for an analyst does not, the review queue being ops' backlog. A student
   has at most one open application per program (a partial unique index), so two offers for one
-  course cannot both be accepted.
+  course cannot both be accepted. An accepted offer follows its contract: lending's
+  `ContractCancelled` moves it to `withdrawn` (`origination.withdraw-application`) and
+  `ContractCompleted` to `closed` (`origination.close-application`), both final and freeing the
+  program for a new application; a defaulted contract keeps it held.
 - **Who does what.** A student applies for themselves; a training center's integration (API key
   with `applications:write`) starts a draft for a student of its own programs, who must already
   have an account (`FindStudentQuery`, iam's public query). The center picks the program and the
@@ -605,7 +608,8 @@ modules (ADR 019). It decides nothing and owns no aggregate.
   contract's.
 - **Figures.** Pure functions of the domain over rows the store groups, computed when asked:
   - `GET /centers/:id/dashboard` (the center's admins, its API keys with `portfolio:read`,
-    staff): applications submitted (drafts are not in the funnel) by where they are now,
+    staff): applications submitted (drafts are not in the funnel) by where they are now (an
+    accepted offer stays accepted whatever its contract does next; contracts count that),
     contracts by state, in total and by product, money disbursed (settled transfers), collected,
     outstanding (charged, not collected; a payoff being collected is left out, it covers the
     charges still open) and written off, and the delinquency rate (contracts in arrears among

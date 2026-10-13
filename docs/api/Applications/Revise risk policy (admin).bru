@@ -10,6 +10,10 @@ post {
   auth: bearer
 }
 
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
 auth:bearer {
   token: {{adminToken}}
 }

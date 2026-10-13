@@ -26,6 +26,8 @@ const TERMINAL: readonly ApplicationStatus[] = [
   'offer_accepted',
   'cancelled',
   'expired',
+  'withdrawn',
+  'closed',
 ];
 
 // An application nobody has touched for this long expires: a draft abandoned, an offer never
@@ -60,7 +62,12 @@ export interface FinancingApplicationProps {
 //   draft → submitted → verifying → scoring → approved | needs_review | rejected
 //   needs_review → approved | rejected            (ops, with a reason)
 //   approved → offer_accepted                     (lending takes over)
+//   offer_accepted → withdrawn | closed           (lending: contract cancelled | completed)
 //   any state not final → cancelled (student) | expired (EXPIRY_DAYS without moving)
+//
+// An accepted offer holds the program (one open application per program) until its contract is
+// cancelled before taking effect or runs its course; then the student may apply for that program
+// again. A defaulted contract keeps it held: the debt for that course is in collection.
 //
 // Verification results arrive in any order: the first moves it to verifying, the third to scoring.
 export class FinancingApplication extends AggregateRoot {
@@ -380,6 +387,40 @@ export class FinancingApplication extends AggregateRoot {
     this.moveTo('cancelled', now);
     this.record({
       eventType: OriginationEvents.ApplicationCancelled,
+      aggregateType: 'FinancingApplication',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { applicationId: this.id, centerId: this.centerId },
+    });
+  }
+
+  // Lending cancelled the contract before it took effect: the accepted offer did not lead to a
+  // contract in force. Idempotent (a redelivered ContractCancelled).
+  withdraw(now: Date): void {
+    if (this.props.status === 'withdrawn') {
+      return;
+    }
+    this.assertStatus('offer_accepted', 'withdrawn');
+    this.moveTo('withdrawn', now);
+    this.record({
+      eventType: OriginationEvents.ApplicationWithdrawn,
+      aggregateType: 'FinancingApplication',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: { applicationId: this.id, centerId: this.centerId },
+    });
+  }
+
+  // The contract drawn from the offer ran its course. Idempotent (a redelivered
+  // ContractCompleted).
+  close(now: Date): void {
+    if (this.props.status === 'closed') {
+      return;
+    }
+    this.assertStatus('offer_accepted', 'closed');
+    this.moveTo('closed', now);
+    this.record({
+      eventType: OriginationEvents.ApplicationClosed,
       aggregateType: 'FinancingApplication',
       aggregateId: this.id,
       occurredAt: now,

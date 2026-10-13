@@ -9,6 +9,8 @@ import {
   type KycResult,
   type ProgramSnapshot,
   type RequestedProduct,
+  RiskPolicy,
+  ScoringEngine,
 } from '../../src/modules/origination/domain';
 import { Money, NationalId, Percentage, unwrap } from '../../src/shared/domain';
 
@@ -106,6 +108,29 @@ export function anApplicationInScoring(
   application.recordVerification({ type: 'kyc', result: passedKyc() }, NOW);
   application.recordVerification({ type: 'employment', result: steadyEmployment() }, NOW);
   application.recordVerification({ type: 'bureau', result: cleanBureau() }, NOW);
+  application.pullEvents();
+  return application;
+}
+
+// Approved by the engine and accepted by the student: lending draws the contract up next.
+export function anAcceptedApplication(
+  overrides: Parameters<typeof aDraftApplication>[0] = {},
+): FinancingApplication {
+  const application = anApplicationInScoring(overrides);
+  const decision = ScoringEngine.decide(
+    {
+      profile: application.submittedProfile,
+      program: application.program,
+      product: application.product,
+      kyc: passedKyc(),
+      employment: steadyEmployment(),
+      bureau: cleanBureau(),
+    },
+    RiskPolicy.initial(NOW),
+    NOW,
+  );
+  application.decide({ ...decision, outcome: 'approved' }, NOW);
+  application.acceptOffer(NOW);
   application.pullEvents();
   return application;
 }

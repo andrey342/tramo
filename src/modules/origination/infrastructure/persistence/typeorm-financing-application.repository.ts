@@ -17,12 +17,15 @@ import {
 import { FinancingApplicationOrmEntity } from './financing-application.orm-entity';
 import { FinancingApplicationMapper } from './origination.mappers';
 
-// Final, or waiting for an analyst: never expired (FinancingApplication.isStale).
+// Final, or waiting for an analyst: never expired (FinancingApplication.isStale). The same list
+// as the predicate of the index that serves the sweep.
 const NOT_EXPIRING = [
   'rejected',
   'offer_accepted',
   'cancelled',
   'expired',
+  'withdrawn',
+  'closed',
   'needs_review',
 ] as const;
 

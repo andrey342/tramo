@@ -127,12 +127,17 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   scoring → approved | needs_review | rejected      the scoring engine decides
   needs_review → approved | rejected       an ops analyst, with a reason
   approved → offer_accepted                the student accepts; lending takes over
+  offer_accepted → withdrawn               lending's ContractCancelled (declined or never signed)
+  offer_accepted → closed                  lending's ContractCompleted (the contract ran its course)
   any non-final → cancelled                the student cancels
   any non-final but needs_review → expired 14 days without a change (hourly sweep)
   ```
 
-  Final states: `rejected`, `offer_accepted`, `cancelled`, `expired`. A student has at most one
-  open application per program.
+  Final states: `rejected`, `offer_accepted`, `cancelled`, `expired`, `withdrawn`, `closed`; only
+  the consumers of lending's events move an accepted offer on. A student has at most one open
+  application per program: every final state but `offer_accepted` frees it, so an accepted offer
+  holds the program until its contract is cancelled (`withdrawn`) or completed (`closed`). A
+  defaulted contract keeps it held: the debt for that course is in collection.
 
 - **`ApplicantProfile`**: what the student declares: `dateOfBirth`, `nationalId` (encrypted,
   shown masked), `residenceCountry`, `declaredMonthlyIncome`, `employmentStatus`
@@ -178,7 +183,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   accepted.
 - Events: `ApplicationSubmitted`, `VerificationCompleted`, `ApplicationApproved`,
   `ApplicationNeedsReview`, `ApplicationRejected`, `OfferAccepted`, `ApplicationCancelled`,
-  `ApplicationExpired`.
+  `ApplicationExpired`, `ApplicationWithdrawn`, `ApplicationClosed`.
 
 ## lending
 

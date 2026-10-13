@@ -111,6 +111,24 @@ export function originationRepositoriesContract(
       expect(stale).not.toContain(cancelled.id);
     });
 
+    it('should not list a draft edited since, nor one waiting for an analyst, as stale', async () => {
+      const centerId = aProgramSnapshot().centerId;
+      // Started (its last change of status) long ago, but edited after the cutoff.
+      const edited = aDraftApplication({ program: aProgramSnapshot({ centerId }) });
+      edited.updateDraft({ profile: {} }, new Date(NOW.getTime() + 2 * DAY_MS));
+      const inReview = decided('needs_review', centerId, NOW);
+      await t.run(async () => {
+        await t.applications.save(edited);
+        await t.applications.save(inReview);
+      });
+
+      const stale = await t.applications.findStaleIds(new Date(NOW.getTime() + DAY_MS), 1_000);
+
+      expect(edited.statusChangedAt).toEqual(NOW);
+      expect(stale).not.toContain(edited.id);
+      expect(stale).not.toContain(inReview.id);
+    });
+
     it('should list by applicant, center and status, newest first, page by page', async () => {
       const centerId = aProgramSnapshot().centerId;
       const program = aProgramSnapshot({ centerId });

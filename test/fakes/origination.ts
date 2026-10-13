@@ -37,11 +37,21 @@ export class InMemoryFinancingApplicationRepository
   extends InMemoryRepository<FinancingApplication>
   implements FinancingApplicationRepository
 {
+  // As the real query: not final, not waiting for an analyst, untouched (no change of status, no
+  // edit of the draft) since `before`; oldest activity first.
   findStaleIds(before: Date, limit: number): Promise<string[]> {
     return Promise.resolve(
       this.all()
-        .filter((application) => !application.isFinal && application.statusChangedAt < before)
-        .sort((a, b) => a.statusChangedAt.getTime() - b.statusChangedAt.getTime())
+        .filter(
+          (application) =>
+            !application.isFinal &&
+            application.status !== 'needs_review' &&
+            application.lastActivityAt < before,
+        )
+        .sort(
+          (a, b) =>
+            a.lastActivityAt.getTime() - b.lastActivityAt.getTime() || a.id.localeCompare(b.id),
+        )
         .slice(0, limit)
         .map((application) => application.id),
     );
