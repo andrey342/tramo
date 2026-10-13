@@ -524,7 +524,9 @@ through a payment provider, dunning, ISA income declarations and the account sta
 - **Mandate.** The student authorises the debit of a contract from an account
   (`POST /contracts/:id/mandate`, from signature on); the IBAN is encrypted and bound to its row
   (ADR 014) and shown masked. A new mandate revokes the one in force, and collects at once the
-  charges that fell due while the contract had none, scheduled or already overdue.
+  charges that fell due while the contract had none, scheduled or already overdue. A contract
+  cancelled before it took effect (`ContractCancelled`) has its mandate revoked: nothing will be
+  collected under it.
 - **Cycle.** `billing.cycle` on the 1st and the 5th at 03:00 UTC, or
   `POST /ops/billing/run?asOf=` for a demo or a catch-up (`&contractId=` for one contract; a day
   still to come only where `BILLING_FUTURE_RUNS_ENABLED`, off in production): for every plan
@@ -658,6 +660,7 @@ an event of another module; it decides nothing.
   | `ChargeDueSoon`            | `installment_reminder`     | the student                |
   | `ChargePaid`               | `installment_collected`    | the student                |
   | `ChargeOverdue`            | `payment_overdue`          | the student                |
+  | `ChargeReturned`           | `payment_returned`         | the student                |
   | `ContractInArrears`        | `contract_in_arrears`      | the student                |
   | `IncomeDeclarationDue`     | `isa_declaration_reminder` | the student                |
   | `IsaDeclarationOverdue`    | `isa_declaration_overdue`  | the student                |

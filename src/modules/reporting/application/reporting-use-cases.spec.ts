@@ -1,6 +1,7 @@
 import { uuidv7 } from 'uuidv7';
 
 import { BillingEvents } from '@modules/billing/domain/events/billing-events';
+import { LendingEvents } from '@modules/lending/domain/events/lending-events';
 import { OriginationEvents } from '@modules/origination/domain/events/origination-events';
 import { type Principal } from '@shared/application';
 import { type ApiKeyScope, EntityNotFoundError, FixedClock } from '@shared/domain';
@@ -258,6 +259,23 @@ describe('reporting use cases', () => {
     await expect(t.overview.execute(new GetOpsOverviewQuery(adminOf(uuidv7())))).rejects.toThrow(
       ReportingAccessDeniedError,
     );
+  });
+
+  // Failed for good and cancelled with its contract: nothing left for operations to do about it.
+  it('should stop counting a failed transfer once it is cancelled with its contract', async () => {
+    const t = setup();
+    const transfer = { disbursementId: uuidv7(), contractId: uuidv7(), centerId: uuidv7() };
+    await t.happened(
+      anEvent(LendingEvents.DisbursementRequested, { ...transfer, amountCents: 7_125_00 }),
+      anEvent(LendingEvents.DisbursementFailed, { ...transfer, reason: 'center_not_active' }),
+    );
+    const before = await t.overview.execute(new GetOpsOverviewQuery(OPS));
+
+    await t.happened(anEvent(LendingEvents.DisbursementCancelled, { ...transfer, attempt: 1 }));
+    const after = await t.overview.execute(new GetOpsOverviewQuery(OPS));
+
+    expect([before.failedDisbursements, after.failedDisbursements]).toEqual([1, 0]);
+    expect(after.pendingDisbursements).toBe(0);
   });
 
   it('should still answer the overview, without the dead letters, when the queue cannot be read', async () => {

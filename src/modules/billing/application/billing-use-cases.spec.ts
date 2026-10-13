@@ -60,6 +60,10 @@ import {
 } from './commands/record-payment-result.command';
 import { RetryChargeCommand, RetryChargeHandler } from './commands/retry-charge.command';
 import {
+  RevokeContractMandateCommand,
+  RevokeContractMandateHandler,
+} from './commands/revoke-contract-mandate.command';
+import {
   RunBillingCycleCommand,
   RunBillingCycleHandler,
 } from './commands/run-billing-cycle.command';
@@ -113,6 +117,7 @@ function setup() {
   };
   return {
     clock,
+    uow,
     events,
     charges,
     mandates,
@@ -147,6 +152,22 @@ function setup() {
 
 describe('billing use cases', () => {
   describe('mandates', () => {
+    // Lending cancelled the contract before it took effect: nothing is ever collected under it.
+    it('should revoke the mandate of a contract cancelled before it took effect, once', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      const signed = await t.mandate(contractId);
+      const revoke = new RevokeContractMandateHandler(t.uow, t.mandates, t.charges, t.clock);
+
+      const first = await revoke.execute(new RevokeContractMandateCommand(contractId));
+      const again = await revoke.execute(new RevokeContractMandateCommand(contractId));
+
+      expect([first, again]).toEqual([true, false]);
+      expect((await t.mandates.findById(signed.id))?.status).toBe('revoked');
+      expect(await t.mandates.findActiveByContract(contractId)).toBeNull();
+      expect(t.charges.locked).toContain(contractId);
+    });
+
     it('should let the student sign one, replacing the one in force', async () => {
       const t = setup();
       const contractId = t.contract();

@@ -9,6 +9,7 @@ import { type RequestEmailCommand } from '../../application/commands/request-ema
 import {
   EmailOnApplicationRejected,
   EmailOnChargeOverdue,
+  EmailOnChargeReturned,
   EmailOnDisbursementSettled,
   EmailOnIsaDeclarationOverdue,
   WebhookOnApplicationRejected,
@@ -135,6 +136,34 @@ describe('notifications consumers', () => {
       to: { userId: 's-1' },
       reference: 'c-1',
       data: { missingSince: '2026-09' },
+    });
+  });
+
+  it('should tell the student why a payment collected is owed again', async () => {
+    const { commands, executed } = recorded();
+
+    await new EmailOnChargeReturned(commands).handle(
+      event('ChargeReturned', {
+        chargeId: 'ch-1',
+        contractId: 'c-1',
+        studentId: 's-1',
+        centerId: 'center-1',
+        kind: 'installment',
+        installmentNumber: 1,
+        amountCents: 338_86,
+        attempt: 1,
+        reason: 'MD06',
+        dueDate: '2026-11-13',
+        returnedAt: '2026-11-20T08:00:00.000Z',
+      }),
+    );
+
+    expect((executed[0] as RequestEmailCommand).request).toEqual({
+      eventId: 'event-1',
+      template: 'payment_returned',
+      to: { userId: 's-1' },
+      reference: 'c-1',
+      data: { amountCents: 338_86, kind: 'installment', reason: 'MD06' },
     });
   });
 

@@ -15,6 +15,7 @@ import {
 } from './application/commands/ops-runs.command';
 import { RecordPaymentResultHandler } from './application/commands/record-payment-result.command';
 import { RetryChargeHandler } from './application/commands/retry-charge.command';
+import { RevokeContractMandateHandler } from './application/commands/revoke-contract-mandate.command';
 import { RunBillingCycleHandler } from './application/commands/run-billing-cycle.command';
 import { RunDunningHandler } from './application/commands/run-dunning.command';
 import { SendDeclarationRemindersHandler } from './application/commands/send-declaration-reminders.command';
@@ -40,6 +41,7 @@ import {
 import { QueuedPspCallbacks } from './infrastructure/adapters/simulated-psp-callbacks';
 import {
   CancelChargesOnContractDefaulted,
+  RevokeMandateOnContractCancelled,
   CancelChargesOnPlanCompleted,
   ChargeOnPayoffRequested,
   RebillOnPayoffWithdrawn,
@@ -120,6 +122,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     RetryChargeHandler,
     CreatePayoffChargeHandler,
     CancelOpenChargesHandler,
+    RevokeContractMandateHandler,
     SendDeclarationRemindersHandler,
     RunBillingNowHandler,
     RunDunningNowHandler,
@@ -133,6 +136,8 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     RebillOnPayoffWithdrawn,
     CancelChargesOnPlanCompleted,
     CancelChargesOnContractDefaulted,
+    RevokeMandateOnContractCancelled,
+    RevokeMandateOnContractCancelled,
     LedgerOnChargeCreated,
     LedgerOnChargePaid,
     LedgerOnChargeReturned,

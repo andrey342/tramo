@@ -14,6 +14,7 @@ export const EMAIL_TEMPLATES = [
   'contract_in_arrears',
   'isa_declaration_reminder',
   'isa_declaration_overdue',
+  'payment_returned',
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 

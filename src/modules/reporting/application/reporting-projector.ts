@@ -18,6 +18,7 @@ import {
   type ContractCompletedPayload,
   type ContractCreatedPayload,
   type ContractDefaultedPayload,
+  type DisbursementCancelledPayload,
   type DisbursementFailedPayload,
   type DisbursementRequestedPayload,
   type DisbursementRetriedPayload,
@@ -250,6 +251,18 @@ const PROJECTIONS: Readonly<Record<string, Project>> = {
       contractId: p.contractId,
       centerId: p.centerId,
       status: 'failed',
+    });
+  },
+  // Failed for good and cancelled with its contract: no longer a transfer to deal with.
+  [LendingEvents.DisbursementCancelled]: (store, event, at) => {
+    const p = event.payload as unknown as DisbursementCancelledPayload;
+    return store.recordDisbursement({
+      disbursementId: p.disbursementId,
+      at,
+      eventId: event.eventId,
+      contractId: p.contractId,
+      centerId: p.centerId,
+      status: 'cancelled',
     });
   },
   [LendingEvents.DisbursementRetried]: (store, event, at) => {

@@ -83,6 +83,13 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
       'Declare it in the app before the 5th; a month without a declaration is paused, and two in a row are followed up.',
     ],
   },
+  payment_returned: {
+    subject: 'Your bank returned a payment of {{money amountCents}}',
+    body: [
+      'Your bank returned the direct debit of {{money amountCents}} for your {{kind kind}} that we had collected (reason {{reason}}), so it is owed again.',
+      'We will try the direct debit again in a few days; please make sure your account accepts it, or contact us.',
+    ],
+  },
   isa_declaration_overdue: {
     subject: 'Your income declarations are missing since {{missingSince}}',
     body: [
