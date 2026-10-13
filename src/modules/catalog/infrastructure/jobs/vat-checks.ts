@@ -51,7 +51,10 @@ export class VatCheckScheduler {
 
 // Runs outside any transaction: VerifyCenterVatCommand asks VIES first and then saves the answer
 // in a short transaction of its own, so no connection waits on the registry, and the
-// "unverified" mark stays visible while the job waits for its next attempt.
+// "unverified" mark stays visible while the job waits for its next attempt. The retry follows
+// the registry's answer, not the status the center keeps: an outage leaves an earlier `invalid`
+// verdict in place (a reinstated center whose number was refused once), and that check must still
+// be asked again until VIES answers.
 @Processor(QueueNames.VAT_CHECKS, { concurrency: 5 })
 export class VatCheckProcessor extends QueueProcessor<VatCheckJob> {
   constructor(private readonly commands: CommandBus) {
@@ -59,10 +62,10 @@ export class VatCheckProcessor extends QueueProcessor<VatCheckJob> {
   }
 
   protected async handle(job: Job<VatCheckJob>): Promise<void> {
-    const center = await this.commands.execute(
+    const { outcome } = await this.commands.execute(
       new VerifyCenterVatCommand('system', job.data.centerId),
     );
-    if (center.vatValidation?.status === 'unverified') {
+    if (outcome === 'unavailable') {
       throw new VatRegistryUnavailableError(job.data.centerId);
     }
   }

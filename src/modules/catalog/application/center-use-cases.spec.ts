@@ -54,6 +54,7 @@ function setup() {
   const vat = new FakeVatValidator();
   return {
     clock,
+    uow,
     events,
     centers,
     changes,
@@ -116,8 +117,11 @@ describe('training center use cases', () => {
       const t = setup();
       const center = await registered(t);
 
-      const result = await t.verify.execute(new VerifyCenterVatCommand(OPS, center.id));
+      const { center: result, outcome } = await t.verify.execute(
+        new VerifyCenterVatCommand(OPS, center.id),
+      );
 
+      expect(outcome).toBe('valid');
       expect(result.status).toBe('active');
       expect(result.vatValidation?.status).toBe('valid');
       expect(t.events.ofType(CatalogEvents.CenterActivated)).toHaveLength(1);
@@ -127,10 +131,38 @@ describe('training center use cases', () => {
       const t = setup();
       const center = await registered(t, aTrainingCenter({ taxId: '300' }));
 
-      const result = await t.verify.execute(new VerifyCenterVatCommand('system', center.id));
+      const { center: result, outcome } = await t.verify.execute(
+        new VerifyCenterVatCommand('system', center.id),
+      );
 
+      expect(outcome).toBe('unavailable');
       expect(result.status).toBe('pending_verification');
       expect(result.vatValidation?.status).toBe('unverified');
+    });
+
+    // The job retries on this answer: the center still shows the earlier verdict.
+    it('should report an unavailable registry when a center pending verification was refused before', async () => {
+      const t = setup();
+      const center = aTrainingCenter({ taxId: '200' });
+      center.recordVatCheck({ outcome: 'invalid', provider: 'fake' }, t.clock.now());
+      await registered(t, center);
+      const down = new VerifyCenterVatHandler(
+        t.uow,
+        t.centers,
+        {
+          check: () =>
+            Promise.resolve({ outcome: 'unavailable', provider: 'fake', reason: 'TIMEOUT' }),
+        },
+        t.clock,
+      );
+
+      const { center: result, outcome } = await down.execute(
+        new VerifyCenterVatCommand('system', center.id),
+      );
+
+      expect(outcome).toBe('unavailable');
+      expect(result.status).toBe('pending_verification');
+      expect(result.vatValidation?.status).toBe('invalid');
     });
 
     it('should only let staff and the system ask', async () => {

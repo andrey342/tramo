@@ -245,8 +245,10 @@ Training centers and the programs students finance.
 - **Center lifecycle.** An admin registers a center (`pending_verification`). The
   `CenterRegistered` consumer only queues a VAT check on `catalog.vat-checks`; that job asks VIES
   outside any transaction and saves the answer in a short one. A valid number activates the
-  center. While VIES cannot answer, the center is marked `unverified` and the job is retried for
-  about a day and a half (exponential from one minute) before it is dead-lettered; ops can also
+  center. While VIES cannot answer, a center never checked is marked `unverified` (one with an
+  earlier verdict keeps it) and the job, which retries on the registry's answer rather than on
+  what the center keeps, asks again for about a day and a half (exponential from one minute)
+  before it is dead-lettered; ops can also
   ask again with `POST /centers/:id/verify-vat`. A number that stops being valid leaves an active
   center active and emits `CenterVatInvalidated` for ops to decide. Only an admin changes a
   center's fee, payout account or status, and each change is an event (`CenterRenamed`,

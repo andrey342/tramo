@@ -9,6 +9,8 @@ export type VatCheckResult =
   | { readonly outcome: 'invalid'; readonly provider: string }
   | { readonly outcome: 'unavailable'; readonly provider: string; readonly reason: string };
 
+export type VatCheckOutcome = VatCheckResult['outcome'];
+
 export type VatValidationStatus = 'valid' | 'invalid' | 'unverified';
 
 // The latest check, as kept on the center.

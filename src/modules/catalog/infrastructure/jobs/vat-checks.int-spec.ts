@@ -50,9 +50,9 @@ describe('VAT check after registration (integration)', () => {
     await app.close();
   });
 
-  const register = async (taxId: string): Promise<string> => {
+  const register = async (taxId: string, country = 'ES'): Promise<string> => {
     const { centerId } = await commands.execute(
-      new RegisterTrainingCenterCommand(ADMIN, 'Codeworks', 'ES', taxId, VALID_IBAN, 500),
+      new RegisterTrainingCenterCommand(ADMIN, 'Codeworks', country, taxId, VALID_IBAN, 500),
     );
     await publisher.publishBatch();
     return centerId;
@@ -87,5 +87,31 @@ describe('VAT check after registration (integration)', () => {
     const center = await centers.findById(centerId);
     expect(center?.status).toBe('pending_verification');
     expect(center?.vatValidation?.status).toBe('unverified');
+  });
+
+  // An outage does not overwrite an earlier verdict, so the job cannot tell from the center
+  // whether the registry answered.
+  it('should keep retrying while the registry cannot answer when the center keeps an earlier invalid verdict', async () => {
+    // ES 300 belongs to the previous test: a tax id is registered once per country.
+    const centerId = await register('300', 'DE');
+    const vatChecks = app.get<Queue>(getQueueToken(QueueNames.VAT_CHECKS));
+    await eventually(async () => {
+      expect(await (await vatChecks.getJob(centerId))?.isDelayed()).toBe(true);
+    });
+    await db.query(`UPDATE catalog.training_centers SET vat_status = 'invalid' WHERE id = $1`, [
+      centerId,
+    ]);
+
+    await (await vatChecks.getJob(centerId))?.promote();
+
+    await eventually(async () => {
+      const check = await vatChecks.getJob(centerId);
+      expect(check?.attemptsMade).toBe(2);
+      expect(check?.failedReason).toContain('VIES could not check');
+      expect(await check?.isDelayed()).toBe(true);
+    });
+    const center = await centers.findById(centerId);
+    expect(center?.status).toBe('pending_verification');
+    expect(center?.vatValidation?.status).toBe('invalid');
   });
 });
