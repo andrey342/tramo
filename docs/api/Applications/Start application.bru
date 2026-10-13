@@ -1,0 +1,48 @@
+meta {
+  name: Start application
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/applications
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+body:json {
+  {
+    "programId": "{{programId}}",
+    "product": {
+      "kind": "installments",
+      "termMonths": 24
+    },
+    "profile": {
+      "dateOfBirth": "1998-05-20",
+      "nationalId": "56781234F",
+      "residenceCountry": "ES",
+      "declaredMonthlyIncomeCents": 180000,
+      "employmentStatus": "employed"
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("applicationId", res.body.id);
+  }
+}
+
+docs {
+  Student (use the new student from Auth), or a center API key with `applications:write` plus `studentEmail`. Creates a draft and stores its id in `applicationId`.
+
+  `product.kind` is `installments` (with `termMonths`, one of the program's allowed terms) or `isa`. `employmentStatus` is employed, self_employed, unemployed or student. This profile is verified and approved by the simulated providers. A national id ending in 9 fails identity verification; one ending in 7 is listed as a defaulter by the bureau.
+}

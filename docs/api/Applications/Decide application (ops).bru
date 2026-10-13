@@ -1,0 +1,26 @@
+meta {
+  name: Decide application (ops)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/ops/applications/{{reviewApplicationId}}/decide
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+body:json {
+  {
+    "outcome": "approved",
+    "reason": "Stable job for two years; payment is 18 % of income."
+  }
+}
+
+docs {
+  Approves or rejects (`outcome`: approved | rejected) an application in review, with a reason. Uses `reviewApplicationId` from "Review queue (ops)"; 409 when it is not in review.
+}

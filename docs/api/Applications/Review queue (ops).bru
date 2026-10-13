@@ -1,0 +1,30 @@
+meta {
+  name: Review queue (ops)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/ops/applications/review-queue
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~limit: 20
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.data && res.body.data.length > 0) {
+    bru.setEnvVar("reviewApplicationId", res.body.data[0].id);
+  }
+}
+
+docs {
+  Applications waiting for an analyst (`needs_review`), longest waiting first. The seed leaves at least one here. Stores the first id in `reviewApplicationId`.
+}

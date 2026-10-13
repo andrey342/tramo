@@ -1,0 +1,15 @@
+meta {
+  name: Readiness
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{rootUrl}}/health/ready
+  body: none
+  auth: none
+}
+
+docs {
+  Outside the `/api/v1` prefix. Pings Postgres and Redis; answers 503 with the failing check when one is down.
+}

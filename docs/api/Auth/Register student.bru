@@ -1,0 +1,32 @@
+meta {
+  name: Register student
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{newStudentEmail}}",
+    "password": "{{password}}"
+  }
+}
+
+script:pre-request {
+  bru.setEnvVar("newStudentEmail", `student-${Date.now()}@example.com`);
+}
+
+script:post-response {
+  if (res.status !== 201) {
+    bru.setEnvVar("newStudentEmail", "");
+  }
+}
+
+docs {
+  Creates a student with a fresh email (`student-<timestamp>@example.com`, stored in `newStudentEmail`). Answers 201 with `userId`. The happy path uses this student: one application per program may be open at a time, and the seeded students already have theirs.
+}

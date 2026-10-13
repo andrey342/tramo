@@ -1,0 +1,19 @@
+meta {
+  name: Get webhook
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/centers/{{centerId}}/webhook
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+docs {
+  The center's webhook subscription, without its secret (center admin, ops or admin). The seed points Codeworks at the compose webhook sink, `http://webhook-sink:9099/codeworks`; what it received is listed at http://localhost:9099/deliveries.
+}

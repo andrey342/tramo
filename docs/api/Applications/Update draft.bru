@@ -1,0 +1,27 @@
+meta {
+  name: Update draft
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{baseUrl}}/applications/{{applicationId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+body:json {
+  {
+    "profile": {
+      "declaredMonthlyIncomeCents": 180000
+    }
+  }
+}
+
+docs {
+  Optional. Changes a draft before submitting; accepts `programId`, `product` and `profile` with the same fields as "Start application". Submitting needs every profile field.
+}

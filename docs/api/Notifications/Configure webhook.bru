@@ -1,0 +1,25 @@
+meta {
+  name: Configure webhook
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/centers/{{centerId}}/webhook
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+body:json {
+  {
+    "url": "http://webhook-sink:9099/codeworks"
+  }
+}
+
+docs {
+  Center admin only. Points the webhook at a URL (https outside development) and returns a new signing `secret`, shown once. The URL is called by the worker inside the compose network, hence the service name.
+}

@@ -1,0 +1,30 @@
+meta {
+  name: List charges
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/contracts/{{contractId}}/charges
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~limit: 20
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.data && res.body.data.length > 0) {
+    bru.setEnvVar("chargeId", res.body.data[0].id);
+  }
+}
+
+docs {
+  Charges of the contract, newest first (student, ops or admin). Repeat after "Run billing (ops)" until instalment 1 is `paid`. Stores the newest charge in `chargeId`.
+}

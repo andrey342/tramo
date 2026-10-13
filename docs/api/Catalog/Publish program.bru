@@ -1,0 +1,25 @@
+meta {
+  name: Publish program
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{baseUrl}}/programs/{{newProgramId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+body:json {
+  {
+    "status": "published"
+  }
+}
+
+docs {
+  Publishing needs an active center and at least one financing option. The same route changes any field of `Create program` (financing replaces every option) or archives with `"status": "archived"`.
+}

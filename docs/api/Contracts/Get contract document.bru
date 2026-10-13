@@ -1,0 +1,19 @@
+meta {
+  name: Get contract document
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/contracts/{{contractId}}/document
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  The contract text the student signs, as `text/plain`. Its SHA-256 is the `documentHash` of the signature.
+}

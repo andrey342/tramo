@@ -1,0 +1,28 @@
+meta {
+  name: Refresh session
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("studentToken", res.body.accessToken);
+    bru.setEnvVar("refreshToken", res.body.refreshToken);
+  }
+}
+
+docs {
+  Rotates the new student's refresh token. The old one stops working; presenting it again revokes the whole session.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Get center
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/centers/{{newCenterId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+docs {
+  Admin and ops see any center; a center admin only its own (use `centerToken` with `{{centerId}}`).
+}

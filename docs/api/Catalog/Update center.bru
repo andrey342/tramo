@@ -1,0 +1,26 @@
+meta {
+  name: Update center
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/centers/{{newCenterId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+body:json {
+  {
+    "name": "Valencia Tech School (Ruzafa)",
+    "platformFeeBasisPoints": 650
+  }
+}
+
+docs {
+  Admin only. All fields optional: `name`, `platformFeeBasisPoints`, `payoutIban`, `status` (`suspended` with a `suspensionReason`, or `active` to reinstate a suspended center).
+}

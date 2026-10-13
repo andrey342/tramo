@@ -1,0 +1,19 @@
+meta {
+  name: Metrics
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{rootUrl}}/metrics
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{metricsToken}}
+}
+
+docs {
+  Prometheus text format, outside the `/api/v1` prefix. The token is `METRICS_TOKEN` (`tramo-metrics-token` in compose). A wrong token gets 401; with no token configured the route answers 404.
+}

@@ -1,0 +1,38 @@
+meta {
+  name: List programs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/programs?limit=50
+  body: none
+  auth: none
+}
+
+params:query {
+  limit: 50
+  ~cursor: 
+  ~centerId: {{centerId}}
+  ~modality: online
+  ~product: installments
+  ~minPriceCents: 0
+  ~maxPriceCents: 1000000
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const programs = res.body.data || [];
+    const program =
+      programs.find((item) => item.name === "Full Stack Web Development Bootcamp") || programs[0];
+    if (program) {
+      bru.setEnvVar("programId", program.id);
+    }
+  }
+}
+
+docs {
+  Public. Published programs of active centers, newest first, with cursor pagination (`limit`, `cursor` from `nextCursor`). Filters: `centerId`, `modality` (online, onsite, hybrid), `product` (installments, isa), `minPriceCents`, `maxPriceCents`.
+
+  Stores the id of the seeded "Full Stack Web Development Bootcamp" (Codeworks Barcelona) in `programId`; the happy path applies to it.
+}

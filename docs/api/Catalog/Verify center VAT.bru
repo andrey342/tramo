@@ -1,0 +1,19 @@
+meta {
+  name: Verify center VAT
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/centers/{{newCenterId}}/verify-vat
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+docs {
+  Admin or ops. Checks the VAT number against VIES now. A valid number activates a pending center; when VIES is unavailable the check is recorded as `unverified` and nothing fails.
+}

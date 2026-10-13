@@ -1,0 +1,54 @@
+meta {
+  name: Create program
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/centers/{{centerId}}/programs
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+body:json {
+  {
+    "name": "Frontend Engineering Bootcamp",
+    "modality": "online",
+    "priceCents": 650000,
+    "durationWeeks": 14,
+    "startDates": ["2027-01-11", "2027-04-05"],
+    "employabilityRateBasisPoints": 8200,
+    "avgStartingSalaryCents": 2600000,
+    "financing": {
+      "installments": {
+        "allowedTerms": [12, 24, 36],
+        "annualRateBasisPoints": 750
+      },
+      "isa": {
+        "incomeShareBasisPoints": 1000,
+        "minMonthlyIncomeCents": 150000,
+        "maxPayments": 36,
+        "capMultiplierHundredths": 150,
+        "graceMonths": 3
+      }
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("newProgramId", res.body.id);
+  }
+}
+
+docs {
+  Center admin of the center, an admin, or an API key with `programs:write`. Creates a draft in the Codeworks center (`centerId` from "Me (center admin)"). Money is in cents, rates in basis points (750 = 7.5 %). Terms run from 6 to 48 months; an ISA needs an employability rate of at least 6000. Stores the id in `newProgramId`.
+}

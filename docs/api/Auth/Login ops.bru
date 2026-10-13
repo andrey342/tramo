@@ -1,0 +1,28 @@
+meta {
+  name: Login ops
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "ops@tramo.test",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("opsToken", res.body.accessToken);
+  }
+}
+
+docs {
+  Operations analyst (seeded). Stores the access token in `opsToken`.
+}

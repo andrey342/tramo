@@ -1,0 +1,23 @@
+meta {
+  name: Retry disbursement
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/ops/disbursements/{{disbursementId}}/retry
+  body: none
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  Sends a failed disbursement again as a new transfer. 409 for one that has not failed.
+}

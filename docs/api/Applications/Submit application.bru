@@ -1,0 +1,23 @@
+meta {
+  name: Submit application
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/applications/{{applicationId}}/submit
+  body: none
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  Starts the verification saga in the worker: identity (KYC), employment and credit bureau checks, then scoring with the risk policy in force.
+}

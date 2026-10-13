@@ -1,0 +1,19 @@
+meta {
+  name: Current risk policy (ops)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/risk-policies/current
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  The risk policy new applications are scored with: limits, allowed countries, factor weights and thresholds.
+}

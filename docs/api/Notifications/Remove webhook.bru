@@ -1,0 +1,19 @@
+meta {
+  name: Remove webhook
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/centers/{{centerId}}/webhook
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{centerToken}}
+}
+
+docs {
+  Center admin only. Stops posting events to the center (204). Run "Configure webhook" to restore the sink.
+}

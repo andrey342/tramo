@@ -1,0 +1,28 @@
+meta {
+  name: Login student Ana
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "ana.garcia@example.com",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("studentToken", res.body.accessToken);
+  }
+}
+
+docs {
+  Seeded student with applications already on file. Stores the access token in `studentToken`. Ana already has an open application for the Full Stack bootcamp, so the happy path uses a new student instead ("Register student" and "Login new student", later in this folder, overwrite `studentToken`). Other seeded students: bruno.silva@example.com (ISA), carla.moreno@example.com, diego.lopez@example.com, elena.ruiz@example.com.
+}

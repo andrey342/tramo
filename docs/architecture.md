@@ -23,6 +23,85 @@ flowchart LR
   worker -->|signed webhooks| sink[Center webhook endpoint]
 ```
 
+## Inside a module
+
+Every module has the same three layers (ADR 002); `pnpm arch:check` fails on any import against
+the arrows. Other modules reach it only through its `application/dto` (queries and commands it
+publishes) and `domain/events`.
+
+```mermaid
+flowchart TB
+  subgraph infrastructure
+    http[HTTP controllers and DTOs]
+    consumers[event consumers, job processors]
+    persistence[TypeORM repositories, mappers, migrations]
+    adapters[adapters: providers, other modules' facades]
+  end
+  subgraph application
+    handlers[command and query handlers]
+    ports[ports: repositories, gateways, lookups]
+    dto[public DTOs]
+  end
+  subgraph domain
+    aggregates[aggregates and value objects]
+    events[domain events]
+    repos[repository interfaces]
+  end
+  http --> handlers
+  consumers --> handlers
+  handlers --> aggregates
+  handlers --> ports
+  persistence -.implements.-> repos
+  adapters -.implements.-> ports
+  aggregates --> events
+```
+
+A command handler loads an aggregate, calls one method on it and saves it inside the unit of work
+(ADR 003); the save writes the aggregate, with an optimistic version check, and its events to the
+outbox in the same transaction. Queries read through query ports straight into DTOs.
+
+## From a change to its effects
+
+```mermaid
+sequenceDiagram
+  participant H as Command handler (api or worker)
+  participant DB as Postgres
+  participant P as Outbox publisher (worker)
+  participant Q as BullMQ (events.<module>)
+  participant C as Consumer (worker)
+  H->>DB: BEGIN; save aggregate (version check); INSERT outbox_messages; COMMIT
+  loop every OUTBOX_POLL_INTERVAL_MS
+    P->>DB: SELECT unpublished FOR UPDATE SKIP LOCKED
+    P->>Q: one job per subscribed consumer, id <eventId>.<consumer>
+    P->>DB: mark published, COMMIT
+  end
+  Q->>C: job (attempts with backoff, then the dead-letter queue)
+  C->>DB: BEGIN; INSERT processed_events (eventId, consumer); handle; COMMIT
+```
+
+A duplicate (the publisher retried after Redis accepted the jobs, or a job ran twice) finds its
+`processed_events` row and does nothing, so every side effect runs once. Jobs carry the
+correlation id of the request that caused them, which appears in every log line they write.
+
+## Data model
+
+One Postgres schema per module (ADR 008); tables refer to other modules' rows by id only, never by
+foreign key. Lists are paginated on `(created_at, id)`, so every list has an index in that order.
+
+| Schema          | Tables                                                                                          | Notes                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `iam`           | `users`, `refresh_tokens`, `api_keys`                                                           | Passwords as argon2id, refresh tokens and API keys as SHA-256                             |
+| `catalog`       | `training_centers`, `programs`                                                                  | Payout IBAN encrypted (ADR 014); financing options as columns with CHECKs                 |
+| `origination`   | `financing_applications`, `risk_policies`                                                       | Profile, verifications and the decision record (score, factors, reasons) as jsonb         |
+| `lending`       | `contracts`, `disbursements`, `financing_plans`                                                 | The instalment table or ISA periods read back whole as jsonb                              |
+| `billing`       | `charges`, `payment_mandates`, `income_declarations`, `declaration_reminders`, `ledger_entries` | Mandate IBAN encrypted; one charge per contract and reference; the ledger is a projection |
+| `notifications` | `notification_log`, `webhook_subscriptions`, `webhook_deliveries`                               | Webhook secrets encrypted (ADR 018)                                                       |
+| `reporting`     | `application_facts`, `contract_facts`, `disbursement_facts`, `charge_facts`                     | Disposable read models, rebuilt from the outbox (ADR 019)                                 |
+| `shared`        | `outbox_messages`, `processed_events`, `audit_log`                                              | Kept forever; the outbox is also the event history                                        |
+
+Money columns are integer cents with `CHECK (... >= 0)`, rates are basis points, enums are text
+with CHECKs, timestamps are `timestamptz(3)`, and aggregates carry a `version`.
+
 ## Decision records
 
 | ADR                                                                                        | Title                                                                    | Status   |

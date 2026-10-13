@@ -1,0 +1,25 @@
+meta {
+  name: List applications
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/applications
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: approved
+  ~limit: 20
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  A student sees their own, a center admin (`centerToken`) the center's, ops and admin all of them; newest first. Optional `status` filter and cursor pagination.
+}

@@ -1,0 +1,31 @@
+meta {
+  name: List disbursements
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/ops/disbursements
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: failed
+  ~limit: 20
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.data && res.body.data.length > 0) {
+    bru.setEnvVar("disbursementId", res.body.data[0].id);
+  }
+}
+
+docs {
+  Payments to training centers, newest first; filter by `status` (pending, sent, settled, failed). Stores the newest one in `disbursementId`; filter by `failed` before using the two requests below.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Reconcile disbursement
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/ops/disbursements/{{disbursementId}}/reconcile
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+docs {
+  For a disbursement whose jobs ran out of attempts: sends a pending transfer again with the same key, or asks the bank about a sent one.
+}

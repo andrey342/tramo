@@ -1,0 +1,23 @@
+meta {
+  name: Accept offer
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/applications/{{applicationId}}/accept-offer
+  body: none
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  Accepts an approved offer. Lending then draws up the contract in the worker and sends it for signature; continue with "Contracts".
+}

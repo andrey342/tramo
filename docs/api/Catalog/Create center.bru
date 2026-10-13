@@ -1,0 +1,45 @@
+meta {
+  name: Create center
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/centers
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{adminToken}}
+}
+
+body:json {
+  {
+    "name": "Valencia Tech School",
+    "country": "ES",
+    "taxId": "{{newTaxId}}",
+    "payoutIban": "ES9121000418450200051332",
+    "platformFeeBasisPoints": 600
+  }
+}
+
+script:pre-request {
+  bru.setVar("newTaxId", String(Math.floor(10000000 + Math.random() * 89999999)));
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("newCenterId", res.body.id);
+  }
+}
+
+docs {
+  Admin only. `country` is ES or DE; `platformFeeBasisPoints` is at most 3000. The center starts as `pending_verification` and the worker checks the VAT number against VIES. Stores the id in `newCenterId`.
+
+  With `VIES_MODE=test` (compose default) the VIES test service answers 100 as valid, 200 as invalid and anything else as an outage. The seed already uses ES 100, DE 100 and ES 200 (country and number are unique, so reusing them answers 409), so this request sends a random number and the center stays pending with an `unverified` check. The program requests below use the seeded, active Codeworks center instead.
+}
