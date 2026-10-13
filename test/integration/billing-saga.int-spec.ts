@@ -147,6 +147,52 @@ describe('billing saga (integration)', () => {
     expect(statement.balanceCents).toBe(0);
   }, 60_000);
 
+  // ADR 020: the bank sends a collected debit back; a repeated notice of it writes nothing.
+  it('should owe an instalment again, on the plan and the statement, when the bank returns it', async () => {
+    const { contractId, firstDue } = await repaying(true);
+    await commands.execute(new RunBillingNowCommand(OPS, firstDue, contractId));
+    const charge = await charges.findByReference(contractId, 'installment:1');
+    await collect(charge, 'succeeded');
+    const paidInstallments = (plan: Awaited<ReturnType<typeof plans.findByContractId>>) =>
+      plan?.terms.kind === 'installments' ? plan.terms.paidInstallments : null;
+    await until(
+      () => plans.findByContractId(contractId),
+      (plan) => {
+        expect(paidInstallments(plan)).toEqual([1]);
+      },
+    );
+    const collected = await charges.findById(charge?.id ?? '');
+    const returned = new RecordPaymentResultCommand({
+      reference: collected?.currentAttempt?.key ?? '',
+      paymentId: collected?.currentAttempt?.paymentId ?? '',
+      outcome: 'returned',
+      failureReason: 'MD06',
+    });
+
+    await commands.execute(returned);
+    await commands.execute(returned);
+
+    const plan = await until(
+      () => plans.findByContractId(contractId),
+      (found) => {
+        expect(paidInstallments(found)).toEqual([]);
+      },
+    );
+    expect(plan?.status).toBe('active');
+    const statement = await until(
+      () => app.get(QueryBus).execute(new GetStatementQuery(OPS, contractId)),
+      (found) => {
+        expect(found.entries).toHaveLength(3);
+      },
+    );
+    expect(statement.entries.map((entry) => entry.type)).toEqual(['charge', 'payment', 'return']);
+    expect(statement.balanceCents).toBe(charge?.amount.cents);
+    expect(await charges.findById(charge?.id ?? '')).toMatchObject({
+      status: 'failed',
+      paidAt: null,
+    });
+  }, 60_000);
+
   // ADR 017: lending assesses the ISA month in billing's transaction. When the charge cannot be
   // written, the assessment is rolled back with it and the next run assesses the month again.
   it('should roll back the ISA assessment when its charge is not written', async () => {

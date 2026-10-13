@@ -6,6 +6,7 @@ import {
   BillingEvents,
   type ChargeFailedPayload,
   type ChargePaidPayload,
+  type ChargeReturnedPayload,
   type ChargeWrittenOffPayload,
   type ContractInArrearsPayload,
 } from '@modules/billing/domain/events/billing-events';
@@ -29,6 +30,28 @@ export class RecordRepaymentOnChargePaid implements EventHandler<ChargePaidPaylo
       );
     } else if (kind === 'payoff') {
       await this.commands.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+    }
+  }
+}
+
+// The student's bank sent a collected payment back: the instalment is unpaid again. An ISA charge
+// changes nothing in the plan (its month was counted when assessed); a payoff finds the plan paid
+// off, which is not reopened (ADR 020).
+@Injectable()
+@EventSubscriber({ event: BillingEvents.ChargeReturned, consumer: 'lending.record-return' })
+export class RecordReturnOnChargeReturned implements EventHandler<ChargeReturnedPayload> {
+  constructor(private readonly commands: CommandBus) {}
+
+  async handle(event: IntegrationEvent<ChargeReturnedPayload>): Promise<void> {
+    const { contractId, kind, installmentNumber } = event.payload;
+    if (kind === 'installment' && installmentNumber !== null) {
+      await this.commands.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'installment_returned', installmentNumber }),
+      );
+    } else if (kind === 'payoff') {
+      await this.commands.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'payoff_returned' }),
+      );
     }
   }
 }

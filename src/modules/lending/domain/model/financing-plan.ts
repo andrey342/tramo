@@ -7,6 +7,7 @@ import {
 } from '@shared/domain';
 
 import {
+  InstallmentNotPaidError,
   PayoffAlreadyRequestedError,
   PayoffNotAvailableError,
   PayoffQuoteChangedError,
@@ -283,9 +284,9 @@ export class FinancingPlan extends AggregateRoot {
     this.complete('paid_off', now);
   }
 
-  // Whether billing's payments still change the instalments: while the plan is repaid, and once
-  // defaulted, since the debt is still being recovered. A plan that ended otherwise (repaid, paid
-  // off, an ISA) stays as it ended.
+  // Whether billing's payments and returns still change the instalments: while the plan is
+  // repaid, and once defaulted, since the debt is still being recovered. A plan that ended
+  // otherwise (repaid, paid off, an ISA) stays as it ended (ADR 020).
   get recordsRepayments(): boolean {
     return this.props.status === 'active' || this.props.completionReason === 'defaulted';
   }
@@ -302,6 +303,18 @@ export class FinancingPlan extends AggregateRoot {
     if (this.props.status === 'active' && paidInstallments.length === terms.termMonths) {
       this.complete('repaid', now);
     }
+  }
+
+  // The student's bank sent back the payment of an instalment: it is unpaid again, and billing
+  // duns it. A return found before its payment waits for it (billing's notices are applied in
+  // order).
+  recordInstallmentReturned(number: number): void {
+    const terms = this.repaidInstallmentTerms(number);
+    if (!terms.paidInstallments.includes(number)) {
+      throw new InstallmentNotPaidError(number);
+    }
+    const paidInstallments = terms.paidInstallments.filter((paid) => paid !== number);
+    this.props = { ...this.props, terms: { ...terms, paidInstallments } };
   }
 
   // The contract defaulted: what is owed goes to recovery and nothing more is billed or assessed.

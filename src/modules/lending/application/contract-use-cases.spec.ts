@@ -26,6 +26,7 @@ import {
   DisbursementNotFailedError,
   type DisbursementSettledPayload,
   EnvelopeNotRecordedError,
+  InstallmentNotPaidError,
   LendingEvents,
   PayoffQuoteChangedError,
   renderContractDocument,
@@ -76,6 +77,7 @@ import {
 import {
   RecordRepaymentCommand,
   RecordRepaymentHandler,
+  type Repayment,
 } from './commands/record-repayment.command';
 import {
   RecordSignatureEventCommand,
@@ -855,24 +857,67 @@ describe('lending use cases', () => {
       await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(uuidv7()));
     });
 
+    it('should mark an instalment unpaid again when the bank returns its payment', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      const record = (repayment: Repayment) =>
+        t.repayment.execute(new RecordRepaymentCommand(contractId, repayment));
+      await record({ kind: 'installment', installmentNumber: 1 });
+
+      await record({ kind: 'installment_returned', installmentNumber: 1 });
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan?.status).toBe('active');
+      expect(plan?.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([]);
+      // Delivered before its payment: refused, so the consumer tries again once it is recorded.
+      await expect(record({ kind: 'installment_returned', installmentNumber: 2 })).rejects.toThrow(
+        InstallmentNotPaidError,
+      );
+    });
+
     // Billing keeps collecting the overdue charges of a defaulted contract: the schedule shows
     // what was recovered, and the plan stays closed as defaulted.
-    it('should record payments on a plan when its contract defaulted', async () => {
+    it('should record payments and returns on a plan when its contract defaulted', async () => {
       const t = setup();
       const contractId = await t.active();
       await t.collectionStatus.execute(
         new RecordCollectionStatusCommand(contractId, 'defaulted', new Date()),
       );
       await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(contractId));
+      const record = (repayment: Repayment) =>
+        t.repayment.execute(new RecordRepaymentCommand(contractId, repayment));
 
-      await t.repayment.execute(
-        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber: 1 }),
-      );
+      await record({ kind: 'installment', installmentNumber: 1 });
+      await record({ kind: 'installment', installmentNumber: 2 });
+      await record({ kind: 'installment_returned', installmentNumber: 2 });
 
       const plan = await t.plans.findByContractId(contractId);
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
       expect(plan?.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([1]);
       expect(t.events.ofType(LendingEvents.PlanCompleted)).toHaveLength(1);
+    });
+
+    // ADR 020: the plan stays paid off; billing duns the payoff returned and ops settle it.
+    it('should leave a plan paid off when the bank returns the payoff', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.payoff.execute(new RequestPayoffCommand(t.student, contractId, 6_000_00));
+      await t.repayment.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+      const version = (await t.plans.findByContractId(contractId))?.version;
+
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'payoff_returned' }),
+      );
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, {
+          kind: 'installment_returned',
+          installmentNumber: 1,
+        }),
+      );
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan).toMatchObject({ status: 'completed', completionReason: 'paid_off' });
+      expect(plan?.version).toBe(version);
     });
   });
 

@@ -2,6 +2,7 @@ import { CalendarDate, InvalidValueError, Money, Percentage } from '@shared/doma
 
 import { aPlan, anIsa, LATER } from '../../../../../test/factories/lending';
 import {
+  InstallmentNotPaidError,
   PayoffAlreadyRequestedError,
   PayoffNotAvailableError,
   PayoffQuoteChangedError,
@@ -162,9 +163,32 @@ describe('FinancingPlan', () => {
       expect(eventTypes(plan)).toEqual([LendingEvents.PlanCompleted]);
     });
 
-    // The debt of a defaulted contract is still being recovered: what is collected shows on the
-    // schedule, and the plan stays closed as defaulted.
-    it('should record payments when defaulted, without reopening or repaying it', () => {
+    it('should mark an instalment unpaid again when its payment is returned', () => {
+      const plan = aPlan();
+      plan.recordInstallmentPaid(1, LATER);
+      plan.recordInstallmentPaid(2, LATER);
+
+      plan.recordInstallmentReturned(1);
+
+      expect(plan.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([2]);
+      expect(plan.status).toBe('active');
+      expect(plan.hasPendingEvents).toBe(false);
+    });
+
+    it('should refuse a return when the payment of the instalment is not recorded yet', () => {
+      const plan = aPlan();
+
+      expect(() => {
+        plan.recordInstallmentReturned(1);
+      }).toThrow(InstallmentNotPaidError);
+      expect(() => {
+        plan.recordInstallmentReturned(25);
+      }).toThrow(InvalidValueError);
+    });
+
+    // The debt of a defaulted contract is still being recovered: what is collected or returned
+    // shows on the schedule, and the plan stays closed as defaulted.
+    it('should record payments and returns when defaulted, without reopening or repaying it', () => {
       const plan = aPlan({
         product: { kind: 'installments', termMonths: 2, annualRate: Percentage.fromPercent(9) },
       });
@@ -173,11 +197,27 @@ describe('FinancingPlan', () => {
       plan.pullEvents();
 
       plan.recordInstallmentPaid(2, LATER);
-
       expect(plan.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([1, 2]);
+      plan.recordInstallmentReturned(1);
+
+      expect(plan.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([2]);
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
       expect(plan.recordsRepayments).toBe(true);
       expect(plan.hasPendingEvents).toBe(false);
+    });
+
+    // ADR 020: a plan that ended repaid or paid off is not reopened by a return.
+    it('should refuse a return when the plan ended repaid', () => {
+      const plan = aPlan({
+        product: { kind: 'installments', termMonths: 1, annualRate: Percentage.fromPercent(9) },
+      });
+      plan.recordInstallmentPaid(1, LATER);
+
+      expect(plan.completionReason).toBe('repaid');
+      expect(plan.recordsRepayments).toBe(false);
+      expect(() => {
+        plan.recordInstallmentReturned(1);
+      }).toThrow(PlanEndedError);
     });
 
     // Billing is already collecting the instalment that fell due: a payoff would charge it twice.
