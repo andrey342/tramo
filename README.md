@@ -337,7 +337,10 @@ ending in 14 cents is collected and then returned by the student's bank: owed ag
 the plan, and dunned from the day of the return. In
 production the cycle runs on the 1st and the 5th, collection and dunning every morning. ISA
 students declare a month's income with `POST /contracts/:id/income-declarations` until the 4th of
-the next month; on the 5th the month is charged.
+the next month; on the 5th the month is charged. An ISA signed today starts paying months later
+(`firstPeriod` on its schedule): to see one charged, declare that month with `?asOf=` set to the
+2nd of the next month, then run billing as of the 5th (both need `BILLING_FUTURE_RUNS_ENABLED`, on
+outside production).
 
 Every step above writes to someone: the student receives emails (welcome, application received,
 decision, contract ready to sign, payment reminders and receipts, overdue notices, ISA declaration

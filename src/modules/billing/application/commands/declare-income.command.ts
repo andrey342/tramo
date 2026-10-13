@@ -3,7 +3,7 @@ import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock, Money } from '@shared/domain';
+import { type CalendarDate, CLOCK, type Clock, Money } from '@shared/domain';
 
 import {
   CHARGE_REPOSITORY,
@@ -21,13 +21,16 @@ import { type IncomeDeclarationDto } from '../dto/billing.dto';
 import { REPAYMENT_PLANS, type RepaymentPlans } from '../ports/billing-ports';
 
 // An ISA student declares what they earned in a month; the billing cycle charges the share of it
-// the plan's rules set. Declaring nothing pauses the month.
+// the plan's rules set. Declaring nothing pauses the month. `asOf`: a day still to come the
+// windows are judged on, where the demo walks the months (the HTTP layer allows it only where
+// future billing runs are).
 export class DeclareIncomeCommand extends Command<IncomeDeclarationDto> {
   constructor(
     readonly actor: Principal,
     readonly contractId: string,
     readonly period: string,
     readonly grossMonthlyIncomeCents: number,
+    readonly asOf: CalendarDate | null = null,
   ) {
     super();
   }
@@ -68,6 +71,7 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
         grossMonthlyIncome: Money.fromCents(command.grossMonthlyIncomeCents),
         source: 'self',
         openFrom: contract.nextIsaPeriod,
+        ...(command.asOf ? { asOf: command.asOf } : {}),
         now: this.clock.now(),
       });
       await this.declarations.save(declaration);

@@ -581,7 +581,9 @@ through a payment provider, dunning, ISA income declarations and the account sta
   time) and while lending has not assessed it (`period_not_open` otherwise: on the 5th the cycle
   assesses the month, paused when undeclared); audited, the amount stays in billing (events say
   only that a month was declared). On the 25th students who have not declared the month are
-  reminded once (`IncomeDeclarationDue`).
+  reminded once (`IncomeDeclarationDue`). Where future billing runs are enabled, `?asOf=` judges
+  the windows on a day still to come (never a past one), so a demo walks a new ISA through its
+  months together with the ops runs.
 - **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once
   and never dunned; meanwhile nothing else of the contract is collected or dunned, since it
   covers what is left. Paid, the plan ends (`paid_off`) and every charge not collected is

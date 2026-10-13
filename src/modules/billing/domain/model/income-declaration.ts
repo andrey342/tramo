@@ -55,16 +55,23 @@ export class IncomeDeclaration extends AggregateRoot {
     source: IncomeSource;
     // The first month lending has not assessed yet; an earlier one is not open.
     openFrom?: string | null;
+    // The day the windows are judged on: today, or a day still to come where the demo walks the
+    // months (never a past one, which would reopen closed windows).
+    asOf?: CalendarDate;
     now: Date;
   }): IncomeDeclaration {
     if (!PERIOD.test(input.period)) {
       throw new InvalidPeriodError('expected a month as YYYY-MM');
     }
     const today = CalendarDate.fromInstant(input.now);
-    if (input.period > today.period) {
+    if (input.asOf?.isBefore(today)) {
+      throw new InvalidValueError('asOf', 'Income is declared as of today or a day to come.');
+    }
+    const day = input.asOf ?? today;
+    if (input.period > day.period) {
       throw new InvalidPeriodError('income is declared for a month that has started');
     }
-    const windowOpenFrom = firstDeclarablePeriod(today);
+    const windowOpenFrom = firstDeclarablePeriod(day);
     const openFrom =
       input.openFrom && input.openFrom > windowOpenFrom ? input.openFrom : windowOpenFrom;
     if (input.period < openFrom) {

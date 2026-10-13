@@ -10,6 +10,10 @@ post {
   auth: bearer
 }
 
+params:query {
+  ~asOf: 2027-06-02
+}
+
 headers {
   Idempotency-Key: {{$guid}}
 }
@@ -20,11 +24,11 @@ auth:bearer {
 
 body:json {
   {
-    "period": "2026-11",
+    "period": "2027-05",
     "grossMonthlyIncomeCents": 215000
   }
 }
 
 docs {
-  Income share agreements only: the student declares the gross income of a month (`period` as YYYY-MM; 0 when none), from its first day until the end of the 4th of the next month. On the 5th the month is assessed and charged; a closed or assessed month answers `period_not_open`. The happy path contract is an instalment loan, so this answers an error there; apply with `"product": { "kind": "isa" }` to try it.
+  Income share agreements only: the student declares the gross income of a month (`period` as YYYY-MM; 0 when none), from its first day until the end of the 4th of the next month. On the 5th the month is assessed and charged; a closed or assessed month answers `period_not_open`. The happy path contract is an instalment loan, so this answers an error there: sign in as `bruno.silva@example.com`, whose seeded contract is an ISA, or apply with `"product": { "kind": "isa" }`. An ISA signed today starts paying months from now (`firstPeriod` in "Get schedule"): put that month in `period`, enable `asOf` with the 2nd of the month after it (accepted where `BILLING_FUTURE_RUNS_ENABLED` is on, the default outside production), then "Run billing (ops)" as of the 5th of that month to see the share charged and collected.
 }

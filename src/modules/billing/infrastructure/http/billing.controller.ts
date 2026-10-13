@@ -47,6 +47,7 @@ import { ListChargesQuery } from '../../application/queries/list-charges.query';
 
 import {
   AsOfQueryDto,
+  DeclarationAsOfQueryDto,
   BillingRunResponse,
   ChargePageResponse,
   ChargeResponse,
@@ -97,15 +98,22 @@ export class BillingController {
   @ApiOperation({
     summary: 'Declare the income of a month (income share agreements)',
     description:
-      'A month is declared from its first day until the end of the 4th of the next month (UTC), so a salary paid on the 1st or 2nd is declared in time. On the 5th the month is assessed and its charge falls due; a month undeclared by then is paused. A month whose window closed or that was assessed answers period_not_open with the first open month.',
+      'A month is declared from its first day until the end of the 4th of the next month (UTC), so a salary paid on the 1st or 2nd is declared in time. On the 5th the month is assessed and its charge falls due; a month undeclared by then is paused. A month whose window closed or that was assessed answers period_not_open with the first open month. Where BILLING_FUTURE_RUNS_ENABLED is on, asOf declares as of a day still to come, to walk an ISA through its months with the billing runs.',
   })
   declareIncome(
     @CurrentPrincipal() actor: Principal,
     @Param('contractId', ParseUUIDPipe) contractId: string,
     @Body() body: DeclareIncomeRequest,
+    @Query() query: DeclarationAsOfQueryDto,
   ): Promise<IncomeDeclarationDto> {
     return this.commands.execute(
-      new DeclareIncomeCommand(actor, contractId, body.period, body.grossMonthlyIncomeCents),
+      new DeclareIncomeCommand(
+        actor,
+        contractId,
+        body.period,
+        body.grossMonthlyIncomeCents,
+        query.asOf ? this.asOf(query) : null,
+      ),
     );
   }
 
@@ -185,14 +193,14 @@ export class BillingController {
   }
 
   // A day still to come only where future runs are enabled (not in production by default).
-  private asOf(query: AsOfQueryDto): CalendarDate {
+  private asOf(query: { readonly asOf?: string }): CalendarDate {
     const today = CalendarDate.fromInstant(this.clock.now());
     const asOf = query.asOf ? CalendarDate.parse(query.asOf) : today;
     if (asOf.isAfter(today) && !this.config.billing.futureRunsEnabled) {
       throw new ProblemException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         'as_of_in_future',
-        'Billing runs as of today or a past day.',
+        'Only today or a past day; days to come are enabled outside production.',
       );
     }
     return asOf;

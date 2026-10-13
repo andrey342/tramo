@@ -39,6 +39,17 @@ export class DeclareIncomeRequest {
   grossMonthlyIncomeCents!: number;
 }
 
+export class DeclarationAsOfQueryDto {
+  @ApiPropertyOptional({
+    example: '2026-12-02',
+    description:
+      'A day still to come to declare as of, where BILLING_FUTURE_RUNS_ENABLED is on (the demo walks the months); today when omitted',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'asOf must be a date as YYYY-MM-DD' })
+  asOf?: string;
+}
+
 export class AsOfQueryDto {
   @ApiPropertyOptional({
     example: '2026-12-01',
