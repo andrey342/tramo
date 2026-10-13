@@ -373,7 +373,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   admin) generates a new secret, returned once; deliveries are signed with it from then on.
 - **`FIELD_ENCRYPTION_KEY`**: the process reads one key and has no previous-key variable.
   Changing it on a database with data makes every encrypted value unreadable (payout and creditor
-  IBANs, mandate IBANs, webhook secrets, national ids fail with `FieldDecryptionError`). ADR 014
+  IBANs, mandate IBANs, webhook secrets, national ids fail with `FieldDecryptionError`), and so
+  does replaying an idempotent response stored in the last 24 hours (the retry answers 500). ADR 014
   records that the versioned ciphertext prefix allows a key change later: decrypt every known
   version, write only the newest, re-encrypt old rows in a background job, then stop reading the
   old version. That procedure is not implemented.

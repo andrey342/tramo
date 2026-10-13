@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Body, Controller, Inject, type INestApplication, Param, Post, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Throttle } from '@nestjs/throttler';
@@ -131,6 +133,17 @@ describe('HTTP platform (integration)', () => {
       expect(retry.body).toEqual(first.body);
       expect(retry.headers['idempotent-replayed']).toBe('true');
       expect(paymentsTaken - before).toBe(1);
+    });
+
+    it('should keep the stored response encrypted in Redis', async () => {
+      const first = await pay('key-sealed', 4321);
+      const storageKey = createHash('sha256').update('user:student-1\nkey-sealed').digest('hex');
+
+      const raw = await app.get<Redis>(REDIS_CLIENT).get(`tramo:idempotency:${storageKey}`);
+
+      expect(first.body).toMatchObject({ amountCents: 4321 });
+      expect(raw).toContain('"sealedBody":"v2.');
+      expect(raw).not.toContain('amountCents');
     });
 
     it('should reject the same key with a different body', async () => {

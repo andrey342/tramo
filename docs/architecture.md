@@ -142,7 +142,8 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   provider. Exceeding either limit returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
-  concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
+  concurrent duplicate fail fast with 409; a completed response is kept for 24 h, its body
+  encrypted with `FieldCipher` and bound to the caller and key (ADR 014), and replayed with
   `Idempotent-Replayed: true`. The same key with a different method, path, query or body returns 422.
   Failed requests are not stored, so a client can fix the request and retry with the same key.
   The in-progress record is renewed while the handler runs; if the response cannot be stored after
