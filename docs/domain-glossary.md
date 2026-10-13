@@ -59,10 +59,11 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   account, which also revokes every refresh token family it has.
 - **`RefreshToken`** and family: refresh tokens are opaque, stored hashed and single use; each
   refresh rotates the presented token into the next one of the same family. `RefreshTokenStatus`:
-  `active → rotated` (used) or `revoked`. A rotated token presented again more than 10 s
+  `active → rotated` (used) or `revoked`. A rotated token presented again more than 2 s
   (`REUSE_GRACE_MS`) after its rotation revokes the whole family and publishes
-  `RefreshTokenReuseDetected`; within those 10 s it is only rejected (`superseded`). A family
-  ends `SESSION_MAX_DAYS` after sign-in.
+  `RefreshTokenReuseDetected`; within those 2 s it is only rejected (`superseded`). A family
+  ends `SESSION_MAX_DAYS` after sign-in, at logout, or when the user signs out everywhere
+  (every family of theirs).
 - **`ApiKey`**: a center's integration credential, `tramo_<8 hex prefix>_<secret>`, shown once,
   stored as a hash, with at least one scope. Revoked keys keep `revokedAt`. Suspending a center
   revokes all its keys, and a suspended center gets no new ones.

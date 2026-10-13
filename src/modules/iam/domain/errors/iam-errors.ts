@@ -40,6 +40,16 @@ export class InvalidRefreshTokenError extends DomainError {
   }
 }
 
+// Sessions belong to users; an API key has none to end (it is revoked instead).
+export class SessionOwnerRequiredError extends DomainError {
+  readonly code = 'session_owner_required';
+  readonly category = 'forbidden';
+
+  constructor() {
+    super('Only a signed-in user has sessions to end.');
+  }
+}
+
 export class InvalidRoleAssignmentError extends DomainError {
   readonly code = 'invalid_role_assignment';
   readonly category = 'rule_violation';

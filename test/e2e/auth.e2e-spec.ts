@@ -108,13 +108,31 @@ describe('Authentication (e2e)', () => {
     ]);
 
     const statuses = results.map((response) => response.status).sort();
-    expect(statuses).toContain(200);
-    expect(statuses.every((status) => status === 200 || status === 401)).toBe(true);
+    expect(statuses).toEqual([200, 401]);
     const winner = results.find((response) => response.status === 200);
     const next = await api()
       .post('/api/v1/auth/refresh')
       .send({ refreshToken: winner?.body.refreshToken as string });
     expect(next.status).toBe(200);
+  });
+
+  it('should end every session of the caller when they sign out everywhere', async () => {
+    const email = uniqueEmail('everywhere');
+    const { tokens } = await registerAndLogin(email);
+    const second = await api().post('/api/v1/auth/login').send({ email, password: PASSWORD });
+
+    const revoked = await api()
+      .post('/api/v1/me/sessions/revoke')
+      .set('Authorization', `Bearer ${tokens.accessToken as string}`);
+
+    expect(revoked.status).toBe(204);
+    for (const refreshToken of [tokens.refreshToken, second.body.refreshToken]) {
+      const refresh = await api().post('/api/v1/auth/refresh').send({ refreshToken });
+      expect(refresh.status).toBe(401);
+      expect(refresh.body.code).toBe('invalid_refresh_token');
+    }
+    const anonymous = await api().post('/api/v1/me/sessions/revoke');
+    expect(anonymous.status).toBe(401);
   });
 
   it('should end the session on logout', async () => {

@@ -18,6 +18,7 @@ import {
   IamEvents,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
+  SessionOwnerRequiredError,
   UserAdministrationDeniedError,
 } from '../domain';
 
@@ -29,6 +30,10 @@ import {
   RegisterStudentCommand,
   RegisterStudentHandler,
 } from './commands/register-student.command';
+import {
+  RevokeOwnSessionsCommand,
+  RevokeOwnSessionsHandler,
+} from './commands/revoke-own-sessions.command';
 import {
   GetCurrentPrincipalHandler,
   GetCurrentPrincipalQuery,
@@ -82,6 +87,12 @@ function setup() {
       sessions,
     ),
     logout: new LogoutHandler(uow, refreshTokens, credentials, clock),
+    revokeOwn: new RevokeOwnSessionsHandler(
+      uow,
+      refreshTokens,
+      { describeChanges: (change) => changes.push(change) },
+      clock,
+    ),
     me: new GetCurrentPrincipalHandler(users),
   };
 }
@@ -237,10 +248,10 @@ describe('session use cases', () => {
       ).toEqual(['active', 'rotated']);
     });
 
-    it('should reject a token replayed within seconds without ending the session', async () => {
+    it('should reject a token replayed within a second without ending the session', async () => {
       const t = await signedIn();
       const next = await t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken));
-      t.clock.advanceBy(2_000);
+      t.clock.advanceBy(500);
 
       await expect(
         t.refresh.execute(new RefreshSessionCommand(t.session.refreshToken)),
@@ -319,6 +330,53 @@ describe('session use cases', () => {
       await expect(
         t.refresh.execute(new RefreshSessionCommand(session.refreshToken)),
       ).rejects.toThrow(InvalidRefreshTokenError);
+    });
+  });
+
+  describe('RevokeOwnSessions', () => {
+    it('should end every session of the user and no one else when the user asks', async () => {
+      const t = setup();
+      const ana = aStudent({ email: 'ana@example.com' });
+      const luis = aStudent({ email: 'luis@example.com' });
+      await t.users.save(ana);
+      await t.users.save(luis);
+      const phone = await t.login.execute(new LoginCommand('ana@example.com', PASSWORD));
+      const laptop = await t.login.execute(new LoginCommand('ana@example.com', PASSWORD));
+      const other = await t.login.execute(new LoginCommand('luis@example.com', PASSWORD));
+
+      await t.revokeOwn.execute(
+        new RevokeOwnSessionsCommand({
+          kind: 'user',
+          userId: ana.id,
+          roles: ['student'],
+          centerId: null,
+        }),
+      );
+
+      for (const session of [phone, laptop]) {
+        await expect(
+          t.refresh.execute(new RefreshSessionCommand(session.refreshToken)),
+        ).rejects.toThrow(InvalidRefreshTokenError);
+      }
+      await expect(
+        t.refresh.execute(new RefreshSessionCommand(other.refreshToken)),
+      ).resolves.toBeDefined();
+      expect(t.changes).toEqual([{ revokedRefreshTokens: { before: null, after: 2 } }]);
+    });
+
+    it('should refuse when the caller is an API key', async () => {
+      const t = setup();
+
+      await expect(
+        t.revokeOwn.execute(
+          new RevokeOwnSessionsCommand({
+            kind: 'api_key',
+            apiKeyId: 'key-1',
+            centerId: 'center-1',
+            scopes: ['applications:read'],
+          }),
+        ),
+      ).rejects.toThrow(SessionOwnerRequiredError);
     });
   });
 

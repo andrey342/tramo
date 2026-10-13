@@ -190,10 +190,16 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed. A 401 for a missing or
   invalid access token, wrong credentials or a refresh token that no longer works carries
   `WWW-Authenticate: Bearer`.
-- **Reuse.** A rotated refresh token presented again more than 10 seconds after its rotation is
+- **Reuse.** A rotated refresh token presented again more than 2 seconds after its rotation is
   treated as stolen: the whole family is revoked and `RefreshTokenReuseDetected` is published.
-  Within those 10 seconds it is rejected without revocation, because it is almost always the
-  legitimate client retrying a request whose response it lost.
+  Within those 2 seconds it is rejected without revocation, because it is almost always the
+  legitimate client sending two refreshes together or retrying one whose response it lost. The
+  window is short because it also protects a thief who rotated first: the user coming back
+  within it would leave the thief the session (ADR 013).
+- **Signing out everywhere.** `POST /me/sessions/revoke` (any user, audited
+  `session.revoke_all`) revokes every refresh token of every family of the caller, each family
+  under its lock, as disabling an account does; access tokens already issued keep working until
+  they expire.
 - **Lockout.** Sign-in attempts are counted per account, not per IP, so distributed guessing
   cannot avoid them. Each attempt is checked against the lock and counted in one Redis script
   before its password is verified, so parallel requests cannot all slip past the threshold; a

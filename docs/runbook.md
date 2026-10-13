@@ -492,5 +492,11 @@ future billing runs and private webhook targets by default. The compose stack ru
 - **Signing someone out everywhere**: `pnpm api:call POST /users/<userId>/disable --as admin`
   (204, also when already disabled). The account can no longer sign in and its refresh tokens
   stop working at once; access tokens it holds keep working until they expire, at most 15
-  minutes. There is no endpoint to enable it again or to change a password.
+  minutes. There is no endpoint to enable it again or to change a password. A user who only
+  suspects a stolen session ends all of theirs with `POST /me/sessions/revoke` (204, audited
+  `session.revoke_all`) and signs in again.
+- **A user signed out unexpectedly** after a refresh: a refresh token presented again more than
+  2 seconds after it was rotated counts as stolen and ends its session
+  (`Refresh token reuse detected; session family revoked`, `RefreshTokenReuseDetected`). A client
+  that retries a refresh late, or two that share one token, cause it too; they sign in again.
 - In compose these variables are not passed to the containers, so the defaults above apply.

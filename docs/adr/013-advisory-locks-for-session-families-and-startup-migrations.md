@@ -52,3 +52,15 @@ Option 3.
   to avoid collisions, and a 64-bit hash collision would only serialise two unrelated families.
 - Bad: deployments with many replicas wait for the first one to migrate; a long migration
   delays their readiness, which is visible in the health checks.
+
+### Reuse grace window (2026-10-13)
+
+A rotated token that comes back shortly after its rotation is rejected without revoking the
+family (`superseded`), since the lock serialises two refreshes sent together and the second one
+finds the token rotated milliseconds earlier. The window was 10 seconds; it is now 2
+(`REUSE_GRACE_MS`). It protects a thief as much as the user: one who rotates a stolen token first
+keeps the family if the user's client presents the old token within the window. Two seconds still
+cover parallel requests and an immediate retry of a dropped connection; a client retrying later
+is signed out and signs in again, the safe way to fail. A user who suspects theft can also end
+every session at once (`POST /me/sessions/revoke`), which takes each family's lock like a
+revocation.
