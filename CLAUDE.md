@@ -7,10 +7,12 @@ NestJS modular monolith with two processes (`api`, `worker`) built from one imag
 ## Commands
 
 - `pnpm test` unit · `pnpm test:int` / `pnpm test:e2e` (Testcontainers, need Docker) · `pnpm test:cov`
+  (domain ≥ 95 %) · `pnpm coverage:check` merges the `:cov` runs of the three levels (global ≥ 80 %)
 - `pnpm lint` · `pnpm typecheck` · `pnpm arch:check` (dependency-cruiser, must report zero violations)
 - `pnpm start:dev` / `pnpm worker:dev` against `docker compose --profile dev up -d` (infra only)
 - `docker compose up -d --build --wait` runs the whole stack (api :3000, Swagger `/docs`, Bull Board
-  `/admin/queues`, Mailpit :8025, webhook sink :9099)
+  `/admin/queues`, `/metrics`, Mailpit :8025, webhook sink :9099); its `seed` container loads the
+  demo data, `pnpm demo` walks the happy path, `pnpm seed` reseeds from the host
 - `pnpm migration:run|revert|show|generate` (CLI over the compiled data source)
 
 ## Architecture (details in `docs/architecture.md`, decisions in `docs/adr/`)
@@ -21,7 +23,8 @@ NestJS modular monolith with two processes (`api`, `worker`) built from one imag
 3. Side effects leave through the transactional outbox and BullMQ consumers, which are idempotent.
 4. Money is integer cents (`Money`), rates are basis points (`Percentage`). Never a raw `number`.
 
-Path-scoped rules in `.claude/rules/` cover domain, migrations, HTTP and tests.
+Path-scoped rules in `.claude/rules/` cover domain, migrations, HTTP and tests. Terms of the domain:
+`docs/domain-glossary.md`; operating the stack: `docs/runbook.md`; API collection: `docs/api`.
 
 ## Workflow
 
