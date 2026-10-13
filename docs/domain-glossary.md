@@ -219,7 +219,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 
 - **`FinancingPlan`**: how an active contract is repaid, opened on `ContractActivated` (ADR 016).
   `PlanStatus`: `active → completed`, with a completion reason `repaid`, `paid_off`,
-  `cap_reached`, `max_payments` or `window_expired` (`PlanCompleted` completes the contract).
+  `cap_reached`, `max_payments`, `window_expired` (`PlanCompleted` completes the contract) or
+  `defaulted` (the contract defaulted first, `ContractDefaulted` closes the plan; the contract
+  stays `defaulted`).
   - **Instalment schedule** (`InstallmentRow`): French amortisation, a constant instalment with
     each row's interest rounded half-up and the rounding absorbed by the last row. Instalments
     fall due on the activation day of each following month (days 29 to 31 move to the 28th).
@@ -282,7 +284,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `POST /ops/dunning/run`): `reminder` at −3 (`ChargeDueSoon`), `first_notice` at +1
   (`ChargeOverdue`, the charge `overdue`), `retry` at +3 and +7, `second_notice` at +15,
   `arrears` at +30 (`ContractInArrears`) and `write_off` at +90 (`ChargeWrittenOff`, the contract
-  defaults). A charge being collected waits for the answer.
+  defaults). A charge being collected waits for the answer. After the default no retry is
+  submitted: the debt goes to recovery and the other charges only get their notices and
+  write-off.
 - **Arrears**: a contract with a charge past the arrears step and unpaid. A payment that leaves no
   other charge of the contract in arrears publishes `ArrearsCleared`.
 - **Write-off**: the end of dunning; the charge is `written_off` with reason `dunning_exhausted`.

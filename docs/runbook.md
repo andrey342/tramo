@@ -224,7 +224,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     (on by default outside production).
   - Dunning steps by days from the due date: reminder at −3, notice at +1 (`overdue`), collection
     retried at +3 and +7, second notice at +15, arrears at +30 (contract `in_arrears`), write-off
-    at +90 (contract `defaulted`). A payment that leaves nothing in arrears clears them.
+    at +90 (contract `defaulted`, its plan closed as `defaulted`). After the default no retry is
+    submitted, by dunning or ops; the other charges still get their notices and write-off. A
+    payment that leaves nothing in arrears clears them.
 
 ## A center's webhook failing
 

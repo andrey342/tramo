@@ -376,7 +376,8 @@ the repayment plan.
 - **Repayment.** Billing collects (see Billing) and lending follows it: `ChargePaid` marks an
   instalment paid (in any order: a retried one may come after the next) or settles a payoff;
   `ContractInArrears` and `ArrearsCleared` move the contract into and out of `in_arrears`;
-  `ChargeWrittenOff` defaults it (`ContractDefaulted`). A payoff is refused while an instalment
+  `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan (`defaulted`): the
+  schedule shows it ended and billing no longer bills it. A payoff is refused while an instalment
   due is unpaid, since billing is already collecting it.
 - **Activation and plan.** `DisbursementSettled` activates the contract on that day;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
@@ -460,7 +461,9 @@ through a payment provider, dunning, ISA income declarations and the account sta
   days before (`ChargeDueSoon`), a notice the day after (`ChargeOverdue`, the charge
   `overdue`), collection retried at 3 and 7 days, a second notice at 15, arrears at 30
   (`ContractInArrears`, the contract `in_arrears` and its center told) and at 90 the charge
-  written off and the contract defaulted. A payment that leaves nothing of the contract in
+  written off and the contract defaulted. Once the contract has defaulted its debt goes to
+  recovery: its other charges still get their notices and are written off in turn, but
+  collection is not retried. A payment that leaves nothing of the contract in
   arrears clears them (`ArrearsCleared`); lending applies these notices in the order billing
   saw them, whatever the order they arrive in. A charge being collected waits for the answer.
   Ops collect a failed or overdue charge again with `POST /charges/:id/retry`, or ask the
