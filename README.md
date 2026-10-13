@@ -311,8 +311,9 @@ The billing run charges what falls due that month and submits it to the (simulat
 provider, which answers a couple of seconds later on `POST /webhooks/psp`: the charge is paid, the
 instalment marked in the plan and the statement balanced. An amount ending in 13 cents is refused,
 and dunning takes over: notices, retries at 3 and 7 days, arrears at 30, default at 90. In
-production the cycle runs on the 1st, collection and dunning every morning. ISA students declare
-their income with `POST /contracts/:id/income-declarations`.
+production the cycle runs on the 1st and the 5th, collection and dunning every morning. ISA
+students declare a month's income with `POST /contracts/:id/income-declarations` until the 4th of
+the next month; on the 5th the month is charged.
 
 Every step above writes to someone: the student receives emails (welcome, application received,
 decision, contract ready to sign, payment reminders and receipts, overdue notices, ISA declaration

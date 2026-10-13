@@ -208,8 +208,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   - A charge stuck `pending`: the provider never answered (collection retried about two hours,
     then dead-lettered) or its callback did not reach the api. Dunning leaves pending charges
     alone.
-  - Schedules (UTC): cycle on the 1st at 03:00, collection daily at 06:00, dunning daily at 07:00,
-    ISA declaration reminders on the 25th at 09:00. A run that could not bill or dun some items
+  - Schedules (UTC): cycle on the 1st and the 5th at 03:00 (instalments of the month, then the
+    ISA months whose declarations closed on the 4th), collection daily at 06:00, dunning daily at
+    07:00, ISA declaration reminders on the 25th at 09:00. A run that could not bill or dun some items
     reports them and the scheduled job fails, so it shows in the queue and is retried.
 - **Action**:
   - `POST /charges/:id/retry` (ops, admin): a `failed` or `overdue` charge gets a new attempt; a

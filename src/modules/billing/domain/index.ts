@@ -9,9 +9,12 @@ export {
   OPEN_CHARGE_STATUSES,
 } from './model/charge';
 export {
+  firstDeclarablePeriod,
   IncomeDeclaration,
   type IncomeDeclarationProps,
   type IncomeSource,
+  ISA_DUE_DAY,
+  isaPeriodClosesOn,
 } from './model/income-declaration';
 export {
   type MandateStatus,

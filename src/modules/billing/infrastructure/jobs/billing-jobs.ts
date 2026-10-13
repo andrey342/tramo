@@ -11,6 +11,7 @@ import { ExecuteChargeCollectionCommand } from '../../application/commands/execu
 import { RunBillingCycleCommand } from '../../application/commands/run-billing-cycle.command';
 import { RunDunningCommand } from '../../application/commands/run-dunning.command';
 import { SendDeclarationRemindersCommand } from '../../application/commands/send-declaration-reminders.command';
+import { ISA_DUE_DAY } from '../../domain';
 
 export interface CollectionJob extends CorrelatedJobData {
   readonly chargeId: string;
@@ -25,10 +26,16 @@ const COLLECT_CHARGE = 'charge.collect';
 // ask the provider again with the same key (POST /charges/:id/retry).
 const PROVIDER_CALL: JobsOptions = { attempts: 9, backoff: { type: 'exponential', delay: 30_000 } };
 
-// The calendar of billing, in UTC: the cycle on the 1st, collection and dunning every morning,
-// the ISA declaration reminder on the 25th. Upserted by name on every worker start: one schedule.
+// The calendar of billing, in UTC: the cycle on the 1st (the instalments of the month) and on
+// the 5th (the ISA months whose declarations closed that day; a run repeats nothing), collection
+// and dunning every morning, the ISA declaration reminder on the 25th. Upserted by name on every
+// worker start: one schedule each.
 const SCHEDULES = [
-  { queue: QueueNames.BILLING_CYCLE, name: 'monthly-cycle', pattern: '0 3 1 * *' },
+  {
+    queue: QueueNames.BILLING_CYCLE,
+    name: 'monthly-cycle',
+    pattern: `0 3 1,${String(ISA_DUE_DAY)} * *`,
+  },
   { queue: QueueNames.BILLING_COLLECT, name: 'daily-collection', pattern: '0 6 * * *' },
   { queue: QueueNames.BILLING_DUNNING, name: 'daily-dunning', pattern: '0 7 * * *' },
   { queue: QueueNames.DECLARATION_REMINDERS, name: 'declaration-reminder', pattern: '0 9 25 * *' },

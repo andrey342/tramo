@@ -433,13 +433,14 @@ through a payment provider, dunning, ISA income declarations and the account sta
   (`POST /contracts/:id/mandate`, from signature on); the IBAN is encrypted and bound to its row
   (ADR 014) and shown masked. A new mandate revokes the one in force, and collects at once the
   charges that fell due while the contract had none, scheduled or already overdue.
-- **Cycle.** `billing.cycle` on the 1st at 03:00 UTC, or `POST /ops/billing/run?asOf=` for a
-  demo or a catch-up (`&contractId=` for one contract; a day still to come only where
-  `BILLING_FUTURE_RUNS_ENABLED`, off in production): for every plan being repaid
-  (`ListBillablePlansQuery` of lending, which leaves out a plan whose payoff is being
-  collected), a charge for each instalment falling due by the end of the month, and for an ISA
-  each month of income that has ended, assessed by the rules of lending on the income declared
-  (ADR 017) and due on the 5th of the next month, until the month that ends the plan. A charge
+- **Cycle.** `billing.cycle` on the 1st and the 5th at 03:00 UTC, or
+  `POST /ops/billing/run?asOf=` for a demo or a catch-up (`&contractId=` for one contract; a day
+  still to come only where `BILLING_FUTURE_RUNS_ENABLED`, off in production): for every plan
+  being repaid (`ListBillablePlansQuery` of lending, which leaves out a plan whose payoff is
+  being collected), a charge for each instalment falling due by the end of the month, and for an
+  ISA each month of income whose declarations have closed (on the 5th of the next month),
+  assessed by the rules of lending on the income declared (ADR 017) and due that day, until the
+  month that ends the plan. A charge
   billed late is due on the day of the run, so dunning counts from when the student could pay.
   Charges are unique per contract and reference (`installment:3`, `isa:2026-07`,
   `payoff:<request>`): a second run creates nothing. One plan per transaction; the run goes on
@@ -466,10 +467,12 @@ through a payment provider, dunning, ISA income declarations and the account sta
   provider again for one stuck in collection (same key, a new job), unless the contract
   defaulted. Declarations and the ISA step of the cycle take the same lock on the contract, so
   a declaration cannot land in a month being assessed without it.
-- **ISA declarations.** `POST /contracts/:id/income-declarations`, one per month that has
-  started and has not been assessed yet (`period_not_open` otherwise: the month was
-  paused); audited, the amount stays in billing (events say only that a month was declared). On
-  the 25th students who have not declared the month are reminded once (`IncomeDeclarationDue`).
+- **ISA declarations.** `POST /contracts/:id/income-declarations`, one per month, from its first
+  day until the end of the 4th of the next month (a salary paid on the 1st or 2nd is declared in
+  time) and while lending has not assessed it (`period_not_open` otherwise: on the 5th the cycle
+  assesses the month, paused when undeclared); audited, the amount stays in billing (events say
+  only that a month was declared). On the 25th students who have not declared the month are
+  reminded once (`IncomeDeclarationDue`).
 - **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once
   and never dunned; meanwhile nothing else of the contract is collected or dunned, since it
   covers what is left. Paid, the plan ends (`paid_off`) and every charge not collected is
@@ -501,7 +504,7 @@ Known gaps, accepted for now:
 
 ```mermaid
 sequenceDiagram
-  participant Ops as cycle (1st) / ops
+  participant Ops as cycle (1st, 5th) / ops
   participant Billing as billing (worker)
   participant Lending as lending
   participant PSP as payment provider

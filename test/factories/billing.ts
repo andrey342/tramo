@@ -1,6 +1,11 @@
 import { uuidv7 } from 'uuidv7';
 
-import { Charge, IncomeDeclaration, PaymentMandate } from '../../src/modules/billing/domain';
+import {
+  Charge,
+  IncomeDeclaration,
+  isaPeriodClosesOn,
+  PaymentMandate,
+} from '../../src/modules/billing/domain';
 import { type ChargeKind } from '../../src/modules/billing/domain/events/billing-events';
 import { CalendarDate, Iban, Money, unwrap } from '../../src/shared/domain';
 
@@ -55,16 +60,19 @@ export function aMandate(overrides: { contractId?: string; studentId?: string } 
   });
 }
 
+// Declared at NOW, or on the 1st of the next month when the month's window had closed by NOW.
 export function aDeclaration(
   overrides: { contractId?: string; period?: string; incomeCents?: number } = {},
 ) {
+  const period = overrides.period ?? '2026-11';
+  const late = !isaPeriodClosesOn(period).isAfter(CalendarDate.fromInstant(NOW));
   return IncomeDeclaration.declare({
     id: uuidv7(),
     contractId: overrides.contractId ?? uuidv7(),
     studentId: uuidv7(),
-    period: overrides.period ?? '2026-10',
+    period,
     grossMonthlyIncome: Money.fromCents(overrides.incomeCents ?? 2_000_00),
     source: 'self',
-    now: NOW,
+    now: late ? new Date(`${day(`${period}-01`).addMonths(1).toString()}T08:00:00Z`) : NOW,
   });
 }

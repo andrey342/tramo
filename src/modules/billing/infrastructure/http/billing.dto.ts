@@ -24,7 +24,10 @@ export class SignMandateRequest {
 }
 
 export class DeclareIncomeRequest {
-  @ApiProperty({ example: '2026-11', description: 'The month the income was earned in' })
+  @ApiProperty({
+    example: '2026-11',
+    description: 'The month the income was earned in; open until the 4th of the next month',
+  })
   @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'period must be a month as YYYY-MM' })
   period!: string;
 

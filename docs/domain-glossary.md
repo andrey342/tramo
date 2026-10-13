@@ -268,11 +268,12 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   mandate it debits, the provider's payment id and its outcome (`pending | succeeded | failed`).
   A repeated call sends the same key and is never collected twice.
 - **Billing cycle / billing run**: no aggregate of its own. `RunBillingCycleCommand` runs as of a
-  day (the `billing.cycle` schedule on the 1st at 03:00 UTC, or ops through
+  day (the `billing.cycle` schedule on the 1st and the 5th at 03:00 UTC, or ops through
   `POST /ops/billing/run`): for each plan being repaid it creates a charge for each instalment
-  falling due by the end of that month, and for an ISA each month of income that has ended,
-  assessed by lending's rules (ADR 017) and due on the 5th of the next month. One plan per
-  transaction; a charge billed late is due on the day of the run.
+  falling due by the end of that month, and for an ISA each month of income whose declarations
+  have closed (`isaPeriodClosesOn`, the 5th of the next month), assessed by lending's rules
+  (ADR 017) and due that day. One plan per transaction; a charge billed late is due on the day of
+  the run.
 - **Collection**: submitting due charges under the mandate in force (`billing.collect`, every day
   at 06:00 UTC, and after each ops billing run). The provider answers later on
   `POST /webhooks/psp`. A charge without a mandate stays `scheduled`.
@@ -286,10 +287,12 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   other charge of the contract in arrears publishes `ArrearsCleared`.
 - **Write-off**: the end of dunning; the charge is `written_off` with reason `dunning_exhausted`.
 - **`IncomeDeclaration`**: what an ISA student earned in one month (`period` as `YYYY-MM`), one
-  per contract and month, for a month that has started and that lending has not assessed yet
-  (`period_not_open` otherwise). `IncomeSource`: `self | employment_provider`. The amount stays in
-  billing; `IncomeDeclared` says only that a month was declared. On the 25th, students who have
-  not declared the month are reminded once (`IncomeDeclarationDue`).
+  per contract and month. The declaration window of a month runs from its first day to the end
+  of the 4th of the next (`ISA_DUE_DAY`, the 5th, closes it), so a salary paid on the 1st or 2nd
+  is declared in time; a month whose window closed, or that lending has assessed, is refused
+  (`period_not_open`, naming the first open month). `IncomeSource`: `self | employment_provider`.
+  The amount stays in billing; `IncomeDeclared` says only that a month was declared. On the 25th,
+  students who have not declared the month are reminded once (`IncomeDeclarationDue`).
 - **Ledger / statement**: `billing.ledger_entries`, written from the charge events, one entry per
   event (`LedgerEntryType`: `charge`, `payment`, `write_off`, `cancellation`; positive amounts are
   owed, negative ones paid or no longer owed). `GET /contracts/:id/statement` lists them with the
