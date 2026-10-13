@@ -3,7 +3,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm';
 // The read models of reporting: one fact per application, contract, disbursement and charge,
 // built up from the events of the other modules (their ids, no foreign keys: ADR 008). Columns
 // an event may not carry are nullable; the status follows the latest event (last_event_at, then
-// last_event_id). Disposable: a rebuild truncates and replays them (ADR 019).
+// last_event_id). Disposable: a rebuild deletes and replays them (ADR 019).
 export class CreateReportingFacts1791850140000 implements MigrationInterface {
   name = 'CreateReportingFacts1791850140000';
 

@@ -50,7 +50,9 @@ that could drift from the consumers. Option 3 duplicates the outbox.
 The mean score of a program's applicants is not projected: putting scores in events would
 publish personal financial data to every consumer and job. Origination answers it as an
 aggregate (`GetProgramScoresQuery`), only from ten scored applicants and in bands of five, so
-neither one applicant's score nor the newest one can be read from it.
+no applicant's score can be read from it. Two readings either side of a new decision still say
+roughly whether that applicant scored above or below the mean, which tells the center little
+more than the decision it already sees.
 
 ### Consequences
 
@@ -59,11 +61,9 @@ neither one applicant's score nor the newest one can be read from it.
 - Bad: the outbox is never pruned while reporting replays it; at volume it grows without bound.
   An archive of published events (a partitioned table, or a copy to object storage) would keep
   the history without slowing the publisher's scans, which only read unpublished rows.
-- Bad: a rebuild holds one transaction for the whole history, and live consumers wait for it; at
-  volume it would replay into shadow tables and swap them.
-- Bad: an event whose transaction commits after the rebuild's snapshot but with a smaller id
-  than events already replayed (a transaction left open across the start of a rebuild) is
-  missed if its consumer ran before the rebuild; the next rebuild picks it up.
+- Bad: a rebuild holds one transaction for the whole history, and live consumers wait for it,
+  each holding a database connection: up to five of the worker's pool while it lasts, which slows
+  its other queues. At volume it would replay into shadow tables and swap them.
 - Bad: events published before reporting existed reach no consumer: a deployment that adds
   reporting to existing data runs one rebuild.
 - Bad: figures are aggregated per request; a large portfolio would want summary tables updated by

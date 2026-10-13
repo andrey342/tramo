@@ -539,5 +539,5 @@ sequenceDiagram
   Outbox->>Reporting: events.reporting (one job per consumer and event)
   Reporting->>Reporting: ReportingProjector: upsert the fact
   Api->>Reporting: GET /centers/:id/dashboard (figures from the facts)
-  Note over Reporting,Outbox: rebuild: truncate the facts, replay the outbox in order
+  Note over Reporting,Outbox: rebuild: delete the facts, replay the outbox in order
 ```
