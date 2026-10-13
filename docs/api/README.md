@@ -14,7 +14,9 @@ error.
    `carla.moreno`, `diego.lopez` and `elena.ruiz` (all `@example.com`).
 2. In Bruno, choose **Open Collection** and select this `docs/api` folder.
 3. Select the `local` environment (top right). It holds the base URLs, the demo password and the
-   variables the scripts fill in: tokens, ids, the first due date and so on.
+   variables the scripts fill in: ids, the first due date and so on. Tokens, the API key and
+   `esignSecret` are secret variables: Bruno keeps their values out of the collection files, so a
+   run never writes a token into the repository.
 4. Run the **Auth** folder first (right click, **Run**). It signs in as admin, ops and the
    Codeworks center admin, stores the center id, and registers and signs in a new student, whose
    token ends up in `studentToken`. Access tokens last 15 minutes; run Auth again when requests
@@ -54,7 +56,8 @@ the "repeat until" steps just mean sending the request again.
 
 In production the e-signature provider calls `POST /webhooks/esign` with an HMAC signature. The
 "Sign contract" request plays the provider: its pre-request script signs the body with the local
-`ESIGN_WEBHOOK_SECRET` (`esignSecret` in the environment). It uses `require("crypto")`, so it needs
+`ESIGN_WEBHOOK_SECRET` (`esignSecret` in the environment; set it to the compose default
+`local-esign-webhook-secret-change-me-0123456789` before the first run). It uses `require("crypto")`, so it needs
 Bruno's **Developer Mode** (the JavaScript sandbox selector next to the environment).
 
 The simpler route is a terminal, from the repository root:
