@@ -162,6 +162,24 @@ describe('FinancingPlan', () => {
       expect(eventTypes(plan)).toEqual([LendingEvents.PlanCompleted]);
     });
 
+    // The debt of a defaulted contract is still being recovered: what is collected shows on the
+    // schedule, and the plan stays closed as defaulted.
+    it('should record payments when defaulted, without reopening or repaying it', () => {
+      const plan = aPlan({
+        product: { kind: 'installments', termMonths: 2, annualRate: Percentage.fromPercent(9) },
+      });
+      plan.recordInstallmentPaid(1, LATER);
+      plan.closeOnDefault(LATER);
+      plan.pullEvents();
+
+      plan.recordInstallmentPaid(2, LATER);
+
+      expect(plan.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([1, 2]);
+      expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
+      expect(plan.recordsRepayments).toBe(true);
+      expect(plan.hasPendingEvents).toBe(false);
+    });
+
     // Billing is already collecting the instalment that fell due: a payoff would charge it twice.
     it('should refuse a payoff while an instalment due is unpaid', () => {
       const plan = aPlan({ activatedOn: '2026-10-12' });

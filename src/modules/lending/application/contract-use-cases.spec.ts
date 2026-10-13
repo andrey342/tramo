@@ -854,6 +854,26 @@ describe('lending use cases', () => {
       expect(t.events.ofType(LendingEvents.PlanCompleted)).toHaveLength(1);
       await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(uuidv7()));
     });
+
+    // Billing keeps collecting the overdue charges of a defaulted contract: the schedule shows
+    // what was recovered, and the plan stays closed as defaulted.
+    it('should record payments on a plan when its contract defaulted', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.collectionStatus.execute(
+        new RecordCollectionStatusCommand(contractId, 'defaulted', new Date()),
+      );
+      await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(contractId));
+
+      await t.repayment.execute(
+        new RecordRepaymentCommand(contractId, { kind: 'installment', installmentNumber: 1 }),
+      );
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
+      expect(plan?.terms.kind === 'installments' && plan.terms.paidInstallments).toEqual([1]);
+      expect(t.events.ofType(LendingEvents.PlanCompleted)).toHaveLength(1);
+    });
   });
 
   describe('payoff', () => {

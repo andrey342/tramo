@@ -283,19 +283,23 @@ export class FinancingPlan extends AggregateRoot {
     this.complete('paid_off', now);
   }
 
+  // Whether billing's payments still change the instalments: while the plan is repaid, and once
+  // defaulted, since the debt is still being recovered. A plan that ended otherwise (repaid, paid
+  // off, an ISA) stays as it ended.
+  get recordsRepayments(): boolean {
+    return this.props.status === 'active' || this.props.completionReason === 'defaulted';
+  }
+
   // As billing collects them, in any order; a repeated notice of one already counted changes
-  // nothing. The plan ends when every instalment is paid.
+  // nothing. The plan ends when every instalment is paid; a defaulted one stays defaulted.
   recordInstallmentPaid(number: number, now: Date): void {
-    const terms = this.installmentTerms();
-    if (!Number.isInteger(number) || number < 1 || number > terms.termMonths) {
-      throw new InvalidValueError('installment', `The plan has no instalment ${String(number)}.`);
-    }
+    const terms = this.repaidInstallmentTerms(number);
     if (terms.paidInstallments.includes(number)) {
       return;
     }
     const paidInstallments = [...terms.paidInstallments, number].sort((a, b) => a - b);
     this.props = { ...this.props, terms: { ...terms, paidInstallments } };
-    if (paidInstallments.length === terms.termMonths) {
+    if (this.props.status === 'active' && paidInstallments.length === terms.termMonths) {
       this.complete('repaid', now);
     }
   }
@@ -394,6 +398,20 @@ export class FinancingPlan extends AggregateRoot {
       throw new PayoffNotAvailableError('an income share agreement has no instalments');
     }
     this.assertActive();
+    return terms;
+  }
+
+  private repaidInstallmentTerms(number: number): InstallmentPlanTerms {
+    const { terms } = this.props;
+    if (terms.kind !== 'installments') {
+      throw new InvalidValueError('plan', 'An income share agreement has no instalments.');
+    }
+    if (!this.recordsRepayments) {
+      throw new PlanEndedError(this.id);
+    }
+    if (!Number.isInteger(number) || number < 1 || number > terms.termMonths) {
+      throw new InvalidValueError('installment', `The plan has no instalment ${String(number)}.`);
+    }
     return terms;
   }
 

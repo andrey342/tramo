@@ -10,8 +10,8 @@ import {
   type FinancingPlanRepository,
 } from '../../domain';
 
-// Billing collected a charge (ChargePaid): an instalment of the table, or the payoff; or could
-// not collect a payoff (ChargeFailed), which is withdrawn. An ISA charge needs nothing more, its
+// Billing collected a charge (ChargePaid): an instalment of the table, or the payoff; or could not
+// collect a payoff (ChargeFailed), which is withdrawn. An ISA charge needs nothing more, its
 // amount counted when the month was assessed.
 export type Repayment =
   | { readonly kind: 'installment'; readonly installmentNumber: number }
@@ -42,9 +42,8 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
       if (!plan) {
         throw new EntityNotFoundError('FinancingPlan', command.contractId);
       }
-      // A redelivered payment changes nothing, and writes nothing. A plan that has ended (paid
-      // off while an instalment was in collection) has nothing left to record either.
-      if (alreadyRecorded(plan, repayment) || plan.status !== 'active') {
+      // A redelivered payment changes nothing, and writes nothing.
+      if (alreadyRecorded(plan, repayment) || !takes(plan, repayment)) {
         return;
       }
       const now = this.clock.now();
@@ -58,6 +57,13 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
       await this.plans.save(plan);
     });
   }
+}
+
+// What the plan, as it is now, records. Instalments also once defaulted, since the debt is still
+// being recovered (a plan paid off while an instalment was in collection has nothing left to
+// record); a payoff only while active.
+function takes(plan: FinancingPlan, repayment: Repayment): boolean {
+  return repayment.kind === 'installment' ? plan.recordsRepayments : plan.status === 'active';
 }
 
 function alreadyRecorded(plan: FinancingPlan, repayment: Repayment): boolean {
