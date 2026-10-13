@@ -10,4 +10,7 @@ module.exports = {
   globalTeardown: '<rootDir>/test/setup/global-teardown.ts',
   testTimeout: 60_000,
   passWithNoTests: false,
+  // The domain thresholds belong to the unit run; this run only feeds the global gate
+  // (pnpm coverage:check).
+  coverageThreshold: {},
 };

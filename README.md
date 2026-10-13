@@ -129,6 +129,16 @@ Integration and e2e tests start Postgres and Redis containers once per run and b
 with the real migrations. E2E tests build the application through the same HTTP setup as `main.api.ts`, so they exercise routing, validation and error rendering as
 deployed. CI runs all of the above plus the Docker image build on every pull request.
 
+Coverage has two gates. `pnpm test:cov` holds every `domain/` folder to 95 % of statements and
+lines (90 % of branches). The global gate merges the three levels, since persistence and HTTP are
+only reached by integration and e2e tests: 80 % of statements, lines and functions, 70 % of
+branches.
+
+```bash
+pnpm test:cov && pnpm test:int:cov && pnpm test:e2e:cov
+pnpm coverage:check   # merges coverage/{unit,int,e2e}
+```
+
 On Docker Desktop (Windows), run the suites with only the `dev` profile up, not the full stack:
 with the api and worker containers also running we have seen sporadic `ECONNRESET` on the test
 containers' published ports. `docker compose stop api worker` is enough.

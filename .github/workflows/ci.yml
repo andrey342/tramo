@@ -48,6 +48,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:cov
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-unit
+          path: coverage/unit/coverage-final.json
+          retention-days: 7
 
   integration:
     name: Integration tests
@@ -61,10 +66,15 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:int
+      - run: pnpm test:int:cov
         env:
           # Also run the suites that call real third-party test services (VIES test service).
           TEST_EXTERNAL_SERVICES: 'true'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-int
+          path: coverage/int/coverage-final.json
+          retention-days: 7
 
   e2e:
     name: E2E tests
@@ -78,7 +88,31 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:e2e
+      - run: pnpm test:e2e:cov
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-e2e
+          path: coverage/e2e/coverage-final.json
+          retention-days: 7
+
+  coverage:
+    name: Coverage gate
+    needs: [unit, integration, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage
+      # Each artifact lands in coverage/<name>/coverage-final.json.
+      - run: pnpm coverage:check coverage/coverage-unit coverage/coverage-int coverage/coverage-e2e
 
   build:
     name: Build
