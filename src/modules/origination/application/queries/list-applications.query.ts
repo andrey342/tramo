@@ -44,10 +44,8 @@ function scopeOf(actor: Principal, status: ApplicationStatus | undefined): Appli
   if (actor.kind === 'user' && actor.roles.includes('center_admin') && actor.centerId) {
     return { centerId: actor.centerId, status };
   }
-  if (
-    actor.kind === 'api_key' &&
-    actor.scopes.some((scope) => scope === 'applications:read' || scope === 'applications:write')
-  ) {
+  // The route requires applications:read of a key; a write-only key never gets here.
+  if (actor.kind === 'api_key' && actor.scopes.includes('applications:read')) {
     return { centerId: actor.centerId, status };
   }
   throw new ApplicationAccessDeniedError();
