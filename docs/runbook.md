@@ -254,9 +254,25 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     failure reason; `GET /contracts/:id/statement` for the ledger.
   - No mandate: charges stay `scheduled` and dunning chases them. Signing one
     (`POST /contracts/:id/mandate`, the student) collects at once what fell due meanwhile.
-  - The simulated provider refuses amounts ending in 13 cents (`insufficient_funds`) and answers
+  - The simulated provider refuses amounts ending in 13 cents (`insufficient_funds`), collects
+    and then returns those ending in 14 (`MD06`, twice the delay later), and answers
     `SIMULATED_PSP_DELAY_MS` later through `billing.psp-simulator`, which posts to the api at
     `PSP_CALLBACK_URL`.
+  - A charge `failed` with `lastFailureReason` a four-letter code (`MD06`, `AM04`, `AC04`...)
+    was collected and then returned by the student's bank: owed again from the day of the
+    return (a `return` line on the statement), dunned from that day, its instalment unpaid on
+    the plan. If that payment had ended the plan (its last instalment, or a payoff), the plan and
+    the contract stay as they ended and the api logs `Payment returned on a plan that has ended`:
+    the instalment is dunned as usual; a payoff is not dunned, so retry it or settle it with the
+    student (ADR 020).
+  - Provider callbacks (`POST /webhooks/psp`) carry no amount: a real provider's adapter must
+    compare the amount it echoes. Answers: 200 recorded or already recorded; 400 malformed (a
+    `payment.returned` needs `returnReason`); 401 bad signature; 409 when the callback does not
+    fit what is recorded: `unknown_collection_attempt` (no such attempt key),
+    `payment_mismatch` (another payment id for the attempt) or `invalid_state_transition` (an
+    outcome contradicting the recorded one). All 409s are refusals the provider should not
+    expect to change, except a return that arrived before its success, which its retries record
+    once the success is in. A 409 that keeps coming back needs a look at the charge's attempts.
   - A charge stuck `pending`: the provider never answered (collection retried about two hours,
     then dead-lettered) or its callback did not reach the api. Dunning leaves pending charges
     alone.

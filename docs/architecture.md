@@ -126,6 +126,7 @@ with CHECKs, timestamps are `timestamptz(3)`, and aggregates carry a `version`.
 | [017](adr/017-billing-applies-lendings-isa-rules-through-a-public-command.md)              | Billing applies lending's ISA rules through a public command             | accepted |
 | [018](adr/018-outgoing-webhooks-sign-with-a-per-center-secret-kept-encrypted.md)           | Outgoing webhooks sign with a per-center secret kept encrypted           | accepted |
 | [019](adr/019-reporting-read-models-are-rebuilt-from-the-outbox.md)                        | Reporting read models are rebuilt from the outbox                        | accepted |
+| [020](adr/020-a-returned-direct-debit-reopens-the-charge-not-an-ended-plan.md)             | A returned direct debit reopens the charge, not an ended plan            | accepted |
 
 ## HTTP pipeline
 
@@ -457,12 +458,16 @@ the repayment plan.
   the contract stays recorded but has nothing to collect. All three routes are audited.
 - **Repayment.** Billing collects (see Billing) and lending follows it: `ChargePaid` marks an
   instalment paid (in any order: a retried one may come after the next) or settles a payoff;
-  `ContractInArrears` and `ArrearsCleared` move the contract into and out of `in_arrears`;
-  `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan (`defaulted`): the
-  schedule shows it ended and billing no longer bills it. The first ending recorded is final: a
-  `PlanCompleted` delivered after the default leaves the contract `defaulted` (the default stands
-  and the application stays held), and a write-off after completion leaves it `completed`. A
-  payoff is refused while an instalment due is unpaid, since billing is already collecting it.
+  `ChargeReturned` marks it unpaid again (a return before its payment is retried until the
+  payment is in); `ContractInArrears` and `ArrearsCleared` move the contract into and out of
+  `in_arrears`; `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan
+  (`defaulted`): the schedule shows it ended and billing no longer bills it. A defaulted plan
+  still records what billing collects or sees returned, since its debt is being recovered, and
+  stays `defaulted`; a plan that ended otherwise is not reopened by a return (ADR 020). The first
+  ending recorded is final: a `PlanCompleted` delivered after the default leaves the contract
+  `defaulted` (the default stands and the application stays held), and a write-off after
+  completion leaves it `completed`. A payoff is refused while an instalment due is unpaid, since
+  billing is already collecting it.
 - **Activation and plan.** `DisbursementSettled` activates the contract on the day the transfer
   settled (`settledAt` in the payload, or the event's `occurredAt` for events recorded before it
   carried one), not the day the consumer gets to it, so a backlog does not move the schedule;
@@ -541,7 +546,19 @@ through a payment provider, dunning, ISA income declarations and the account sta
   be the one the provider accepted for the attempt; the answer is audited and a repeated one
   writes nothing. A charge without a mandate stays scheduled and dunning chases it. Whether a
   payment clears the arrears of a contract is decided under a lock on the contract, so two
-  payments at once cannot both see the other unpaid.
+  payments at once cannot both see the other unpaid. Callbacks carry no amount (the key names
+  the attempt, asked for the charge's amount; a real provider's adapter compares the amount it
+  echoes). Every callback that does not fit what is recorded is a 409:
+  `unknown_collection_attempt`, `payment_mismatch` (another payment for the attempt) or
+  `invalid_state_transition` (an outcome contradicting the recorded one, or a return before its
+  success, which a later retry records); 400 is a malformed body and 401 a bad signature.
+- **Returns.** The student's bank can send back a debit the provider collected (SEPA Core: 8
+  weeks, 13 months if unauthorised): `payment.returned` with its reason code (`MD06`...). The
+  charge is owed again (`ChargeReturned`, a `return` line on the statement) and `failed`, due
+  that day: dunning starts over from the return. The same return again writes nothing, and a
+  success repeated after it is ignored. Lending marks the instalment unpaid; a plan that ended
+  on that payment (repaid, or paid off by a payoff returned) stays ended, and the charge is
+  dunned, or for a payoff left to ops (ADR 020).
 - **Dunning.** Every morning (`billing.dunning`), or `POST /ops/dunning/run?asOf=`, every
   charge not settled moves through the steps it has reached, each applied once: a reminder three
   days before (`ChargeDueSoon`), a notice the day after (`ChargeOverdue`, the charge
@@ -572,12 +589,13 @@ through a payment provider, dunning, ISA income declarations and the account sta
   one plan and one charge per transaction as in the scheduled runs (the job fails and is retried
   while any of them fails), and the student may ask again, which is a new charge.
 - **Statement.** `GET /contracts/:id/statement`: a projection of the charge events (charge,
-  payment, write-off, cancellation), one line per event, with the running balance; charges in
-  `GET /contracts/:id/charges`. The student and staff see them; centers see their portfolio in
-  aggregate.
+  payment, return, write-off, cancellation), one line per event, with the running balance;
+  charges in `GET /contracts/:id/charges`. The student and staff see them; centers see their
+  portfolio in aggregate.
 - **Provider.** Simulated: deterministic by key, it answers `SIMULATED_PSP_DELAY_MS` later
   through a queue the worker posts from (`PSP_CALLBACK_URL`), refusing amounts that end in 13
-  cents (`insufficient_funds`). A production process refuses to start with it.
+  cents (`insufficient_funds`) and returning those that end in 14 (collected, then `MD06` twice
+  the delay later). A production process refuses to start with it.
 
 Known gaps, accepted for now:
 
@@ -605,6 +623,8 @@ sequenceDiagram
   Billing->>PSP: collect (key <chargeId>.<attempt>)
   PSP->>Api: POST /webhooks/psp (signed, echoes the key)
   Api->>Lending: ChargePaid (outbox): instalment paid, payoff settled; ChargeFailed: payoff withdrawn
+  PSP->>Api: POST /webhooks/psp payment.returned (weeks later)
+  Api->>Lending: ChargeReturned (outbox): instalment unpaid again; the charge is dunned anew
   Ops->>Billing: dunning: notices, retries, arrears at 30 days, default at 90
 ```
 
@@ -696,9 +716,10 @@ modules (ADR 019). It decides nothing and owns no aggregate.
   facts whatever the order and repetition of events: each event sets what it knows; the status
   follows the most recent event but a final one (a contract completed, defaulted or cancelled, a
   charge paid, written off or cancelled, an application rejected, accepted, cancelled or
-  expired) is never replaced by one that is not; the decision is set once; a charge keeps the
-  day of its latest failure. A charge whose events never named the center is placed by its
-  contract's.
+  expired) is never replaced by one that is not, but by a newer return of a paid charge
+  (`ChargeReturned` reopens it: no longer collected, outstanding again); the decision is set
+  once; a charge keeps the day of its latest failure. A charge whose events never named the
+  center is placed by its contract's.
 - **Figures.** Pure functions of the domain over rows the store groups, computed when asked:
   - `GET /centers/:id/dashboard` (the center's admins, its API keys with `portfolio:read`,
     staff): applications submitted (drafts are not in the funnel) by where they are now (an
