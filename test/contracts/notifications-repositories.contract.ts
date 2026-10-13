@@ -3,6 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { type NotificationsQueries } from '../../src/modules/notifications/application/ports/notifications-ports';
 import {
   type EmailNotificationRepository,
+  STALE_EMAIL_MS,
   type WebhookDeliveryRepository,
   type WebhookSubscriptionRepository,
 } from '../../src/modules/notifications/domain';
@@ -137,7 +138,7 @@ export function notificationsRepositoriesContract(
       ).rejects.toMatchObject({ code: 'concurrent_modification' });
     });
 
-    it('should find the emails still pending that were written before a time', async () => {
+    it('should find the emails still pending a day after they were written, in order', async () => {
       const { emails, run } = await create();
       const [pending, sent] = [anEmail(), anEmail()];
       sent.markSent(LATER);
@@ -146,11 +147,19 @@ export function notificationsRepositoriesContract(
         await emails.save(sent);
       });
 
-      const ids = await run(() => emails.findPendingIds(new Date(LATER.getTime() + 1), 10_000));
+      const dayAfter = new Date(pending.createdAt.getTime() + STALE_EMAIL_MS);
+      const ids = (await run(() => emails.findStale(dayAfter, 10_000, null))).map((e) => e.id);
+      const afterIt = await run(() =>
+        emails.findStale(dayAfter, 10_000, { id: pending.id, createdAt: pending.createdAt }),
+      );
+      const early = await run(() =>
+        emails.findStale(new Date(dayAfter.getTime() - 1), 10_000, null),
+      );
 
       expect(ids).toContain(pending.id);
       expect(ids).not.toContain(sent.id);
-      expect(await run(() => emails.findPendingIds(new Date(0), 10))).toEqual([]);
+      expect(afterIt.map((e) => e.id)).not.toContain(pending.id);
+      expect(early.map((e) => e.id)).not.toContain(pending.id);
     });
   });
 }

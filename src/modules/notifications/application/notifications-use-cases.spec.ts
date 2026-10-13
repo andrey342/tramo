@@ -480,17 +480,17 @@ describe('notifications use cases', () => {
       t.clock.advanceBy(24 * 60 * 60 * 1000 + 1);
       const late = await t.sweep.execute();
 
-      expect([early, late]).toEqual([0, 1]);
+      expect([early.abandoned, late.abandoned]).toEqual([0, 1]);
       expect(await t.emails.findById(email?.id ?? '')).toMatchObject({
         status: 'failed',
         lastError: 'abandoned',
       });
     });
 
-    // A full page of rows that cannot be given up would otherwise be read again forever.
-    it('should end the sweep when a whole page cannot be given up', async () => {
+    // The oldest rows failing must not keep the sweep from the newer ones, nor hide the failures.
+    it('should walk past emails it cannot give up and report them', async () => {
       const t = setup();
-      for (let n = 0; n < 200; n += 1) {
+      for (let n = 0; n < 201; n += 1) {
         await t.request.execute(
           new RequestEmailCommand({
             eventId: uuidv7(),
@@ -502,11 +502,19 @@ describe('notifications use cases', () => {
         );
       }
       t.clock.advanceBy(24 * 60 * 60 * 1000 + 1);
-      jest.spyOn(t.emails, 'save').mockRejectedValue(new Error('database unavailable'));
+      const save = t.emails.save.bind(t.emails);
+      let calls = 0;
+      jest.spyOn(t.emails, 'save').mockImplementation(async (email) => {
+        calls += 1;
+        // The 200 oldest fail; the newest one is given up.
+        if (calls <= 200) throw new Error('database unavailable');
+        await save(email);
+      });
 
-      const abandoned = await t.sweep.execute();
+      const result = await t.sweep.execute();
 
-      expect(abandoned).toBe(0);
+      expect(result.abandoned).toBe(1);
+      expect(result.failedIds).toHaveLength(200);
     });
   });
 });
