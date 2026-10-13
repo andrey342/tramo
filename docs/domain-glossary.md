@@ -90,6 +90,10 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   number of a center that is not active (`CenterVatNumberChanged`): its validation is dropped and
   the new number is checked as on registration.
 
+- **`VatNumber`**: country (ES or DE) and national number, prefix dropped. ES takes a letter or
+  digit, seven digits and a letter or digit (NIF, CIF, NIE); DE nine digits. The VIES test
+  service's three-digit numbers are accepted only while the registry asked is that service or
+  the fake (`registryTestNumbers`).
 - **`VatValidation`** / **`VatCheckResult`**: the latest VAT check kept on the center, with status
   `valid | invalid | unverified`. A check answers `valid`, `invalid` or `unavailable` (VIES could
   not be asked: down, timeout, circuit open). `unavailable` marks a center never checked (or

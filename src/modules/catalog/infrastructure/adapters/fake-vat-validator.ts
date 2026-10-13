@@ -12,6 +12,8 @@ const PROVIDER = 'fake';
 // so realistic tax ids in seed data activate their centers.
 @Injectable()
 export class FakeVatValidator implements VatValidator {
+  readonly acceptsTestNumbers = true;
+
   check(vatNumber: VatNumber): Promise<VatCheckResult> {
     switch (vatNumber.number) {
       case '200':

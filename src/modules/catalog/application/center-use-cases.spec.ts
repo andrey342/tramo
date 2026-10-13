@@ -58,12 +58,13 @@ function setup() {
     events,
     centers,
     changes,
-    register: new RegisterTrainingCenterHandler(uow, centers, clock),
+    register: new RegisterTrainingCenterHandler(uow, centers, vat, clock),
     verify: new VerifyCenterVatHandler(uow, centers, vat, clock),
     update: new UpdateTrainingCenterHandler(
       uow,
       centers,
       { describeChanges: (change) => changes.push(change) },
+      vat,
       clock,
     ),
     get: new GetTrainingCenterHandler(centers),
@@ -110,6 +111,22 @@ describe('training center use cases', () => {
         ),
       ).rejects.toThrow(InvalidValueError);
     });
+
+    it("should take the registry's test numbers as tax ids only while it is the test service", async () => {
+      const t = setup();
+      const live = new RegisterTrainingCenterHandler(
+        new InlineUnitOfWork(),
+        t.centers,
+        { acceptsTestNumbers: false, check: () => Promise.reject(new Error('not asked')) },
+        t.clock,
+      );
+      const command = new RegisterTrainingCenterCommand(ADMIN, 'X', 'DE', '100', VALID_IBAN, 500);
+
+      await expect(live.execute(command)).rejects.toThrow(InvalidValueError);
+      await expect(t.register.execute(command)).resolves.toMatchObject({
+        centerId: expect.any(String) as string,
+      });
+    });
   });
 
   describe('VerifyCenterVat', () => {
@@ -150,6 +167,7 @@ describe('training center use cases', () => {
         t.uow,
         t.centers,
         {
+          acceptsTestNumbers: true,
           check: () =>
             Promise.resolve({ outcome: 'unavailable', provider: 'fake', reason: 'TIMEOUT' }),
         },

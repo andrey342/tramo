@@ -26,6 +26,7 @@ import {
 } from '../../domain';
 import { assertIsAdmin } from '../center-access';
 import { type TrainingCenterDto } from '../dto/training-center.dto';
+import { VAT_VALIDATOR, type VatValidator } from '../ports/catalog-ports';
 import { toTrainingCenterDto } from '../training-center.mapping';
 
 export interface TrainingCenterChanges {
@@ -58,6 +59,7 @@ export class UpdateTrainingCenterHandler implements ICommandHandler<UpdateTraini
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(TRAINING_CENTER_REPOSITORY) private readonly centers: TrainingCenterRepository,
     @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
+    @Inject(VAT_VALIDATOR) private readonly vat: VatValidator,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -69,7 +71,11 @@ export class UpdateTrainingCenterHandler implements ICommandHandler<UpdateTraini
     const vatNumber =
       changes.country === undefined || changes.taxId === undefined
         ? undefined
-        : unwrap(VatNumber.create(changes.country, changes.taxId));
+        : unwrap(
+            VatNumber.create(changes.country, changes.taxId, {
+              registryTestNumbers: this.vat.acceptsTestNumbers,
+            }),
+          );
 
     return this.uow.run(async () => {
       const center = await this.centers.findById(command.centerId);

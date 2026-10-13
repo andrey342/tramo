@@ -58,7 +58,8 @@ describe('retryWhile', () => {
 describe('SEED_TAX_IDS', () => {
   const fake = new FakeVatValidator();
   const outcome = async (country: string, taxId: string): Promise<string> =>
-    (await fake.check(unwrap(VatNumber.create(country, taxId)))).outcome;
+    (await fake.check(unwrap(VatNumber.create(country, taxId, { registryTestNumbers: true }))))
+      .outcome;
 
   it('should give realistic numbers the offline fake accepts when VIES_MODE is fake', async () => {
     await expect(outcome('ES', SEED_TAX_IDS.codeworks('fake'))).resolves.toBe('valid');

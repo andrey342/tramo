@@ -283,6 +283,11 @@ Training centers and the programs students finance.
   with backoff, and a circuit breaker stops calling for 30 s after five failures in a row. Every
   failure becomes an `unavailable` answer: a registry outage never fails a request. `VIES_MODE`
   selects VIES, its test service or a local fake; production accepts only VIES.
+- **Tax id shapes.** `VatNumber` checks each country's shape before VIES is asked (ES: a letter
+  or digit, seven digits, a letter or digit; DE: nine digits); check digits are VIES's call. The
+  test service's three-digit numbers (100, 200, 300...) fit no national shape and are accepted
+  only when the validator in use answers by them (`VatValidator.acceptsTestNumbers`: the test
+  service and the fake), never against live VIES. Numbers already stored are loaded as they are.
 - **Payout IBAN.** Stored encrypted (AES-256-GCM, ADR 014) and bound to its row, with its last four
   characters in clear; responses, events, logs and the audit log only show the masked value.
 - **Programs.** Created as drafts and published once they have a financing option (instalment

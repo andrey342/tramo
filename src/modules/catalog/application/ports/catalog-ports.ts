@@ -9,6 +9,10 @@ export const VAT_VALIDATOR = Symbol('VAT_VALIDATOR');
 // Asks the EU VAT registry (VIES) whether a number is registered and active. Never throws for an
 // unreachable registry: it answers `unavailable`, and the center stays unverified until a retry.
 export interface VatValidator {
+  // True when the registry asked is VIES's test service or a stand-in for it, which answer by
+  // the three-digit test numbers (100 valid, 200 invalid, 300 down): only then are those numbers
+  // accepted as tax ids.
+  readonly acceptsTestNumbers: boolean;
   check(vatNumber: VatNumber): Promise<VatCheckResult>;
 }
 

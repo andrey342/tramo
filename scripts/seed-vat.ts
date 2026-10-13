@@ -8,8 +8,9 @@ const testOr = (realistic: string) => (mode: string) => (mode === 'test' ? '100'
 export const SEED_TAX_IDS = {
   codeworks: testOr('B66079911'),
   berlin: testOr('DE811569869'),
-  // Refused in every mode: the demo's center left pending with an invalid number.
-  nova: (_mode: string) => '200',
+  // Refused in every mode: the demo's center left pending with an invalid number. Live VIES
+  // knows no test numbers, and a well-formed number nobody holds is invalid there.
+  nova: (mode: string) => (mode === 'live' ? 'B00000000' : '200'),
 } as const;
 
 // Waits between VAT checks of a center the registry could not answer for. The VIES client
