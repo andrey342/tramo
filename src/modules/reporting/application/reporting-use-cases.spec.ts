@@ -208,6 +208,16 @@ describe('reporting use cases', () => {
     );
   });
 
+  it('should still answer the overview, without the dead letters, when the queue cannot be read', async () => {
+    const t = setup();
+    await t.happened(...aPortfolio().events);
+    t.queues.letters = null;
+
+    const overview = await t.overview.execute(new GetOpsOverviewQuery(OPS));
+
+    expect(overview).toMatchObject({ reviewQueue: 1, contractsInArrears: 1, deadLetters: null });
+  });
+
   // The read models are disposable: thrown away and replayed, they answer the same.
   it('should rebuild the same read models from the history', async () => {
     const t = setup();

@@ -14,5 +14,6 @@ export {
   QueueNames,
 } from './queue-names';
 export { type CorrelatedJobData, QueueProcessor } from './queue-processor';
+export { QUEUE_CALL_TIMEOUT_MS, QueueUnreachableError, withinQueueTimeout } from './queue-timeout';
 export { QueuesModule } from './queues.module';
 export { bullConnection } from './redis-connection';

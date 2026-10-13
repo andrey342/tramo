@@ -628,8 +628,12 @@ modules (ADR 019). It decides nothing and owns no aggregate.
     there. A program of another center is a 404.
   - `GET /ops/overview` (staff): applications waiting for an analyst, charges whose collection
     failed today and are still unpaid, transfers to centers pending or failed, contracts in
-    arrears, jobs in the dead-letter queue.
-- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time). In one
+    arrears, jobs in the dead-letter queue. The queue connection waits for Redis instead of
+    failing, so the count is given up after two seconds: while Redis is down `deadLetters` is
+    `null` and the rest still answers.
+- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time; a request
+  while one is queued or running answers 202 `{"queued": false}`). When the queue does not answer
+  within two seconds (Redis down) it answers 503 `queue_unavailable` and the client retries. In one
   REPEATABLE READ transaction the facts are locked against writers (readers still see the old
   ones), deleted, and the history of events, read from the outbox (`EventHistory`), is replayed
   through the same projector. A deployment that adds reporting to existing data runs it once.

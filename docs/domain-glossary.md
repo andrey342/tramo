@@ -367,7 +367,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   disbursed, collected, outstanding, written off, delinquency rate), program performance
   (approval rate, mean ticket, mean score in bands from ten scored applicants) and the ops
   overview (applications waiting for an analyst, charges failed today, transfers pending or
-  failed, contracts in arrears, dead letters).
+  failed, contracts in arrears, dead letters; `null` while the queue cannot be read).
 - **Rebuild**: `POST /ops/reporting/rebuild` queues `reporting.rebuild`, one at a time. In one
   REPEATABLE READ transaction the facts are locked against writers, deleted and replayed from the
   outbox (`EventHistory`) through the same projector (ADR 019).

@@ -108,12 +108,13 @@ export interface ProgramScores {
   }>;
 }
 
-// Jobs that ended in the dead-letter queue and are waiting for someone.
+// Jobs that ended in the dead-letter queue and are waiting for someone; null when the queue
+// cannot be read right now (Redis down), so the rest of the overview still answers.
 export interface QueueHealth {
-  deadLetters(): Promise<number>;
+  deadLetters(): Promise<number | null>;
 }
 
 export interface RebuildJobs {
-  // False when a rebuild is already queued or running.
+  // False when a rebuild is already queued or running. Rejects when the queue cannot be reached.
   request(requestedBy: string | null): Promise<boolean>;
 }

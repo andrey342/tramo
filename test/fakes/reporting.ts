@@ -244,9 +244,10 @@ export class FakeProgramScores implements ProgramScores {
 }
 
 export class FakeQueueHealth implements QueueHealth {
-  letters = 0;
+  // null: the queue cannot be read (Redis down).
+  letters: number | null = 0;
 
-  deadLetters(): Promise<number> {
+  deadLetters(): Promise<number | null> {
     return Promise.resolve(this.letters);
   }
 }

@@ -122,7 +122,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 
 - **Symptom**: `failed` or dead-letter counts rising, `Job failed, will retry` (warn) or
   `Job moved to dead-letter queue` (error) in the worker logs, `deadLetters` above 0 in
-  `GET /ops/overview`.
+  `GET /ops/overview` (`null` there means Redis did not answer within two seconds).
 - **Check**:
   - `pnpm queue:inspect`: counts per queue, the outbox backlog and the latest dead letters.
   - `pnpm queue:inspect <queue>`: the latest failed jobs (`--limit N`).
@@ -301,7 +301,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 - **Action**: after a projector fix, on a database that had activity before reporting existed, or
   when facts are suspect: `pnpm api:call POST /ops/reporting/rebuild --as ops`. It answers
   `{"queued": true}`, or `false` when a rebuild is already queued or running (one at a time; the
-  request joins it). The job deletes the facts and replays the outbox in one REPEATABLE READ
+  request joins it); 503 `queue_unavailable` means Redis did not answer within two seconds. The job deletes the facts and replays the outbox in one REPEATABLE READ
   transaction: dashboards show the old figures until it commits, and live projections wait for it
   holding worker connections, so run it when the stack is quiet. The worker logs
   `Reporting read models rebuilt` with the number of events applied.

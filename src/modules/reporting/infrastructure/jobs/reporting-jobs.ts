@@ -3,7 +3,12 @@ import { Injectable } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { type Queue } from 'bullmq';
 
-import { type CorrelatedJobData, QueueNames, QueueProcessor } from '@shared/infrastructure/queues';
+import {
+  type CorrelatedJobData,
+  QueueNames,
+  QueueProcessor,
+  withinQueueTimeout,
+} from '@shared/infrastructure/queues';
 
 import { RebuildProjectionsCommand } from '../../application/commands/rebuild-projections.command';
 import { type RebuildJobs } from '../../application/ports/reporting-ports';
@@ -22,7 +27,14 @@ export class QueuedRebuildJobs implements RebuildJobs {
     @InjectQueue(QueueNames.REPORTING_REBUILD) private readonly queue: Queue<RebuildJob>,
   ) {}
 
-  async request(requestedBy: string | null): Promise<boolean> {
+  // While Redis is down this rejects with QueueUnreachableError instead of waiting for it (the
+  // caller answers 503). An add that reaches Redis once it is back still queues the rebuild, and
+  // the client's retry then finds it.
+  request(requestedBy: string | null): Promise<boolean> {
+    return withinQueueTimeout(this.queueRebuild(requestedBy));
+  }
+
+  private async queueRebuild(requestedBy: string | null): Promise<boolean> {
     const existing = await this.queue.getJob(REBUILD);
     if (existing) {
       const state = await existing.getState();
