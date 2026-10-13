@@ -288,7 +288,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     category (`smtp_550`, `timeout`, `connection_failed`).
 - **Action**: fix the SMTP side (`docker compose up -d mailpit`). An email still pending a day
   after it was written is abandoned by the hourly sweep (at minute 15) instead of being sent
-  late. A `failed` email is never sent again, and retrying its job sends nothing; no endpoint
+  late. The sweep runs once per hour (one attempt, the next hour retries); a run that could not
+  give some up fails, names them and is dead-lettered. A `failed` email is never sent again, and retrying its job sends nothing; no endpoint
   resends one. Sending is at least once: a reply lost after the server took the message can
   produce a duplicate.
 

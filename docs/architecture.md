@@ -546,8 +546,8 @@ an event of another module; it decides nothing.
   (`notifications.emails`, five attempts with backoff) render it from its handlebars template and
   hand it to the SMTP server (Mailpit locally, `SMTP_*`; encrypted in production, and whenever
   credentials are sent); a sent email is not sent again, one that runs out of attempts is
-  `failed` and its job dead-lettered, and an hourly sweep gives up those still pending a day
-  later (their job was lost). Failures are recorded and published as categories (`smtp_550`,
+  `failed` and its job dead-lettered, and an hourly sweep (one attempt: the next hour is its
+  retry) gives up those still pending a day later (their job was lost). Failures are recorded and published as categories (`smtp_550`,
   `timeout`), never the server's text, which quotes the recipient. Sending is at least once: an
   answer lost after the server accepted the message sends it again. Recipients are looked up in
   iam when the email is written (`FindUserContactQuery`, `ListCenterContactsQuery`); the
