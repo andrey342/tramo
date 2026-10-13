@@ -30,6 +30,9 @@ interface Backlog {
 export class BacklogMetrics {
   private readonly logger = new Logger(BacklogMetrics.name);
   private cached: { readonly at: number; readonly backlog: Promise<Backlog> } | null = null;
+  // A read of the queues still waiting for Redis (the connection queues commands while Redis is
+  // down): no new one is issued until it settles, so an outage does not pile commands up.
+  private jobsInFlight = false;
 
   constructor(
     @Inject(METRICS_REGISTRY) registry: Registry,
@@ -83,10 +86,17 @@ export class BacklogMetrics {
 
   private async read(): Promise<Backlog> {
     const [jobs, outbox] = await Promise.all([
-      this.withinTimeout('Queue', this.jobCounts()),
+      this.jobsInFlight ? null : this.withinTimeout('Queue', this.trackedJobCounts()),
       this.withinTimeout('Outbox', this.outboxBacklog.read()),
     ]);
     return { jobs, outbox };
+  }
+
+  private trackedJobCounts(): Promise<JobCounts> {
+    this.jobsInFlight = true;
+    return this.jobCounts().finally(() => {
+      this.jobsInFlight = false;
+    });
   }
 
   private jobCounts(): Promise<JobCounts> {

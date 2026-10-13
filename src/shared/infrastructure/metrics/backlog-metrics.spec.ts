@@ -2,6 +2,7 @@ import { type ModuleRef } from '@nestjs/core';
 import { Registry } from 'prom-client';
 
 import { type OutboxBacklogReader } from '../messaging/outbox-backlog';
+import { ALL_QUEUES } from '../queues';
 
 import { BacklogMetrics } from './backlog-metrics';
 
@@ -32,6 +33,25 @@ describe('BacklogMetrics', () => {
     expect(text).not.toMatch(/tramo_queue_jobs\{/);
     expect(text).toContain('tramo_outbox_pending_events 3');
     expect(text).toContain('tramo_outbox_lag_seconds 1.5');
+  });
+
+  // The connection keeps commands queued while Redis is down: one read at a time, not one per
+  // scrape.
+  it('should not ask the queues again while an earlier read is still waiting', async () => {
+    jest.useFakeTimers();
+    let reads = 0;
+    const registry = metricsWith(() => {
+      reads += 1;
+      return new Promise(() => undefined);
+    });
+
+    for (let scrape = 0; scrape < 3; scrape += 1) {
+      const text = registry.metrics();
+      await jest.advanceTimersByTimeAsync(6_000);
+      await text;
+    }
+
+    expect(reads).toBe(ALL_QUEUES.length);
   });
 
   it('should report every queue by state when Redis answers', async () => {

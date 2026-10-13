@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { Controller, Get, Headers, Inject, Logger, Res, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { type Response } from 'express';
 import { type Registry } from 'prom-client';
 
@@ -13,10 +14,11 @@ import { METRICS_REGISTRY } from './metrics-registry';
 const digest = (value: string): Buffer => createHash('sha256').update(value).digest();
 
 // Prometheus scrapes with `Authorization: Bearer <METRICS_TOKEN>`. Without a configured token the
-// route answers 404, as if it did not exist; a wrong one gets 401 with no body, is logged, and
-// counts toward the rate limit like any other request (a scrape every few seconds stays far below
-// it). Bare statuses rather than Problem Details: the only client is a scraper.
+// route answers 404, as if it did not exist; a wrong one gets 401 with no body and is logged.
+// Exempt from the rate limit, which counts in Redis: a scrape must not depend on the store it
+// reports on. Bare statuses rather than Problem Details: the only client is a scraper.
 @ApiExcludeController()
+@SkipThrottle()
 @Public()
 @Controller({ path: 'metrics', version: VERSION_NEUTRAL })
 export class MetricsController {
