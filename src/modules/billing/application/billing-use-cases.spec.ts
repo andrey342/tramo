@@ -1017,5 +1017,22 @@ describe('billing use cases', () => {
         ),
       ).rejects.toThrow(EntityNotFoundError);
     });
+
+    it('should refuse a ledger amount that is not whole cents when adding up the balance', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      t.queries.entries.push({
+        contractId,
+        occurredAt: NOW,
+        type: 'charge',
+        chargeId: uuidv7(),
+        description: 'Instalment 1',
+        amountCents: 337.5,
+      });
+
+      await expect(t.statement.execute(new GetStatementQuery(OPS, contractId))).rejects.toThrow(
+        InvalidValueError,
+      );
+    });
   });
 });

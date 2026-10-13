@@ -138,11 +138,21 @@ const noContracts = (): Tally<ContractCounts> => ({
   cancelled: 0,
 });
 
-const noMoney = (): Tally<MoneyFigures> => ({
-  disbursedCents: 0,
-  collectedCents: 0,
-  outstandingCents: 0,
-  writtenOffCents: 0,
+// The sums are added up as Money and read back as cents.
+type MoneyTally = Record<keyof MoneyFigures, Money>;
+
+const noMoney = (): MoneyTally => ({
+  disbursedCents: Money.zero(),
+  collectedCents: Money.zero(),
+  outstandingCents: Money.zero(),
+  writtenOffCents: Money.zero(),
+});
+
+const inCents = (money: MoneyTally): MoneyFigures => ({
+  disbursedCents: money.disbursedCents.cents,
+  collectedCents: money.collectedCents.cents,
+  outstandingCents: money.outstandingCents.cents,
+  writtenOffCents: money.writtenOffCents.cents,
 });
 
 // The center's figures from its grouped rows: in total, and by product where the contract is
@@ -178,17 +188,25 @@ export function centerFigures(rows: CenterRows): CenterFigures {
   }
   for (const row of rows.disbursements) {
     if (row.status !== 'settled') continue;
-    for (const target of targets(row.product)) target.money.disbursedCents += row.cents;
+    const amount = Money.fromCents(row.cents);
+    for (const target of targets(row.product)) {
+      target.money.disbursedCents = target.money.disbursedCents.add(amount);
+    }
   }
   for (const row of rows.charges) {
     const key = CHARGE_MONEY[row.status];
     if (!key || (key === 'outstandingCents' && row.kind === 'payoff')) continue;
-    for (const target of targets(row.product)) target.money[key] += row.cents;
+    const amount = Money.fromCents(row.cents);
+    for (const target of targets(row.product)) target.money[key] = target.money[key].add(amount);
   }
   return {
     applications,
     contracts: totals.contracts,
-    ...totals.money,
-    byProduct: byProduct.map(({ product, contracts, money }) => ({ product, contracts, ...money })),
+    ...inCents(totals.money),
+    byProduct: byProduct.map(({ product, contracts, money }) => ({
+      product,
+      contracts,
+      ...inCents(money),
+    })),
   };
 }
