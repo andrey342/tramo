@@ -17,6 +17,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { FINANCING_LIMITS } from '@modules/catalog/application/dto/program-lookup';
 import { CursorPageQueryDto } from '@shared/infrastructure/http';
 
 import { type RequestedProductDto } from '../../application/dto/application.dto';
@@ -42,12 +43,14 @@ export class ProductRequest {
 
   @ApiPropertyOptional({
     example: 24,
+    minimum: FINANCING_LIMITS.minTermMonths,
+    maximum: FINANCING_LIMITS.maxTermMonths,
     description: 'Months, one of the terms the program offers; only for instalments',
   })
   @ValidateIf((product: ProductRequest) => product.kind === 'installments')
   @IsInt()
-  @Min(1)
-  @Max(120)
+  @Min(FINANCING_LIMITS.minTermMonths)
+  @Max(FINANCING_LIMITS.maxTermMonths)
   termMonths?: number;
 
   toProduct(): RequestedProductDto {

@@ -252,6 +252,11 @@ describe('Applications (e2e)', () => {
       programId,
       product: { kind: 'installments', termMonths: 36 },
     });
+    // No program offers more than 48 months: refused as a malformed request, before the program.
+    const termOutOfRange = await start(bearer(ana.token), {
+      programId,
+      product: { kind: 'installments', termMonths: 60 },
+    });
     const noProduct = await start(bearer(ana.token), { programId });
     const opsCannotApply = await start(bearer(opsToken), {
       programId,
@@ -267,6 +272,7 @@ describe('Applications (e2e)', () => {
     expect(nullField.status).toBe(400);
     expect(badTerm.status).toBe(422);
     expect(badTerm.body.code).toBe('product_not_offered');
+    expect(termOutOfRange.status).toBe(400);
     expect(noProduct.status).toBe(400);
     expect(opsCannotApply.status).toBe(403);
   });
