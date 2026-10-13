@@ -1,5 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 
+import { OriginationEvents } from '@modules/origination/domain/events/origination-events';
 import { type Principal } from '@shared/application';
 import { type ApiKeyScope, EntityNotFoundError, FixedClock } from '@shared/domain';
 
@@ -105,6 +106,27 @@ describe('reporting use cases', () => {
       { active: 1, inArrears: 0, completed: 0, defaulted: 0, cancelled: 0 },
       { active: 0, inArrears: 1, completed: 0, defaulted: 0, cancelled: 0 },
     ]);
+  });
+
+  it('should keep an offer accepted in the funnel when its contract is cancelled later', async () => {
+    const t = setup();
+    const portfolio = aPortfolio();
+    const accepted = portfolio.events.find(
+      (event) => event.eventType === OriginationEvents.OfferAccepted,
+    );
+    await t.happened(
+      ...portfolio.events,
+      anEvent(OriginationEvents.ApplicationWithdrawn, {
+        applicationId: accepted?.payload.applicationId ?? null,
+        centerId: portfolio.centerId,
+      }),
+    );
+
+    const dashboard = await t.dashboard.execute(
+      new GetCenterDashboardQuery(adminOf(portfolio.centerId), portfolio.centerId),
+    );
+
+    expect(dashboard.applications.offerAccepted).toBe(1);
   });
 
   it('should keep a center to its own portfolio, and let its keys read it with the scope', async () => {

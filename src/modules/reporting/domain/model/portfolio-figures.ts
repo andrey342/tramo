@@ -71,7 +71,8 @@ export interface ProductFigures extends MoneyFigures {
 
 export interface CenterFigures extends MoneyFigures {
   // Applications submitted, by where they are now; one approved and then accepted counts as
-  // accepted. Drafts are not in the funnel.
+  // accepted, whatever its contract does next (the contract counts tell that). Drafts are not in
+  // the funnel.
   readonly applications: ApplicationCounts;
   readonly contracts: ContractCounts;
   readonly byProduct: readonly ProductFigures[];

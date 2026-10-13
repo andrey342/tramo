@@ -91,6 +91,9 @@ const PROJECTIONS: Readonly<Record<string, Project>> = {
       decision: 'rejected',
     });
   },
+  // The funnel ends at the accepted offer. What origination records once its contract is
+  // cancelled or completed (ApplicationWithdrawn, ApplicationClosed) is not projected: the
+  // contract counts already tell it, and the offer was accepted all the same.
   [OriginationEvents.OfferAccepted]: (store, event, at) => {
     const p = event.payload as unknown as OfferAcceptedPayload;
     return store.recordApplication({
