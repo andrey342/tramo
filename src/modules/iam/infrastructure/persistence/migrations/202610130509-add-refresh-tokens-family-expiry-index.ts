@@ -13,7 +13,9 @@ export class AddRefreshTokensFamilyExpiryIndex1791868140000 implements Migration
     );
   }
 
+  // TypeORM reverts inside a transaction whatever `transaction` says, and CONCURRENTLY cannot run
+  // in one; a revert is a deliberate, manual step, so the brief lock of a plain drop is acceptable.
   async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX CONCURRENTLY iam.ix_iam_refresh_tokens_family_expires_at`);
+    await queryRunner.query(`DROP INDEX iam.ix_iam_refresh_tokens_family_expires_at`);
   }
 }
