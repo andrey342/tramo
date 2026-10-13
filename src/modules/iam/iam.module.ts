@@ -9,6 +9,7 @@ import { DisableUserHandler } from './application/commands/disable-user.command'
 import { IssueApiKeyHandler } from './application/commands/issue-api-key.command';
 import { LoginHandler } from './application/commands/login.command';
 import { LogoutHandler } from './application/commands/logout.command';
+import { PurgeEndedSessionsHandler } from './application/commands/purge-ended-sessions.command';
 import { RefreshSessionHandler } from './application/commands/refresh-session.command';
 import { RegisterStudentHandler } from './application/commands/register-student.command';
 import { RevokeApiKeyHandler } from './application/commands/revoke-api-key.command';
@@ -63,6 +64,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     LoginHandler,
     RefreshSessionHandler,
     LogoutHandler,
+    PurgeEndedSessionsHandler,
     GetCurrentPrincipalHandler,
     CreateCenterUserHandler,
     DisableUserHandler,

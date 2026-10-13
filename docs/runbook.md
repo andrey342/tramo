@@ -165,6 +165,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   | `notifications.emails`          | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
   | `notifications.webhooks`        | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
   | `reporting.rebuild`             | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
+  | `iam.session-sweep`             | scheduled                                           | None: the next daily run deletes what this one left                |
 
 ## Application stuck in verification
 
@@ -415,4 +416,17 @@ future billing runs and private webhook targets by default. The compose stack ru
   failing on purpose; the attempts are in the logs.
 - **Bull Board**: ten failed sign-ins from one client within 15 minutes refuse every attempt from
   it (429 with `Retry-After`) until the window ends.
+
+## Sessions and accounts
+
+- **Ended sessions**: every day at 03:30 UTC the worker deletes from `iam.refresh_tokens` the
+  tokens of sessions that ended (`family_expires_at`) more than 30 days earlier, 1,000 rows per
+  transaction, and logs `Ended sessions purged` with the count. The job runs once on
+  `iam.session-sweep`; a failed run is not retried, the next day's catches up. Like the hourly
+  sweeps of emails (`notifications.emails`) and of stale applications (`origination.expiry`), it
+  is a job scheduler re-registered at every worker start.
+- **Signing someone out everywhere**: `pnpm api:call POST /users/<userId>/disable --as admin`
+  (204, also when already disabled). The account can no longer sign in and its refresh tokens
+  stop working at once; access tokens it holds keep working until they expire, at most 15
+  minutes. There is no endpoint to enable it again or to change a password.
 - In compose these variables are not passed to the containers, so the defaults above apply.

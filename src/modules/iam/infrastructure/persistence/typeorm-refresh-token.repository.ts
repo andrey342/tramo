@@ -74,4 +74,22 @@ export class TypeOrmRefreshTokenRepository implements RefreshTokenRepository {
     );
     return revoked;
   }
+
+  // No family lock: a session that ended this long ago can no longer be refreshed, so no rotation
+  // or revocation writes these rows. A rotated token presented after its row is gone is simply
+  // unknown, and the family it would revoke is already over. Served by
+  // ix_iam_refresh_tokens_family_expires_at.
+  async deleteEndedBefore(endedBefore: Date, limit: number): Promise<number> {
+    const [, deleted]: [unknown[], number] = await this.txHost.tx.query(
+      `DELETE FROM iam.refresh_tokens
+        WHERE id IN (
+          SELECT id FROM iam.refresh_tokens
+           WHERE family_expires_at < $1
+           ORDER BY family_expires_at
+           LIMIT $2
+        )`,
+      [endedBefore, limit],
+    );
+    return deleted;
+  }
 }

@@ -55,6 +55,17 @@ export class InMemoryRefreshTokenRepository
     return Promise.resolve(this.revokeWhere((token) => token.userId === userId, now));
   }
 
+  deleteEndedBefore(endedBefore: Date, limit: number): Promise<number> {
+    const ended = this.all()
+      .filter((token) => token.familyExpiresAt < endedBefore)
+      .sort((a, b) => a.familyExpiresAt.getTime() - b.familyExpiresAt.getTime())
+      .slice(0, limit);
+    for (const token of ended) {
+      this.items.delete(token.id);
+    }
+    return Promise.resolve(ended.length);
+  }
+
   private revokeWhere(matches: (token: RefreshToken) => boolean, now: Date): number {
     let revoked = 0;
     for (const token of this.all()) {

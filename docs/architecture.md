@@ -91,7 +91,7 @@ foreign key. Lists are paginated on `(created_at, id)` (the ops review queue on
 
 | Schema          | Tables                                                                                          | Notes                                                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `iam`           | `users`, `refresh_tokens`, `api_keys`                                                           | Passwords as argon2id, refresh tokens and API keys as SHA-256                             |
+| `iam`           | `users`, `refresh_tokens`, `api_keys`                                                           | Passwords as argon2id, refresh tokens and API keys as SHA-256; ended sessions pruned      |
 | `catalog`       | `training_centers`, `programs`                                                                  | Payout IBAN encrypted (ADR 014); financing options as columns with CHECKs                 |
 | `origination`   | `financing_applications`, `risk_policies`                                                       | Profile, verifications and the decision record (score, factors, reasons) as jsonb         |
 | `lending`       | `contracts`, `disbursements`, `financing_plans`                                                 | The instalment table or ISA periods read back whole as jsonb                              |
@@ -191,6 +191,10 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   progressive and capped at an hour, the auth routes are rate limited per client, and the attempts
   are visible in the logs. A per-IP and device-cookie scheme would reduce that risk at the price of
   more state.
+- **Housekeeping.** A daily job (`iam.session-sweep`, 03:30 UTC) deletes the refresh tokens of
+  sessions that ended more than 30 days earlier, in batches of 1,000 rows per transaction, along
+  `ix_iam_refresh_tokens_family_expires_at`. The month of grace keeps reuse of a stolen token
+  detectable after its session ended.
 - **Disabling an account.** An admin disables an account with `POST /users/:id/disable`
   (audited, `UserDisabled`): it can no longer sign in, and every refresh token of every family it
   has is revoked in the same transaction, each family under its lock (ADR 013). Disabling it again
