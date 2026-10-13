@@ -85,7 +85,7 @@ export class WebhookDeliveryResponse {
   @ApiProperty({ nullable: true, type: Number, example: 503 })
   lastStatusCode!: number | null;
 
-  @ApiProperty({ nullable: true, type: String, example: 'HTTP 503' })
+  @ApiProperty({ nullable: true, type: String, example: 'http_503' })
   lastError!: string | null;
 
   @ApiProperty({ type: 'object', additionalProperties: true, description: 'The "data" posted' })
