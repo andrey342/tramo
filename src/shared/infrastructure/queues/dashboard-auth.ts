@@ -36,19 +36,21 @@ export function dashboardAuth(options: {
         challenge(res);
         return;
       }
-      // The attempt is counted before the credentials are compared, in one step, so parallel
-      // guesses cannot all pass the check before any of them is counted.
-      const blockedForMs = await beginAttempt(options.redis, failuresKey);
+      const supplied = header.startsWith('Basic ')
+        ? Buffer.from(header.slice('Basic '.length), 'base64').toString('utf8')
+        : '';
+      // Only wrong credentials are counted, so an operator's dashboard firing many requests at
+      // once is never refused. Either way the answer waits for the block check, which is atomic
+      // with the count: of a burst of parallel guesses, only those that reached Redis before the
+      // limit get an answer other than 429, as if they had arrived one by one.
+      const matches = timingSafeEqual(digest(supplied), expected);
+      const blockedForMs = await (matches ? admit : recordFailure)(options.redis, failuresKey);
       if (blockedForMs > 0) {
         res.setHeader('Retry-After', String(Math.ceil(blockedForMs / 1000)));
         res.status(429).end();
         return;
       }
-      const supplied = header.startsWith('Basic ')
-        ? Buffer.from(header.slice('Basic '.length), 'base64').toString('utf8')
-        : '';
-      if (timingSafeEqual(digest(supplied), expected)) {
-        await forgetAttempts(options.redis, failuresKey);
+      if (matches) {
         next();
         return;
       }
@@ -62,11 +64,12 @@ function challenge(res: Response): void {
   res.status(401).end();
 }
 
-//   KEYS: attempts   ARGV: maxAttempts, windowMs
-//   Returns the remaining block in ms, or 0 when the attempt may proceed (and was counted).
-const BEGIN_ATTEMPT_SCRIPT = `
-local attempts = tonumber(redis.call('GET', KEYS[1]) or '0')
-if attempts >= tonumber(ARGV[1]) then
+// Both scripts answer the remaining block in ms, or 0 when the client is not blocked.
+//   KEYS: failures   ARGV: maxFailures, windowMs
+// A wrong attempt is counted unless the client is already blocked.
+const RECORD_FAILURE_SCRIPT = `
+local failures = tonumber(redis.call('GET', KEYS[1]) or '0')
+if failures >= tonumber(ARGV[1]) then
   local ttl = redis.call('PTTL', KEYS[1])
   if ttl < 1 then return 1 end
   return ttl
@@ -76,26 +79,30 @@ redis.call('PEXPIRE', KEYS[1], ARGV[2], 'NX')
 return 0
 `;
 
+// The right credentials from a blocked client are refused too (a guess that happens to be right
+// must not get through); otherwise they clear the client's failures.
+const ADMIT_SCRIPT = `
+local failures = tonumber(redis.call('GET', KEYS[1]) or '0')
+if failures >= tonumber(ARGV[1]) then
+  local ttl = redis.call('PTTL', KEYS[1])
+  if ttl < 1 then return 1 end
+  return ttl
+end
+if failures > 0 then redis.call('DEL', KEYS[1]) end
+return 0
+`;
+
+const recordFailure = (redis: Redis, key: string): Promise<number> =>
+  runLimiter(redis, RECORD_FAILURE_SCRIPT, key);
+
+const admit = (redis: Redis, key: string): Promise<number> => runLimiter(redis, ADMIT_SCRIPT, key);
+
 // Redis being unavailable must not lock operations out of the dashboard: the limiter fails open
 // and the credentials are still checked.
-async function beginAttempt(redis: Redis, key: string): Promise<number> {
+async function runLimiter(redis: Redis, script: string, key: string): Promise<number> {
   try {
-    return (await redis.eval(
-      BEGIN_ATTEMPT_SCRIPT,
-      1,
-      key,
-      DASHBOARD_MAX_FAILURES,
-      FAILURE_WINDOW_MS,
-    )) as number;
+    return (await redis.eval(script, 1, key, DASHBOARD_MAX_FAILURES, FAILURE_WINDOW_MS)) as number;
   } catch {
     return 0;
-  }
-}
-
-async function forgetAttempts(redis: Redis, key: string): Promise<void> {
-  try {
-    await redis.del(key);
-  } catch {
-    // Best effort, see beginAttempt.
   }
 }

@@ -415,7 +415,8 @@ future billing runs and private webhook targets by default. The compose stack ru
   right password. No endpoint unlocks an account; the lock expires. Anyone can lock an account by
   failing on purpose; the attempts are in the logs.
 - **Bull Board**: ten failed sign-ins from one client within 15 minutes refuse every attempt from
-  it (429 with `Retry-After`) until the window ends.
+  it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
+  counted, however many the dashboard sends at once, and clear the failures below the limit.
 
 ## Sessions and accounts
 

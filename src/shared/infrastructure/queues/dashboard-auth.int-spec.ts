@@ -73,6 +73,28 @@ describe('dashboardAuth (integration)', () => {
     expect((await call('10.2.0.1', 'ops:right-password')).passed).toBe(true);
   });
 
+  it('should let every request with the right credentials through when many arrive at once', async () => {
+    const ip = `10.4.${String(Math.floor(Math.random() * 200))}.1`;
+
+    const answers = await Promise.all(
+      Array.from({ length: DASHBOARD_MAX_FAILURES * 5 }, () => call(ip, 'ops:right-password')),
+    );
+
+    expect(answers.every((answer) => answer.passed)).toBe(true);
+  });
+
+  it('should forget earlier failures when the right credentials arrive below the limit', async () => {
+    const ip = `10.5.${String(Math.floor(Math.random() * 200))}.1`;
+    for (let attempt = 0; attempt < DASHBOARD_MAX_FAILURES - 1; attempt += 1) {
+      await call(ip, 'ops:guess');
+    }
+
+    expect((await call(ip, 'ops:right-password')).passed).toBe(true);
+    for (let attempt = 0; attempt < DASHBOARD_MAX_FAILURES - 1; attempt += 1) {
+      expect((await call(ip, 'ops:guess')).status).toBe(401);
+    }
+  });
+
   it('should let no more guesses through than the limit when they arrive in parallel', async () => {
     const ip = `10.3.${String(Math.floor(Math.random() * 200))}.1`;
 
