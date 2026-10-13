@@ -5,7 +5,11 @@ import { type Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { uuidv7 } from 'uuidv7';
 
-import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  type ContractCancelledPayload,
+  LendingEvents,
+} from '@modules/lending/domain/events/lending-events';
+import { EVENT_BUS, type EventBus, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { NationalId, unwrap } from '@shared/domain';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/messaging';
@@ -13,11 +17,14 @@ import { QueueNames } from '@shared/infrastructure/queues';
 
 import {
   aCompleteProfile,
+  aDraftApplication,
+  anAcceptedApplication,
   aProgramSnapshot,
   INSTALLMENTS_24,
 } from '../../../../../test/factories/origination';
 import { eventually } from '../../../../../test/helpers/eventually';
 import {
+  ApplicationAlreadyOpenError,
   FINANCING_APPLICATION_REPOSITORY,
   FinancingApplication,
   type FinancingApplicationRepository,
@@ -144,5 +151,40 @@ describe('verification saga (integration)', () => {
     await eventually(async () => {
       expect((await applications.findById(old.id))?.status).toBe('expired');
     });
+  });
+
+  it('should free the program for another application when the contract of an offer is cancelled', async () => {
+    const accepted = anAcceptedApplication();
+    await uow.run(() => applications.save(accepted));
+    const again = () =>
+      aDraftApplication({ applicantId: accepted.applicantId, program: accepted.program });
+    await expect(uow.run(() => applications.save(again()))).rejects.toThrow(
+      ApplicationAlreadyOpenError,
+    );
+
+    // What lending leaves in the outbox when the student declines to sign.
+    const contractId = uuidv7();
+    const payload: ContractCancelledPayload = {
+      contractId,
+      applicationId: accepted.id,
+      centerId: accepted.centerId,
+      reason: 'signature_declined',
+    };
+    await uow.run(() =>
+      app.get<EventBus>(EVENT_BUS).publish([
+        {
+          eventType: LendingEvents.ContractCancelled,
+          aggregateType: 'Contract',
+          aggregateId: contractId,
+          occurredAt: new Date(),
+          payload,
+        },
+      ]),
+    );
+    await settle(accepted.id, 'withdrawn');
+
+    const reapplied = again();
+    await uow.run(() => applications.save(reapplied));
+    expect((await applications.findById(reapplied.id))?.status).toBe('draft');
   });
 });

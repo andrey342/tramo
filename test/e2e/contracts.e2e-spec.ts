@@ -12,6 +12,7 @@ import { ExecuteDisbursementCommand } from '../../src/modules/lending/applicatio
 import { OpenFinancingPlanCommand } from '../../src/modules/lending/application/commands/open-financing-plan.command';
 import { RequestDisbursementCommand } from '../../src/modules/lending/application/commands/request-disbursement.command';
 import { SendContractForSignatureCommand } from '../../src/modules/lending/application/commands/send-contract-for-signature.command';
+import { RecordContractOutcomeCommand } from '../../src/modules/origination/application/commands/record-contract-outcome.command';
 import { RunVerificationCommand } from '../../src/modules/origination/application/commands/run-verification.command';
 import { ScoreApplicationCommand } from '../../src/modules/origination/application/commands/score-application.command';
 import { Percentage } from '../../src/shared/domain';
@@ -78,7 +79,11 @@ describe('Contracts (e2e)', () => {
 
   // A student with an accepted offer, and the contract the worker would draw up and send for it
   // (the api process runs the same commands).
-  async function contractSentForSignature(): Promise<{ token: string; contractId: string }> {
+  async function contractSentForSignature(): Promise<{
+    token: string;
+    contractId: string;
+    applicationId: string;
+  }> {
     const email = `borrower-${uuidv7().slice(-12)}@example.com`;
     await api().post('/api/v1/auth/register').send({ email, password: TEST_PASSWORD });
     const token = await accessTokenFor(app, { email, password: TEST_PASSWORD });
@@ -122,7 +127,7 @@ describe('Contracts (e2e)', () => {
       }),
     );
     await commands.execute(new SendContractForSignatureCommand(contractId));
-    return { token, contractId };
+    return { token, contractId, applicationId };
   }
 
   const callback = (body: object, signedAt = new Date(), secret = ESIGN_SECRET) => {
@@ -235,6 +240,37 @@ describe('Contracts (e2e)', () => {
     expect(declined.status).toBe(200);
     expect(declined.body.status).toBe('cancelled');
     expect(replayed.status).toBe(200);
+  });
+
+  it('should let the student apply for the program again when they decline the contract', async () => {
+    const { token, contractId, applicationId } = await contractSentForSignature();
+    const apply = () =>
+      api()
+        .post('/api/v1/applications')
+        .set(...bearer(token))
+        .set('Idempotency-Key', uuidv7())
+        .send({ programId, product: { kind: 'installments', termMonths: 12 }, profile: PROFILE });
+
+    const whileHeld = await apply();
+    const declined = await callback({
+      eventId: uuidv7(),
+      type: 'envelope.declined',
+      envelopeId: `sim-env-${contractId}`,
+      occurredAt: new Date().toISOString(),
+    });
+    // The worker's consumer of ContractCancelled runs this; the api process runs the same command.
+    await commands.execute(new RecordContractOutcomeCommand(applicationId, 'cancelled'));
+    const withdrawn = await api()
+      .get(`/api/v1/applications/${applicationId}`)
+      .set(...bearer(token));
+    const again = await apply();
+
+    expect(whileHeld.status).toBe(409);
+    expect(whileHeld.body.code).toBe('application_already_open');
+    expect(declined.body.status).toBe('cancelled');
+    expect(withdrawn.body.status).toBe('withdrawn');
+    expect(again.status).toBe(201);
+    expect(again.body.status).toBe('draft');
   });
 
   it('should refuse a signature over another document, and an unknown envelope', async () => {

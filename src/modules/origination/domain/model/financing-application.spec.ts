@@ -3,6 +3,7 @@ import { InvalidStateTransitionError, InvalidValueError, Money } from '@shared/d
 import {
   aCompleteProfile,
   aDraftApplication,
+  anAcceptedApplication,
   anApplicationInScoring,
   aProgramSnapshot,
   aSubmittedApplication,
@@ -266,6 +267,56 @@ describe('FinancingApplication', () => {
     it('should only accept an approved offer', () => {
       expect(() => {
         anApplicationInScoring().acceptOffer(LATER);
+      }).toThrow(InvalidStateTransitionError);
+    });
+  });
+
+  describe('after the offer', () => {
+    it('should withdraw an accepted offer, once, when its contract is cancelled', () => {
+      const application = anAcceptedApplication();
+
+      application.withdraw(LATER);
+      application.withdraw(LATER);
+
+      expect(application.status).toBe('withdrawn');
+      expect(application.isFinal).toBe(true);
+      expect(application.statusChangedAt).toEqual(LATER);
+      expect(application.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: OriginationEvents.ApplicationWithdrawn,
+          payload: { applicationId: application.id, centerId: application.centerId },
+        }),
+      ]);
+    });
+
+    it('should close an accepted offer, once, when its contract is completed', () => {
+      const application = anAcceptedApplication();
+
+      application.close(LATER);
+      application.close(LATER);
+
+      expect(application.status).toBe('closed');
+      expect(application.isFinal).toBe(true);
+      expect(eventTypes(application)).toEqual([OriginationEvents.ApplicationClosed]);
+    });
+
+    it('should refuse to withdraw or close when the offer was not accepted', () => {
+      const approved = anApplicationInScoring();
+      approved.decide(decisionOf(approved, 'approved'), LATER);
+      const withdrawn = anAcceptedApplication();
+      withdrawn.withdraw(LATER);
+
+      expect(() => {
+        approved.withdraw(LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        approved.close(LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        withdrawn.close(LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        withdrawn.cancel(LATER);
       }).toThrow(InvalidStateTransitionError);
     });
   });

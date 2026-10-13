@@ -7,6 +7,7 @@ import { AcceptOfferHandler } from './application/commands/accept-offer.command'
 import { CancelApplicationHandler } from './application/commands/cancel-application.command';
 import { DecideApplicationHandler } from './application/commands/decide-application.command';
 import { ExpireApplicationHandler } from './application/commands/expire-application.command';
+import { RecordContractOutcomeHandler } from './application/commands/record-contract-outcome.command';
 import { ReviseRiskPolicyHandler } from './application/commands/revise-risk-policy.command';
 import { RunVerificationHandler } from './application/commands/run-verification.command';
 import { ScoreApplicationHandler } from './application/commands/score-application.command';
@@ -37,6 +38,10 @@ import {
   SIMULATED_LATENCY,
   type SimulatedLatency,
 } from './infrastructure/adapters/simulated-providers';
+import {
+  CloseApplicationOnContractCompleted,
+  WithdrawApplicationOnContractCancelled,
+} from './infrastructure/consumers/contract-outcome.consumers';
 import {
   ScoreWhenVerified,
   StartVerificationOnSubmit,
@@ -69,6 +74,7 @@ import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeor
     RunVerificationHandler,
     ScoreApplicationHandler,
     ExpireApplicationHandler,
+    RecordContractOutcomeHandler,
     GetApplicationHandler,
     ListApplicationsHandler,
     GetApplicationDecisionHandler,
@@ -99,6 +105,8 @@ import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeor
     VerificationJobs,
     StartVerificationOnSubmit,
     ScoreWhenVerified,
+    WithdrawApplicationOnContractCancelled,
+    CloseApplicationOnContractCompleted,
   ],
   exports: [FINANCING_APPLICATION_REPOSITORY],
 })
