@@ -118,3 +118,14 @@ export class PlanEndedError extends DomainError {
     super('The repayment plan has already ended.', { planId });
   }
 }
+
+// A payment of an instalment came back before lending recorded it: billing's notices are applied
+// in order, so the return waits for the payment (the consumer retries it).
+export class InstallmentNotPaidError extends DomainError {
+  readonly code = 'installment_not_paid';
+  readonly category = 'conflict';
+
+  constructor(installment: number) {
+    super(`Instalment ${String(installment)} has not been recorded as paid.`, { installment });
+  }
+}

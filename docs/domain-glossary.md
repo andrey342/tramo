@@ -251,7 +251,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   - **Instalment schedule** (`InstallmentRow`): French amortisation, a constant instalment with
     each row's interest rounded half-up and the rounding absorbed by the last row. Instalments
     fall due on the activation day of each following month (days 29 to 31 move to the 28th).
-    Paid instalments are recorded in any order; the plan is `repaid` when all are.
+    Paid instalments are recorded in any order; the plan is `repaid` when all are. A payment the
+    bank returned marks its instalment unpaid again. A `defaulted` plan still records both and
+    stays `defaulted`; a plan that ended otherwise is not reopened (ADR 020).
   - **ISA periods**: calendar months from the first full month after the grace period (counted
     from the program's end, taken as activation plus its duration) until the window closes,
     8 years after the program's end. Each month is assessed in order, none skipped
@@ -286,6 +288,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   scheduled → pending                      a collection attempt is submitted
   pending → paid                           the provider collected it
   pending → failed | overdue               the provider refused it, before or after the due date
+  paid → failed                            the bank returned the debit; due again that day
   scheduled | failed → overdue             dunning, the day after the due date
   failed | overdue → pending               dunning's retries, or ops
   scheduled | failed | overdue → written_off        dunning, 90 days after the due date
@@ -296,8 +299,13 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   (`scheduled`), it is `cancelled` and lending withdraws the payoff.
 
 - **`CollectionAttempt`**: one request to the payment provider, key `<chargeId>.<attempt>`, the
-  mandate it debits, the provider's payment id and its outcome (`pending | succeeded | failed`).
-  A repeated call sends the same key and is never collected twice.
+  mandate it debits, the provider's payment id and its outcome
+  (`pending | succeeded | failed | returned`). A repeated call sends the same key and is never
+  collected twice.
+- **Return** (`payment.returned`): the student's bank sends back a debit the provider had
+  collected (SEPA Core: 8 weeks, 13 months if unauthorised), with an ISO 20022 reason code
+  (`MD06`, `AM04`...). The attempt becomes `returned`, the charge `failed` and due that day, so
+  dunning starts over from the return (`ChargeReturned`, ADR 020).
 - **Billing cycle / billing run**: no aggregate of its own. `RunBillingCycleCommand` runs as of a
   day (the `billing.cycle` schedule on the 1st and the 5th at 03:00 UTC, or ops through
   `POST /ops/billing/run`): for each plan being repaid it creates a charge for each instalment
@@ -327,11 +335,12 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   The amount stays in billing; `IncomeDeclared` says only that a month was declared. On the 25th,
   students who have not declared the month are reminded once (`IncomeDeclarationDue`).
 - **Ledger / statement**: `billing.ledger_entries`, written from the charge events, one entry per
-  event (`LedgerEntryType`: `charge`, `payment`, `write_off`, `cancellation`; positive amounts are
-  owed, negative ones paid or no longer owed). `GET /contracts/:id/statement` lists them with the
-  running balance.
+  event (`LedgerEntryType`: `charge`, `payment`, `return`, `write_off`, `cancellation`; positive
+  amounts are owed, a charge or a returned payment, negative ones paid or no longer owed).
+  `GET /contracts/:id/statement` lists them with the running balance.
 - Events: `MandateSigned`, `MandateRevoked`, `ChargeCreated`, `ChargeDueSoon`, `ChargeSubmitted`,
-  `ChargePaid`, `ChargeFailed`, `ChargeOverdue`, `ContractInArrears`, `ArrearsCleared`,
+  `ChargePaid`, `ChargeFailed`, `ChargeReturned`, `ChargeOverdue`, `ContractInArrears`,
+  `ArrearsCleared`,
   `ChargeWrittenOff`, `ChargeCancelled`, `IncomeDeclared`, `IncomeDeclarationDue`.
 
 ## notifications
@@ -383,7 +392,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `reporting.application_facts`, `contract_facts`, `disbursement_facts` and `charge_facts`,
   written by consumers through `ReportingProjector`. Upserts give the same facts whatever the
   order and repetition of events: the status follows the most recent event, but a final status
-  is never replaced by one that is not, and the decision is set once. Reporting owns no aggregate
+  is never replaced by one that is not (except a paid charge by a newer return, which reopens
+  it), and the decision is set once. Reporting owns no aggregate
   and publishes no events.
 - **Figures** (`portfolio-figures.ts`): pure functions over the grouped facts, computed per
   request: the center dashboard (applications by where they are, contracts by state and product,

@@ -33,14 +33,16 @@ export interface ChargeDto {
   readonly createdAt: Date;
 }
 
-export type LedgerEntryType = 'charge' | 'payment' | 'write_off' | 'cancellation';
+// `return`: a payment the bank sent back, owed again.
+export type LedgerEntryType = 'charge' | 'payment' | 'return' | 'write_off' | 'cancellation';
 
 export interface LedgerEntryDto {
   readonly occurredAt: Date;
   readonly type: LedgerEntryType;
   readonly chargeId: string;
   readonly description: string;
-  // Positive: owed by the student; negative: paid, or no longer owed.
+  // Positive: owed by the student (a charge, a returned payment); negative: paid, or no longer
+  // owed.
   readonly amountCents: number;
   readonly balanceCents: number;
 }

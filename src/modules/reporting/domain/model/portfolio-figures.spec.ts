@@ -19,6 +19,17 @@ describe('portfolio figures', () => {
     expect(averageOf(0, 0)).toBeNull();
   });
 
+  it('should refuse a sum that is not whole cents when adding the money up', () => {
+    const rows = { applications: [], contracts: [], disbursements: [] };
+
+    expect(() =>
+      centerFigures({
+        ...rows,
+        charges: [{ product: 'isa', kind: 'isa', status: 'paid', cents: 100.5 }],
+      }),
+    ).toThrow(InvalidValueError);
+  });
+
   it('should add the rows up in total and by product, leaving out what is not counted', () => {
     const figures = centerFigures({
       applications: [

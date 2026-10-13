@@ -331,7 +331,9 @@ pnpm api:call POST '/ops/dunning/run?asOf=<a later day>' --as ops
 The billing run charges what falls due that month and submits it to the (simulated) payment
 provider, which answers a couple of seconds later on `POST /webhooks/psp`: the charge is paid, the
 instalment marked in the plan and the statement balanced. An amount ending in 13 cents is refused,
-and dunning takes over: notices, retries at 3 and 7 days, arrears at 30, default at 90. In
+and dunning takes over: notices, retries at 3 and 7 days, arrears at 30, default at 90. One
+ending in 14 cents is collected and then returned by the student's bank: owed again, unpaid on
+the plan, and dunned from the day of the return. In
 production the cycle runs on the 1st and the 5th, collection and dunning every morning. ISA
 students declare a month's income with `POST /contracts/:id/income-declarations` until the 4th of
 the next month; on the 5th the month is charged.

@@ -10,6 +10,7 @@ export const BillingEvents = {
   ChargeSubmitted: 'ChargeSubmitted',
   ChargePaid: 'ChargePaid',
   ChargeFailed: 'ChargeFailed',
+  ChargeReturned: 'ChargeReturned',
   ChargeOverdue: 'ChargeOverdue',
   ContractInArrears: 'ContractInArrears',
   ArrearsCleared: 'ArrearsCleared',
@@ -80,6 +81,25 @@ export type ChargeFailedPayload = {
   // 0 when no attempt could be made (a payoff without a mandate).
   readonly attempt: number;
   readonly reason: string;
+};
+
+// The debtor's bank returned a debit the provider had collected (SEPA Core: up to 8 weeks, 13
+// months when unauthorised): the charge is owed again from that day and dunned like a failed one
+// (`failed`); lending marks the instalment unpaid.
+export type ChargeReturnedPayload = {
+  readonly chargeId: string;
+  readonly contractId: string;
+  readonly studentId: string;
+  readonly centerId: string;
+  readonly kind: ChargeKind;
+  readonly installmentNumber: number | null;
+  readonly amountCents: number;
+  // The attempt whose payment came back.
+  readonly attempt: number;
+  // The bank's return reason code (ISO 20022, `MD06`, `AC04`...).
+  readonly reason: string;
+  readonly dueDate: string;
+  readonly returnedAt: string;
 };
 
 // Dunning notices: the first a day after the due date, the second at fifteen days.

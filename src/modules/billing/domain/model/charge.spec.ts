@@ -204,6 +204,107 @@ describe('Charge', () => {
     });
   });
 
+  // Due 12 November 2026, collected that day.
+  describe('returns', () => {
+    const RETURNED_AT = new Date('2026-12-20T09:00:00Z');
+    const collected = (): { charge: Charge; key: string } => {
+      const charge = fresh();
+      const key = charge.submitCollection(MANDATE_ID, NOW);
+      charge.recordAccepted(key, 'pay-1');
+      charge.recordSucceeded(key, NOW, false);
+      charge.pullEvents();
+      return { charge, key };
+    };
+
+    it('should owe the charge again when the bank returns its payment', () => {
+      const { charge, key } = collected();
+
+      charge.recordReturned(key, 'MD06', day('2026-12-20'), RETURNED_AT);
+      charge.recordReturned(key, 'MD06', day('2026-12-21'), LATER);
+
+      expect(charge).toMatchObject({ status: 'failed', paidAt: null, collectible: true });
+      expect(charge.dueDate.toString()).toBe('2026-12-20');
+      expect(charge.currentAttempt).toMatchObject({
+        outcome: 'returned',
+        failureReason: 'MD06',
+        paymentId: 'pay-1',
+      });
+      expect(charge.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: BillingEvents.ChargeReturned,
+          payload: expect.objectContaining({
+            installmentNumber: 1,
+            amountCents: 337_50,
+            attempt: 1,
+            reason: 'MD06',
+            dueDate: '2026-12-20',
+          }),
+        }),
+      ]);
+    });
+
+    // Returned 38 days after the old due date: dunning starts over from the return instead of
+    // putting the contract in arrears the next morning.
+    it('should dun a returned charge from the day of the return when the old due date has passed', () => {
+      const { charge, key } = collected();
+      charge.recordReturned(key, 'AM04', day('2026-12-20'), RETURNED_AT);
+      charge.pullEvents();
+
+      expect(charge.applyDunning(day('2026-12-20'), LATER)).toEqual({ retry: false });
+      expect(charge.hasPendingEvents).toBe(false);
+      charge.applyDunning(day('2026-12-21'), LATER);
+      expect(eventTypes(charge)).toEqual([BillingEvents.ChargeOverdue]);
+      expect(charge.applyDunning(day('2026-12-23'), LATER)).toEqual({ retry: true });
+      expect(charge.inArrears).toBe(false);
+    });
+
+    it('should ignore late answers to the first attempt when a returned charge is collected again', () => {
+      const { charge, key } = collected();
+      charge.recordReturned(key, 'MD06', day('2026-12-20'), RETURNED_AT);
+
+      const second = charge.submitCollection(MANDATE_ID, LATER);
+      charge.recordSucceeded(key, LATER, false);
+      expect(() => {
+        charge.recordFailed(key, 'late', day('2026-12-20'), LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(charge.status).toBe('pending');
+      charge.recordSucceeded(second, LATER, false);
+
+      expect(second).toBe(`${charge.id}.2`);
+      expect(charge).toMatchObject({ status: 'paid', paidAt: LATER });
+      expect(charge.attempts.map((attempt) => attempt.outcome)).toEqual(['returned', 'succeeded']);
+    });
+
+    it('should refuse a return when the attempt was not collected', () => {
+      const charge = fresh();
+      const key = charge.submitCollection(MANDATE_ID, NOW);
+
+      expect(() => {
+        charge.recordReturned(key, 'MD06', day('2026-11-20'), NOW);
+      }).toThrow(InvalidStateTransitionError);
+      charge.recordFailed(key, 'insufficient_funds', day('2026-11-12'), NOW);
+      expect(() => {
+        charge.recordReturned(key, 'MD06', day('2026-11-20'), NOW);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        charge.recordReturned(`${charge.id}.9`, 'MD06', day('2026-11-20'), NOW);
+      }).toThrow(UnknownCollectionAttemptError);
+    });
+
+    // The plan it paid off stays ended (ADR 020): ops collect it again, dunning does not.
+    it('should leave a payoff to ops, never dunned, when its payment is returned', () => {
+      const payoff = fresh({ kind: 'payoff', reference: 'payoff:1' });
+      const key = payoff.submitCollection(MANDATE_ID, NOW);
+      payoff.recordSucceeded(key, NOW, false);
+
+      payoff.recordReturned(key, 'MD01', day('2026-12-20'), RETURNED_AT);
+
+      expect(payoff.status).toBe('failed');
+      expect(payoff.applyDunning(day('2027-06-01'), LATER)).toEqual({ retry: false });
+      expect(payoff.retryCollection(MANDATE_ID, LATER)).toBe(`${payoff.id}.2`);
+    });
+  });
+
   // Due 12 November 2026.
   describe('dunning', () => {
     const dun = (charge: Charge, asOf: string) => {

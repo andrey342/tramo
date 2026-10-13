@@ -12,10 +12,12 @@ import { CancelOpenChargesCommand } from '../../application/commands/cancel-open
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { BillingEvents } from '../../domain';
 import { type BillingCycleJobs } from '../jobs/billing-jobs';
+import { type LedgerLine, type LedgerWriter } from '../persistence/typeorm-billing.queries';
 
 import {
   CancelChargesOnPlanCompleted,
   CollectOnMandateSigned,
+  LedgerOnChargeReturned,
   RebillOnPayoffWithdrawn,
 } from './billing.consumers';
 
@@ -89,6 +91,53 @@ describe('CollectOnMandateSigned', () => {
 
     expect(executed).toEqual([
       new CollectWaitingChargesCommand(contractId, CalendarDate.parse('2026-11-20')),
+    ]);
+  });
+});
+
+describe('LedgerOnChargeReturned', () => {
+  it('should owe the amount again on the statement when the bank returns a payment', async () => {
+    const lines: LedgerLine[] = [];
+    const ledger = {
+      append: (line: LedgerLine) => {
+        lines.push(line);
+        return Promise.resolve();
+      },
+    } as unknown as LedgerWriter;
+    const [contractId, chargeId, eventId] = [uuidv7(), uuidv7(), uuidv7()];
+
+    await new LedgerOnChargeReturned(ledger).handle({
+      eventId,
+      eventType: BillingEvents.ChargeReturned,
+      aggregateType: 'Charge',
+      aggregateId: chargeId,
+      occurredAt: '2026-12-20T09:00:00.000Z',
+      correlationId: null,
+      payload: {
+        chargeId,
+        contractId,
+        studentId: uuidv7(),
+        centerId: uuidv7(),
+        kind: 'installment',
+        installmentNumber: 1,
+        amountCents: 337_50,
+        attempt: 1,
+        reason: 'MD06',
+        dueDate: '2026-12-20',
+        returnedAt: '2026-12-20T09:00:00.000Z',
+      },
+    });
+
+    expect(lines).toEqual([
+      {
+        eventId,
+        contractId,
+        chargeId,
+        type: 'return',
+        amountCents: 337_50,
+        description: 'Direct debit returned by the bank (MD06)',
+        occurredAt: new Date('2026-12-20T09:00:00.000Z'),
+      },
     ]);
   });
 });

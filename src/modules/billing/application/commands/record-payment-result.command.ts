@@ -17,7 +17,9 @@ export interface PaymentResult {
   readonly reference: string;
   // The provider's id of the payment, which must be the one it accepted for the attempt.
   readonly paymentId: string;
-  readonly outcome: 'succeeded' | 'failed';
+  // `returned`: collected earlier, then sent back by the debtor's bank.
+  readonly outcome: 'succeeded' | 'failed' | 'returned';
+  // Why it failed, or the bank's return reason code.
   readonly failureReason: string | null;
 }
 
@@ -30,7 +32,10 @@ export class RecordPaymentResultCommand extends Command<{
   }
 }
 
-// Providers deliver callbacks at least once: a repeated one writes nothing.
+// Providers deliver callbacks at least once: a repeated one writes nothing. A callback is
+// matched by its attempt key and the payment the provider accepted for it; it carries no amount,
+// since Tramo asked for the charge's amount under that key (a real adapter compares the amount
+// it echoes before calling this).
 @CommandHandler(RecordPaymentResultCommand)
 export class RecordPaymentResultHandler implements ICommandHandler<RecordPaymentResultCommand> {
   constructor(
@@ -59,8 +64,10 @@ export class RecordPaymentResultHandler implements ICommandHandler<RecordPayment
         await this.charges.lockContract(charge.contractId);
         const others = await this.charges.hasOtherChargesInArrears(charge.contractId, charge.id);
         charge.recordSucceeded(reference, now, others);
-      } else {
+      } else if (outcome === 'failed') {
         charge.recordFailed(reference, failureReason ?? '', CalendarDate.fromInstant(now), now);
+      } else {
+        charge.recordReturned(reference, failureReason ?? '', CalendarDate.fromInstant(now), now);
       }
       if (charge.hasPendingEvents || charge.status !== before) {
         await this.charges.save(charge);

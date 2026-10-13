@@ -19,7 +19,7 @@ import {
 import { type CenterRows, type Product } from '../../src/modules/reporting/domain';
 import { type EventHistory, type IntegrationEvent } from '../../src/shared/application';
 
-type Row<F> = Omit<F, 'at' | 'eventId'> & { lastEventAt: Date; lastEventId: string };
+type Row<F> = Omit<F, 'at' | 'eventId' | 'reopens'> & { lastEventAt: Date; lastEventId: string };
 
 interface Rules {
   readonly terminal: readonly string[];
@@ -30,12 +30,12 @@ interface Rules {
 }
 
 // The same rules as the SQL upserts (see the ReportingStore port).
-function merge<F extends { at: Date; eventId: string; status?: string }>(
+function merge<F extends { at: Date; eventId: string; status?: string; reopens?: boolean }>(
   existing: Row<F> | undefined,
   fact: F,
   rules: Rules,
 ): Row<F> {
-  const { at, eventId, ...fields } = fact;
+  const { at, eventId, reopens, ...fields } = fact;
   if (!existing) {
     return { ...fields, lastEventAt: at, lastEventId: eventId };
   }
@@ -48,7 +48,9 @@ function merge<F extends { at: Date; eventId: string; status?: string }>(
     const stored = merged[key] as string | number | undefined;
     if (key === 'status') {
       const keepsFinal =
-        rules.terminal.includes(String(stored)) && !rules.terminal.includes(String(value));
+        rules.terminal.includes(String(stored)) &&
+        !rules.terminal.includes(String(value)) &&
+        reopens !== true;
       if (newer && !keepsFinal) merged[key] = value;
     } else if (rules.once?.includes(key)) {
       merged[key] = stored ?? value;

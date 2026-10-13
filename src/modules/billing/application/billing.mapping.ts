@@ -25,7 +25,10 @@ export function toDeclarationDto(declaration: IncomeDeclaration): IncomeDeclarat
 }
 
 export function toChargeDto(charge: Charge): ChargeDto {
-  const failed = [...charge.attempts].reverse().find((attempt) => attempt.outcome === 'failed');
+  // A returned debit counts as a failure: its reason is the bank's return code.
+  const failed = [...charge.attempts]
+    .reverse()
+    .find((attempt) => attempt.outcome === 'failed' || attempt.outcome === 'returned');
   return {
     id: charge.id,
     contractId: charge.contractId,

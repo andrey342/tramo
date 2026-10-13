@@ -2,6 +2,7 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
 import { type Principal } from '@shared/application';
+import { Money } from '@shared/domain';
 
 import { findVisibleContract } from '../billing-access';
 import { type StatementDto } from '../dto/billing.dto';
@@ -12,8 +13,8 @@ import {
   type RepaymentPlans,
 } from '../ports/billing-ports';
 
-// The account statement of a contract: every charge, payment, write-off and cancellation in
-// order, with the running balance the student owes.
+// The account statement of a contract: every charge, payment, return, write-off and
+// cancellation in order, with the running balance the student owes.
 export class GetStatementQuery extends Query<StatementDto> {
   constructor(
     readonly actor: Principal,
@@ -32,11 +33,11 @@ export class GetStatementHandler implements IQueryHandler<GetStatementQuery> {
 
   async execute(query: GetStatementQuery): Promise<StatementDto> {
     const contract = await findVisibleContract(this.plans, query.actor, query.contractId);
-    let balanceCents = 0;
+    let balance = Money.zero();
     const entries = (await this.queries.ledger(contract.id)).map((entry) => {
-      balanceCents += entry.amountCents;
-      return { ...entry, balanceCents };
+      balance = balance.add(Money.fromCents(entry.amountCents));
+      return { ...entry, balanceCents: balance.cents };
     });
-    return { contractId: contract.id, entries, balanceCents };
+    return { contractId: contract.id, entries, balanceCents: balance.cents };
   }
 }

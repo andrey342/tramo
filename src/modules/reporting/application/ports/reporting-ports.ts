@@ -27,7 +27,8 @@ export type Product = 'installments' | 'isa';
 //   carries them; an absent one leaves the stored value;
 // - the status follows the most recent event (time, then event id), except that a final status
 //   (a contract completed, defaulted or cancelled; a charge paid, written off or cancelled; an
-//   application rejected, accepted, cancelled or expired) is never replaced by one that is not;
+//   application rejected, accepted, cancelled or expired) is never replaced by one that is not,
+//   but by a newer return of a paid charge (`reopens`);
 // - an application's decision is set once; a charge keeps the day of its latest failure.
 export interface ApplicationFact {
   readonly applicationId: string;
@@ -76,6 +77,8 @@ export interface ChargeFact {
   readonly status?: ChargeStatus;
   // The day (YYYY-MM-DD, UTC) of the last failed collection.
   readonly failedOn?: string;
+  // The bank returned the payment: the status may take a paid charge back to an open one.
+  readonly reopens?: boolean;
 }
 
 // The read models: written by the projector, read by the dashboards. Writes are upserts that can

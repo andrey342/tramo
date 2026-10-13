@@ -13,7 +13,7 @@ export interface CollectionAttemptJson {
   readonly mandateId: string;
   readonly submittedAt: string;
   readonly paymentId: string | null;
-  readonly outcome: 'pending' | 'succeeded' | 'failed';
+  readonly outcome: 'pending' | 'succeeded' | 'failed' | 'returned';
   readonly failureReason: string | null;
   readonly settledAt: string | null;
 }
@@ -156,7 +156,7 @@ export class LedgerEntryOrmEntity {
   chargeId: string;
 
   @Column('text')
-  type: 'charge' | 'payment' | 'write_off' | 'cancellation';
+  type: 'charge' | 'payment' | 'return' | 'write_off' | 'cancellation';
 
   @Column('integer', { name: 'amount_cents' })
   amountCents: number;

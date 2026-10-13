@@ -26,5 +26,5 @@ auth:bearer {
 docs {
   Ops or admin. Runs the billing cycle as of a day (default today) and sends what is due to the simulated payment provider. `asOf` is the first due date from "Get schedule", so the first instalment is charged now; a future day is accepted only where `BILLING_FUTURE_RUNS_ENABLED` is on (the default outside production). Without `contractId` it bills every contract.
 
-  The provider collects and calls back within seconds; then "List charges" shows the instalment as `paid`. An amount ending in 13 cents is refused for insufficient funds.
+  The provider collects and calls back within seconds; then "List charges" shows the instalment as `paid`. An amount ending in 13 cents is refused for insufficient funds; one ending in 14 cents is collected and then returned by the bank (`MD06`) a few seconds later, so the charge is `failed` again and the statement shows a `return` line.
 }

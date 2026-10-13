@@ -8,6 +8,7 @@ import {
   type ChargeFailedPayload,
   type ChargeOverduePayload,
   type ChargePaidPayload,
+  type ChargeReturnedPayload,
   type ChargeWrittenOffPayload,
   type ContractInArrearsPayload,
 } from '@modules/billing/domain/events/billing-events';
@@ -298,6 +299,22 @@ const PROJECTIONS: Readonly<Record<string, Project>> = {
       kind: p.kind,
       status: 'failed',
       failedOn: CalendarDate.fromInstant(at).toString(),
+    });
+  },
+  // The bank sent the payment back: no longer collected, owed again (failed, as billing has it).
+  [BillingEvents.ChargeReturned]: (store, event, at) => {
+    const p = event.payload as unknown as ChargeReturnedPayload;
+    return store.recordCharge({
+      chargeId: p.chargeId,
+      at,
+      eventId: event.eventId,
+      contractId: p.contractId,
+      centerId: p.centerId,
+      kind: p.kind,
+      amountCents: p.amountCents,
+      status: 'failed',
+      failedOn: CalendarDate.fromInstant(at).toString(),
+      reopens: true,
     });
   },
   [BillingEvents.ChargeOverdue]: (store, event, at) => {

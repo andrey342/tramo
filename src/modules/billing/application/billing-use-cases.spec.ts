@@ -206,6 +206,24 @@ describe('billing use cases', () => {
       ).rejects.toThrow(NotAnIncomeShareError);
     });
 
+    // Only the student holds up the cycle of their contract.
+    it('should not lock the contract when someone other than its student declares', async () => {
+      const t = setup();
+      const contractId = t.contract('isa');
+
+      await expect(
+        t.declare.execute(new DeclareIncomeCommand(OPS, contractId, '2026-11', 2_000_00)),
+      ).rejects.toThrow(BillingAccessDeniedError);
+      await expect(
+        t.declare.execute(
+          new DeclareIncomeCommand({ ...t.student, userId: uuidv7() }, contractId, '2026-11', 1),
+        ),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect(t.charges.locked).toEqual([]);
+      await t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00));
+      expect(t.charges.locked).toEqual([contractId]);
+    });
+
     // A salary paid on the 1st or 2nd is declared in time; from the 5th the month is closed,
     // even if the cycle has not assessed it yet.
     it('should take the previous month until the 4th and refuse it from the 5th', async () => {
@@ -379,6 +397,37 @@ describe('billing use cases', () => {
       await expect(
         t.declare.execute(new DeclareIncomeCommand(t.student, other, '2026-08', 2_000_00)),
       ).rejects.toThrow(PeriodNotOpenError);
+    });
+
+    // Another run takes the contract's lock first and assesses July while this one waits for it:
+    // this one reads the plan again under the lock and finds July done.
+    it('should not fail an ISA when a run at the same time assessed its month first', async () => {
+      const t = setup();
+      const contractId = uuidv7();
+      t.plans.addContract(
+        {
+          id: contractId,
+          studentId: t.studentId,
+          centerId: t.centerId,
+          product: 'isa',
+          status: 'active',
+        },
+        { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-07' },
+      );
+      const lock = t.charges.lockContract.bind(t.charges);
+      let concurrent = true;
+      t.charges.lockContract = async (id) => {
+        await lock(id);
+        if (concurrent) {
+          concurrent = false;
+          await t.plans.assessIsaPeriod(contractId, '2026-07', null);
+        }
+      };
+
+      const result = await t.cycle.execute(new RunBillingCycleCommand(day('2026-08-05')));
+
+      expect(result).toEqual({ plansBilled: 1, chargesCreated: 0, failedContractIds: [] });
+      expect(t.plans.assessed.map((assessed) => assessed.period)).toEqual(['2026-07']);
     });
 
     it('should go on with the other plans when one fails, and report it', async () => {
@@ -566,6 +615,51 @@ describe('billing use cases', () => {
       await expect(t.retry.execute(new RetryChargeCommand(OPS, stranded.id))).rejects.toThrow(
         ContractNotRepayingError,
       );
+    });
+
+    it('should owe a collected charge again, once, when the bank returns the payment', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const charge = await t.charge({ contractId });
+      await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12')));
+      const answer = (
+        outcome: 'succeeded' | 'returned',
+        paymentId = 'pay-1',
+        failureReason: string | null = null,
+      ) =>
+        t.result.execute(
+          new RecordPaymentResultCommand({
+            reference: `${charge.id}.1`,
+            paymentId,
+            outcome,
+            failureReason,
+          }),
+        );
+      await answer('succeeded');
+      t.clock.set(new Date('2026-12-20T09:00:00Z'));
+
+      const returned = await answer('returned', 'pay-1', 'MD06');
+      const replayed = await answer('returned', 'pay-1', 'MD06');
+      const lateSuccess = await answer('succeeded');
+
+      expect(returned).toEqual({ id: charge.id, status: 'failed' });
+      expect(replayed).toEqual(returned);
+      expect(lateSuccess).toEqual(returned);
+      expect(t.events.ofType(BillingEvents.ChargeReturned)).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ reason: 'MD06', dueDate: '2026-12-20' }),
+        }),
+      ]);
+      expect(t.audited).toEqual([
+        { status: { before: 'pending', after: 'paid' } },
+        { status: { before: 'paid', after: 'failed' } },
+      ]);
+      expect(await t.charges.findById(charge.id)).toMatchObject({
+        status: 'failed',
+        paidAt: null,
+      });
+      await expect(answer('returned', 'pay-forged', 'MD06')).rejects.toThrow(PaymentMismatchError);
     });
   });
 
@@ -967,6 +1061,47 @@ describe('billing use cases', () => {
           new ListChargesQuery({ ...t.student, userId: uuidv7() }, contractId, { limit: 10 }),
         ),
       ).rejects.toThrow(EntityNotFoundError);
+    });
+
+    it('should owe a payment again on the statement when the bank returned it', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      const chargeId = uuidv7();
+      const line = (type: 'charge' | 'payment' | 'return', amountCents: number) => ({
+        contractId,
+        occurredAt: NOW,
+        type,
+        chargeId,
+        description: type,
+        amountCents,
+      });
+      t.queries.entries.push(
+        line('charge', 337_50),
+        line('payment', -337_50),
+        line('return', 337_50),
+      );
+
+      const statement = await t.statement.execute(new GetStatementQuery(t.student, contractId));
+
+      expect(statement.entries.map((entry) => entry.balanceCents)).toEqual([337_50, 0, 337_50]);
+      expect(statement.balanceCents).toBe(337_50);
+    });
+
+    it('should refuse a ledger amount that is not whole cents when adding up the balance', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      t.queries.entries.push({
+        contractId,
+        occurredAt: NOW,
+        type: 'charge',
+        chargeId: uuidv7(),
+        description: 'Instalment 1',
+        amountCents: 337.5,
+      });
+
+      await expect(t.statement.execute(new GetStatementQuery(OPS, contractId))).rejects.toThrow(
+        InvalidValueError,
+      );
     });
   });
 });

@@ -19,6 +19,7 @@ import {
   type ChargeCancelledPayload,
   type ChargeCreatedPayload,
   type ChargePaidPayload,
+  type ChargeReturnedPayload,
   type ChargeSubmittedPayload,
   type ChargeWrittenOffPayload,
   type MandateSignedPayload,
@@ -132,7 +133,8 @@ const LABELS: Readonly<Record<ChargeCreatedPayload['kind'], string>> = {
   payoff: 'Payoff',
 };
 
-// The statement: a line per charge, payment, write-off and cancellation, from their events.
+// The statement: a line per charge, payment, return, write-off and cancellation, from their
+// events.
 @Injectable()
 @EventSubscriber({ event: BillingEvents.ChargeCreated, consumer: 'billing.ledger-charge' })
 export class LedgerOnChargeCreated implements EventHandler<ChargeCreatedPayload> {
@@ -166,6 +168,26 @@ export class LedgerOnChargePaid implements EventHandler<ChargePaidPayload> {
       type: 'payment',
       amountCents: -amountCents,
       description: 'Direct debit collected',
+      occurredAt: new Date(event.occurredAt),
+    });
+  }
+}
+
+// The bank sent the debit back: owed again, as much as was paid.
+@Injectable()
+@EventSubscriber({ event: BillingEvents.ChargeReturned, consumer: 'billing.ledger-return' })
+export class LedgerOnChargeReturned implements EventHandler<ChargeReturnedPayload> {
+  constructor(private readonly ledger: LedgerWriter) {}
+
+  async handle(event: IntegrationEvent<ChargeReturnedPayload>): Promise<void> {
+    const { chargeId, contractId, amountCents, reason } = event.payload;
+    await this.ledger.append({
+      eventId: event.eventId,
+      contractId,
+      chargeId,
+      type: 'return',
+      amountCents,
+      description: `Direct debit returned by the bank (${reason})`,
       occurredAt: new Date(event.occurredAt),
     });
   }

@@ -43,6 +43,7 @@ import {
   DefaultOnChargeWrittenOff,
   MarkInArrearsOnContractInArrears,
   RecordRepaymentOnChargePaid,
+  RecordReturnOnChargeReturned,
   WithdrawPayoffOnChargeFailed,
 } from './infrastructure/consumers/collection.consumers';
 import {
@@ -147,6 +148,7 @@ function simulated<T>(config: AppConfig, provider: T): T {
     CompleteContractOnPlanCompleted,
     ClosePlanOnContractDefaulted,
     RecordRepaymentOnChargePaid,
+    RecordReturnOnChargeReturned,
     MarkInArrearsOnContractInArrears,
     ClearArrearsOnArrearsCleared,
     DefaultOnChargeWrittenOff,

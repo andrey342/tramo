@@ -27,6 +27,12 @@ import { PSP_SIGNATURE_HEADER } from '../adapters/simulated-psp-callbacks';
 
 import { PaymentCallbackRequest, PaymentCallbackResponse } from './billing.dto';
 
+const OUTCOMES = {
+  'payment.succeeded': 'succeeded',
+  'payment.failed': 'failed',
+  'payment.returned': 'returned',
+} as const;
+
 // Callbacks are authenticated by the provider's signature over the raw body. The guard runs
 // before the body is validated, so nothing unsigned, tampered with or older than five minutes
 // reaches a command.
@@ -78,14 +84,23 @@ export class PspWebhookController {
   @ApiOkResponse({ type: PaymentCallbackResponse, description: 'Recorded, or already recorded' })
   // A collection moves money: the callback leaves an audit entry, with its charge.
   @Audited({ action: 'billing.payment_callback', resource: 'charge' })
-  @ApiOperation({ summary: 'A collection succeeded or failed (the payment provider calls it)' })
+  @ApiOperation({
+    summary: 'A collection succeeded, failed or was returned (the payment provider calls it)',
+    description:
+      'Matched by the attempt key and the payment accepted for it; it carries no amount. A ' +
+      'callback that does not fit what is recorded is a 409: unknown_collection_attempt (no ' +
+      'such attempt), payment_mismatch (another payment for the attempt) or ' +
+      'invalid_state_transition (an outcome contradicting the recorded one, or a return before ' +
+      'its success, which a later retry records).',
+  })
   callback(@Body() body: PaymentCallbackRequest): Promise<PaymentCallbackResponse> {
     return this.commands.execute(
       new RecordPaymentResultCommand({
         reference: body.reference,
         paymentId: body.paymentId,
-        outcome: body.type === 'payment.succeeded' ? 'succeeded' : 'failed',
-        failureReason: body.failureReason ?? null,
+        outcome: OUTCOMES[body.type],
+        failureReason:
+          (body.type === 'payment.returned' ? body.returnReason : body.failureReason) ?? null,
       }),
     );
   }
