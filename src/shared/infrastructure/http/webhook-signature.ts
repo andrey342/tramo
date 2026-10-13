@@ -6,9 +6,18 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // than the tolerance. Several v1 values may be sent while a secret is being rotated.
 export const WEBHOOK_TOLERANCE_SECONDS = 300;
 
-export function signWebhook(secret: string, rawBody: string | Buffer, now: Date): string {
+// One v1 per secret, in the order given: a sender rotating its secret signs with both, and the
+// receiver accepts the request when any v1 matches a secret it holds.
+export function signWebhook(
+  secrets: string | readonly string[],
+  rawBody: string | Buffer,
+  now: Date,
+): string {
   const timestamp = Math.floor(now.getTime() / 1000);
-  return `t=${String(timestamp)},v1=${hmac(secret, timestamp, rawBody)}`;
+  const signatures = (typeof secrets === 'string' ? [secrets] : secrets).map(
+    (secret) => `v1=${hmac(secret, timestamp, rawBody)}`,
+  );
+  return [`t=${String(timestamp)}`, ...signatures].join(',');
 }
 
 export type WebhookVerification =

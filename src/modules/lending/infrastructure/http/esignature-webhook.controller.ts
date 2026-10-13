@@ -86,7 +86,7 @@ export class ESignatureWebhookController {
     description: 't=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">',
     required: true,
   })
-  @ApiProblems(400, 401, 404, 409, 422)
+  @ApiProblems(400, 401, 409, 422)
   @ApiOkResponse({
     type: SignatureCallbackResponse,
     description:

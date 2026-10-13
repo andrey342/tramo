@@ -29,13 +29,24 @@ describe('RefreshToken', () => {
     expect(token.usedAt).toEqual(new Date(NOW.getTime() + DAY_MS));
   });
 
-  it('should treat a token presented again within seconds as a retry, not as theft', () => {
+  it('should treat a token presented again within a second as a retry, not as theft', () => {
     const token = issue();
     token.consume(NOW);
 
-    expect(token.consume(new Date(NOW.getTime() + 5_000))).toEqual({
+    expect(token.consume(new Date(NOW.getTime() + 1_000))).toEqual({
       ok: false,
       error: 'superseded',
+    });
+  });
+
+  // A thief who rotated first must not keep the family because the user came back soon after.
+  it('should report reuse when a consumed token comes back a few seconds after its rotation', () => {
+    const token = issue();
+    token.consume(NOW);
+
+    expect(token.consume(new Date(NOW.getTime() + 3_000))).toEqual({
+      ok: false,
+      error: 'reused',
     });
   });
 

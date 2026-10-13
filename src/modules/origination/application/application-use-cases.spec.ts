@@ -437,6 +437,9 @@ describe('application use cases', () => {
       await expect(
         t.list.execute(new ListApplicationsQuery({ kind: 'anonymous' }, undefined, page)),
       ).rejects.toThrow(ApplicationAccessDeniedError);
+      await expect(ids(centerKey(['applications:write']))).rejects.toThrow(
+        ApplicationAccessDeniedError,
+      );
     });
   });
 

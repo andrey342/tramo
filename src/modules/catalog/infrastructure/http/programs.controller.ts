@@ -4,7 +4,7 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
 import {
   OptionalAuthentication,
   Public,
@@ -79,7 +79,7 @@ export class ProgramsController {
 
   @Get('programs')
   @Public()
-  @ApiProblems(400, 422)
+  @ApiCursorPaginated()
   @ApiOkResponse({ type: ProgramPageResponse })
   @ApiOperation({
     summary: 'The public catalog: published programs of active centers, newest first',

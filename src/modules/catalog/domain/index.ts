@@ -7,6 +7,7 @@ export {
   type TrainingCenterProps,
 } from './model/training-center';
 export {
+  type VatCheckOutcome,
   type VatCheckResult,
   type VatValidation,
   type VatValidationStatus,

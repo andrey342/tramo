@@ -32,6 +32,10 @@ const COMPLETED_TTL_MS = 24 * 60 * 60 * 1000;
 const IN_PROGRESS_TTL_MS = 60 * 1000;
 // Response headers a client may rely on after a create; replayed along with status and body.
 const REPLAYED_HEADERS = ['location', 'content-location', 'etag'] as const;
+// While Redis is down a command waits for reconnections (maxRetriesPerRequest 3, each as long as
+// the connect timeout when the host does not answer). The request gives up after this long.
+export const IDEMPOTENCY_STORE_TIMEOUT_MS = 2_000;
+const RETRY_AFTER_SECONDS = 5;
 
 // A completed record keeps the response body encrypted (`sealedBody`, FieldCipher, ADR 014): it
 // holds what the endpoint answered, applicant profiles and contracts among it, for 24 hours in a
@@ -58,6 +62,10 @@ type IdempotencyRecord =
 
 // Scope is (principal, key); the fingerprint (method, route, query, body) decides between
 // "replay" and "key reused for a different request".
+//
+// Fails closed: when Redis cannot be read or the key cannot be taken, the request is not executed
+// and the client gets 503 `idempotency_unavailable` with Retry-After. Running it without the
+// record would turn a retry into a second payment, contract or application.
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   private readonly logger = new Logger(IdempotencyInterceptor.name);
@@ -84,12 +92,16 @@ export class IdempotencyInterceptor implements NestInterceptor {
     if (existing) {
       return this.answerFromExisting(existing, storageKey, fingerprint, response);
     }
-    const locked = await this.redis.set(
-      storageKey,
-      JSON.stringify({ state: 'in_progress', fingerprint } satisfies IdempotencyRecord),
-      'PX',
-      IN_PROGRESS_TTL_MS,
-      'NX',
+    // A lock that times out may still be written once Redis is back: a retry then gets 409 until
+    // the in-progress marker expires, and runs after that.
+    const locked = await this.fromStore(() =>
+      this.redis.set(
+        storageKey,
+        JSON.stringify({ state: 'in_progress', fingerprint } satisfies IdempotencyRecord),
+        'PX',
+        IN_PROGRESS_TTL_MS,
+        'NX',
+      ),
     );
     if (locked !== 'OK') {
       throw inProgress();
@@ -185,8 +197,37 @@ export class IdempotencyInterceptor implements NestInterceptor {
   }
 
   private async read(storageKey: string): Promise<IdempotencyRecord | null> {
-    const raw = await this.redis.get(storageKey);
+    const raw = await this.fromStore(() => this.redis.get(storageKey));
     return raw === null ? null : (JSON.parse(raw) as IdempotencyRecord);
+  }
+
+  // A store that fails or does not answer in time is a 503, not a 500: nothing ran, and the same
+  // request with the same key can be sent again.
+  private async fromStore<T>(command: () => Promise<T>): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`no answer within ${String(IDEMPOTENCY_STORE_TIMEOUT_MS)} ms`));
+      }, IDEMPOTENCY_STORE_TIMEOUT_MS);
+    });
+    try {
+      return await Promise.race([command(), timeout]);
+    } catch (error) {
+      this.logger.warn(
+        { err: error instanceof Error ? error.message : error },
+        'Idempotency store unavailable; request refused',
+      );
+      throw new ProblemException(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        'idempotency_unavailable',
+        'Repeated requests cannot be recognised right now, so this one was not processed. ' +
+          'Retry later with the same key.',
+        undefined,
+        RETRY_AFTER_SECONDS,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private storageKey(request: RequestWithPrincipal, key: string): string {

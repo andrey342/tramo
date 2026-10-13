@@ -9,6 +9,7 @@ export interface ApiKeySummaryDto {
   readonly createdAt: Date;
   readonly lastUsedAt: Date | null;
   readonly revokedAt: Date | null;
+  readonly expiresAt: Date | null;
 }
 
 // Only returned by the issuing request: the full key is not stored and cannot be shown again.

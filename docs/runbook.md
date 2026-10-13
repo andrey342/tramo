@@ -298,6 +298,11 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   is resolved and refused if any address is loopback, private, link-local, carrier-grade NAT,
   documentation, multicast, reserved or an IPv6 form carrying IPv4 (`target_unreachable`).
   Outside production it is on by default, which is how compose reaches the sink.
+- **Signatures refused after a rotation**: for 24 hours after `PUT /centers/:id/webhook` each
+  delivery carries two `v1` values (new secret first, then the replaced one;
+  `previousSecretExpiresAt` in `GET /centers/:id/webhook` says until when). A center whose
+  endpoint answers 401 or 400 in that window is checking only the first `v1`: it must accept the
+  request when any `v1` matches. After the window only the new secret signs.
 - **Action**: once the center's endpoint answers 2xx,
   `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver` (center admin, ops, admin) starts a
   new round. It is refused with `webhook_delivery_in_progress` while a round is pending, unless
@@ -335,7 +340,10 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 - **Action**: after a projector fix, on a database that had activity before reporting existed, or
   when facts are suspect: `pnpm api:call POST /ops/reporting/rebuild --as ops`. It answers
   `{"queued": true}`, or `false` when a rebuild is already queued or running (one at a time; the
-  request joins it); 503 `queue_unavailable` means Redis did not answer within two seconds. The job deletes the facts and replays the outbox in one REPEATABLE READ
+  request joins it). The route is idempotent, so while Redis is down it answers 503
+  `idempotency_unavailable` (with `Retry-After`) within two seconds, before anything is queued;
+  503 `queue_unavailable` only appears when Redis goes away between the idempotency check and
+  queueing the job. Retry once `GET /health/ready` reports Redis up. The job deletes the facts and replays the outbox in one REPEATABLE READ
   transaction: dashboards show the old figures until it commits, and live projections wait for it
   holding worker connections, so run it when the stack is quiet. The worker logs
   `Reporting read models rebuilt` with the number of events applied.
@@ -411,7 +419,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   working (they live 15 minutes) and clients refresh. Refresh tokens are opaque and unaffected.
 - **`METRICS_TOKEN`, `BULL_BOARD_PASSWORD`**: change and restart the api.
 - **Center webhook secrets**: configuring the webhook again (`PUT /centers/:id/webhook`, center
-  admin) generates a new secret, returned once; deliveries are signed with it from then on.
+  admin) generates a new secret, returned once; deliveries are signed with it from then on, and
+  for 24 hours also with the one it replaced (a second `v1`), so the center has a day to deploy
+  it.
 - **`FIELD_ENCRYPTION_KEY`**: the process reads one key and has no previous-key variable.
   Changing it on a database with data makes every encrypted value unreadable (payout and creditor
   IBANs, mandate IBANs, webhook secrets, national ids fail with `FieldDecryptionError`), and so
@@ -463,6 +473,17 @@ future billing runs and private webhook targets by default. The compose stack ru
   it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
   counted, however many the dashboard sends at once, and clear the failures below the limit.
 
+## Idempotent requests refused
+
+- **Symptom**: POSTs that create or move money (`POST /applications`, payoffs, ops runs, the
+  reporting rebuild...) answer 503 `idempotency_unavailable` with `Retry-After: 5`; the api logs
+  `Idempotency store unavailable; request refused`.
+- **Cause**: the idempotency records live in Redis, and a request whose key cannot be checked is
+  not executed (a retry could otherwise pay or create twice). Reads and other routes keep working.
+- **Action**: `curl -s localhost:3000/health/ready` and bring Redis back; clients retry with the
+  same key. A request whose key was taken just as Redis returned answers 409
+  `idempotency_request_in_progress` for up to a minute, then runs.
+
 ## Sessions and accounts
 
 - **Ended sessions**: every day at 03:30 UTC the worker deletes from `iam.refresh_tokens` the
@@ -471,12 +492,23 @@ future billing runs and private webhook targets by default. The compose stack ru
   `iam.session-sweep`; a failed run is not retried, the next day's catches up. Like the hourly
   sweeps of emails (`notifications.emails`) and of stale applications (`origination.expiry`), it
   is a job scheduler re-registered at every worker start.
-- **A suspended center's integrations**: suspending a center revokes all its API keys within
-  seconds (the `iam.revoke-suspended-center-keys` consumer on `events.iam`), and no key can be
-  issued while it is suspended. After reinstating it, its admins issue new keys; the old ones stay
-  revoked. Its users can still sign in.
+- **A suspended center's integrations**: its API keys answer 401 `invalid_api_key` from the
+  moment it is suspended (authentication reads the center's status), and the
+  `iam.revoke-suspended-center-keys` consumer on `events.iam` revokes them within seconds. No key
+  can be issued while it is suspended. After reinstating it, its admins issue new keys; the old
+  ones stay revoked (a key reinstated before the consumer ran works again until it does). Its
+  users can still sign in.
+- **An integration answering 401 `invalid_api_key`**: the key is revoked, past its `expiresAt`
+  (`GET /centers/<id>/api-keys` shows both), or its center is suspended. Expired keys are not
+  renewed: issue a new one.
 - **Signing someone out everywhere**: `pnpm api:call POST /users/<userId>/disable --as admin`
   (204, also when already disabled). The account can no longer sign in and its refresh tokens
   stop working at once; access tokens it holds keep working until they expire, at most 15
-  minutes. There is no endpoint to enable it again or to change a password.
+  minutes. There is no endpoint to enable it again or to change a password. A user who only
+  suspects a stolen session ends all of theirs with `POST /me/sessions/revoke` (204, audited
+  `session.revoke_all`) and signs in again.
+- **A user signed out unexpectedly** after a refresh: a refresh token presented again more than
+  2 seconds after it was rotated counts as stolen and ends its session
+  (`Refresh token reuse detected; session family revoked`, `RefreshTokenReuseDetected`). A client
+  that retries a refresh late, or two that share one token, cause it too; they sign in again.
 - In compose these variables are not passed to the containers, so the defaults above apply.

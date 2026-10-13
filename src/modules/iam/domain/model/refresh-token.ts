@@ -6,7 +6,12 @@ export type RefreshTokenStatus = 'active' | 'rotated' | 'revoked';
 // legitimate client (lost response, double submit). Rejected, but not treated as theft.
 export type RefreshRejection = 'expired' | 'revoked' | 'reused' | 'superseded';
 
-export const REUSE_GRACE_MS = 10_000;
+// The window is also a thief's: one who rotates a stolen token first keeps the family if the
+// legitimate client comes back within it. Two seconds cover what it is for, requests sent
+// together (two tabs, a double submit, serialised by the family lock and milliseconds apart) and
+// an automatic retry of a connection dropped before the answer arrived. A client that retries
+// later is signed out and signs in again, the safe way to fail (ADR 013).
+export const REUSE_GRACE_MS = 2_000;
 
 export interface RefreshTokenProps {
   readonly familyId: string;

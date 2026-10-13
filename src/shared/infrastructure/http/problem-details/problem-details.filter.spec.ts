@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Post,
 } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Type } from 'class-transformer';
 import { IsEmail, IsInt, Min, ValidateNested } from 'class-validator';
@@ -17,6 +18,7 @@ import { DomainError, InvalidStateTransitionError, InvalidValueError } from '@sh
 import { httpErrorHandlingProviders } from '../testing';
 
 import { PROBLEM_CONTENT_TYPE } from './problem-details';
+import { ProblemException } from './problem.exception';
 
 class AddressDto {
   @IsInt()
@@ -65,6 +67,17 @@ class ProbeController {
     throw new InvalidValueError('nationalId', 'DNI control letter does not match.');
   }
 
+  @Get('unavailable')
+  unavailable(): never {
+    throw new ProblemException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'idempotency_unavailable',
+      'Try again.',
+      undefined,
+      5,
+    );
+  }
+
   @Get('boom')
   boom(): never {
     throw new Error('database password is hunter2');
@@ -104,6 +117,17 @@ describe('ProblemDetailsFilter', () => {
       detail: 'Program 42 does not exist.',
       instance: '/probe/missing',
       code: 'not_found',
+    });
+  });
+
+  it('should tell when to retry when an infrastructure problem carries a delay', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/unavailable');
+
+    expect(response.status).toBe(503);
+    expect(response.headers['retry-after']).toBe('5');
+    expect(response.body).toMatchObject({
+      code: 'idempotency_unavailable',
+      title: 'Service Unavailable',
     });
   });
 

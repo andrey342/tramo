@@ -64,8 +64,10 @@ export class ViesVatValidator implements VatValidator {
   private readonly logger = new Logger(ViesVatValidator.name);
   private readonly endpoint: string;
   private readonly policy: IPolicy;
+  readonly acceptsTestNumbers: boolean;
 
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
+    this.acceptsTestNumbers = config.vies.mode === 'test';
     const path = config.vies.mode === 'test' ? 'check-vat-test-service' : 'check-vat-number';
     this.endpoint = `${config.vies.baseUrl.replace(/\/$/, '')}/${path}`;
     // cockatiel rethrows what a policy does not handle, so the timeout error has to be named here

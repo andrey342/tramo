@@ -73,7 +73,15 @@ export class CenterAccessController {
     @Param('centerId', ParseUUIDPipe) centerId: string,
     @Body() body: IssueApiKeyRequest,
   ): Promise<IssuedApiKeyResponse> {
-    return this.commands.execute(new IssueApiKeyCommand(actor, centerId, body.name, body.scopes));
+    return this.commands.execute(
+      new IssueApiKeyCommand(
+        actor,
+        centerId,
+        body.name,
+        body.scopes,
+        body.expiresAt === undefined ? null : new Date(body.expiresAt),
+      ),
+    );
   }
 
   @Get('api-keys')

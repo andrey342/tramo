@@ -74,7 +74,7 @@ describe('HttpWebhookSender', () => {
 
     const result = await sender(true).post({
       url: `${base}/hooks/200`,
-      secret: SECRET,
+      secrets: [SECRET],
       deliveryId: 'delivery-1',
       event: 'contract.signed',
       body,
@@ -98,11 +98,29 @@ describe('HttpWebhookSender', () => {
     ).toEqual({ valid: true });
   });
 
+  it('should sign with every secret given when a rotation overlaps', async () => {
+    const previous = 'whsec_previous_secret_of_enough_length_01234';
+
+    await sender(true).post({
+      url: `${base}/hooks/200`,
+      secrets: [SECRET, previous],
+      deliveryId: 'delivery-2',
+      event: 'contract.signed',
+      body: '{}',
+    });
+
+    const signature = received[0]?.headers['x-tramo-signature'];
+    const header = typeof signature === 'string' ? signature : undefined;
+    expect(header?.split(',').filter((part) => part.startsWith('v1='))).toHaveLength(2);
+    expect(verifyWebhook(previous, header, Buffer.from('{}'), NOW)).toEqual({ valid: true });
+    expect(verifyWebhook(SECRET, header, Buffer.from('{}'), NOW)).toEqual({ valid: true });
+  });
+
   it('should not follow a redirect, nor read the answer it does not need', async () => {
     const post = (path: string) =>
       sender(true).post({
         url: `${base}${path}`,
-        secret: SECRET,
+        secrets: [SECRET],
         deliveryId: 'd',
         event: 'e',
         body: '{}',
@@ -116,7 +134,7 @@ describe('HttpWebhookSender', () => {
   it('should refuse plain http and private addresses where private targets are off', async () => {
     const post = (target: string) =>
       sender(false)
-        .post({ url: target, secret: SECRET, deliveryId: 'd', event: 'e', body: '{}' })
+        .post({ url: target, secrets: [SECRET], deliveryId: 'd', event: 'e', body: '{}' })
         .catch((error: unknown) => error);
 
     for (const target of [

@@ -18,6 +18,7 @@ import { CalendarDate, type Clock, CLOCK } from '@shared/domain';
 import { Audited } from '@shared/infrastructure/audit';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 import {
+  ApiCursorPaginated,
   ApiProblems,
   CursorPageQueryDto,
   Idempotent,
@@ -110,6 +111,7 @@ export class BillingController {
 
   @Get('contracts/:contractId/charges')
   @ApiProblems(400, 401, 403, 404)
+  @ApiCursorPaginated()
   @ApiOkResponse({ type: ChargePageResponse })
   @Roles('student', 'ops', 'admin')
   @ApiOperation({ summary: 'The charges of a contract, newest first' })

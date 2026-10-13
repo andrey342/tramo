@@ -4,7 +4,8 @@ import { unwrap, VatNumber } from '../../src/shared/domain';
 // The numbers the VIES test service answers deterministically: 100 is valid, 200 is invalid and
 // 300 simulates the service being down. The fake follows the same table, so every implementation
 // runs one suite.
-const vat = (number: string): VatNumber => unwrap(VatNumber.create('ES', number));
+const vat = (number: string): VatNumber =>
+  unwrap(VatNumber.create('ES', number, { registryTestNumbers: true }));
 
 export function vatValidatorContract(
   name: string,
@@ -15,6 +16,10 @@ export function vatValidatorContract(
 
     beforeEach(async () => {
       subject = await create();
+    });
+
+    it('should take the test numbers as tax ids, since it answers by them', () => {
+      expect(subject.acceptsTestNumbers).toBe(true);
     });
 
     it('should answer valid for a registered number', async () => {

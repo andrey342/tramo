@@ -14,6 +14,7 @@ import { RefreshSessionHandler } from './application/commands/refresh-session.co
 import { RegisterStudentHandler } from './application/commands/register-student.command';
 import { RevokeApiKeyHandler } from './application/commands/revoke-api-key.command';
 import { RevokeCenterApiKeysHandler } from './application/commands/revoke-center-api-keys.command';
+import { RevokeOwnSessionsHandler } from './application/commands/revoke-own-sessions.command';
 import {
   ACCESS_TOKEN_ISSUER,
   CENTER_DIRECTORY,
@@ -66,6 +67,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
     LoginHandler,
     RefreshSessionHandler,
     LogoutHandler,
+    RevokeOwnSessionsHandler,
     PurgeEndedSessionsHandler,
     GetCurrentPrincipalHandler,
     CreateCenterUserHandler,

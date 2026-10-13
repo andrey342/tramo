@@ -8,7 +8,11 @@ import {
 import { InvalidWebhookUrlError } from '../errors/notifications-errors';
 import { NotificationsEvents } from '../events/notifications-events';
 
-import { parseWebhookUrl, WebhookSubscription } from './webhook-subscription';
+import {
+  parseWebhookUrl,
+  SECRET_ROTATION_OVERLAP_MS,
+  WebhookSubscription,
+} from './webhook-subscription';
 
 describe('WebhookSubscription', () => {
   it('should subscribe a center to its URL and announce it', () => {
@@ -66,6 +70,41 @@ describe('WebhookSubscription', () => {
     ]);
   });
 
+  // Deliveries made before the center deploys the new secret must still verify.
+  it('should sign with the replaced secret too for a day when the secret is rotated', () => {
+    const subscription = aSubscription();
+
+    subscription.reconfigure(subscription.url, 'whsec_new', LATER);
+
+    const overlapEnd = new Date(LATER.getTime() + SECRET_ROTATION_OVERLAP_MS);
+    expect(subscription.previousSecret).toEqual({ value: SECRET, expiresAt: overlapEnd });
+    expect(subscription.signingSecrets(LATER)).toEqual(['whsec_new', SECRET]);
+    expect(subscription.signingSecrets(new Date(overlapEnd.getTime() - 1))).toEqual([
+      'whsec_new',
+      SECRET,
+    ]);
+    expect(subscription.signingSecrets(overlapEnd)).toEqual(['whsec_new']);
+  });
+
+  it('should keep only the secret just replaced when rotated twice', () => {
+    const subscription = aSubscription();
+
+    subscription.reconfigure(subscription.url, 'whsec_second', LATER);
+    subscription.reconfigure(subscription.url, 'whsec_third', LATER);
+
+    expect(subscription.signingSecrets(LATER)).toEqual(['whsec_third', 'whsec_second']);
+  });
+
+  it('should start with the new secret alone when a removed subscription comes back', () => {
+    const subscription = aSubscription();
+    subscription.remove(LATER);
+
+    subscription.reconfigure(subscription.url, 'whsec_new', LATER);
+
+    expect(subscription.previousSecret).toBeNull();
+    expect(subscription.signingSecrets(LATER)).toEqual(['whsec_new']);
+  });
+
   it('should be reconstituted as saved, without events', () => {
     const saved = aSubscription();
 
@@ -73,6 +112,7 @@ describe('WebhookSubscription', () => {
       centerId: saved.centerId,
       url: saved.url,
       secret: saved.secret,
+      previousSecret: null,
       status: 'removed',
       createdAt: saved.createdAt,
       changedAt: saved.changedAt,

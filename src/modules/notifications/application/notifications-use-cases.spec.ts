@@ -272,7 +272,7 @@ describe('notifications use cases', () => {
       expect(t.webhookSender.posts).toHaveLength(1);
       expect(t.webhookSender.posts[0]).toMatchObject({
         url: 'https://center.example/hooks',
-        secret,
+        secrets: [secret],
         deliveryId: delivery.id,
         event: 'contract.signed',
       });
@@ -283,6 +283,23 @@ describe('notifications use cases', () => {
         data: { contractId: 'c-1' },
       });
       expect((await t.deliveries.findById(delivery.id))?.status).toBe('delivered');
+    });
+
+    it('should sign with the old secret as well for a day when the center rotates it', async () => {
+      const t = setup();
+      const old = await t.subscribed();
+      const rotated = await t.subscribed();
+      const first = await t.published();
+      await t.deliver.execute(new DeliverWebhookCommand(first.id, 1, false));
+      t.clock.advanceBy(24 * 60 * 60 * 1000);
+      const second = await t.published();
+      await t.deliver.execute(new DeliverWebhookCommand(second.id, 1, false));
+
+      expect(t.webhookSender.posts.map((post) => post.secrets)).toEqual([
+        [rotated.secret, old.secret],
+        [rotated.secret],
+      ]);
+      expect(rotated.previousSecretExpiresAt).toEqual(new Date(NOW.getTime() + 86_400_000));
     });
 
     it('should record failed attempts for the job to retry, and end the round on the last', async () => {

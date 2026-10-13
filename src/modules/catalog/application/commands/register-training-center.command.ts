@@ -12,6 +12,7 @@ import {
   type TrainingCenterRepository,
 } from '../../domain';
 import { assertIsAdmin } from '../center-access';
+import { VAT_VALIDATOR, type VatValidator } from '../ports/catalog-ports';
 
 export class RegisterTrainingCenterCommand extends Command<{ centerId: string }> {
   constructor(
@@ -33,13 +34,18 @@ export class RegisterTrainingCenterHandler implements ICommandHandler<RegisterTr
   constructor(
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(TRAINING_CENTER_REPOSITORY) private readonly centers: TrainingCenterRepository,
+    @Inject(VAT_VALIDATOR) private readonly vat: VatValidator,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async execute(command: RegisterTrainingCenterCommand): Promise<{ centerId: string }> {
     const id = uuidv7();
     assertIsAdmin(command.actor, id);
-    const vatNumber = unwrap(VatNumber.create(command.country, command.taxId));
+    const vatNumber = unwrap(
+      VatNumber.create(command.country, command.taxId, {
+        registryTestNumbers: this.vat.acceptsTestNumbers,
+      }),
+    );
     const payoutIban = unwrap(Iban.create(command.payoutIban));
     const platformFee = Percentage.fromBasisPoints(command.platformFeeBasisPoints);
 

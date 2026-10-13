@@ -276,7 +276,8 @@ route requires authentication unless documented otherwise. Two ways in:
 - **Training center integrations**: a center administrator issues an API key with explicit
   scopes (`POST /api/v1/centers/:id/api-keys`, the key is shown once). Send it as
   `X-Api-Key: tramo_<prefix>_<secret>`. Keys only work on endpoints that declare the scopes they
-  need.
+  need. A key may be given an end date (`expiresAt`); without one it works until revoked, and it
+  stops working at once when its center is suspended.
 
 ```bash
 curl -s -X POST localhost:3000/api/v1/auth/register -H 'content-type: application/json'   -d '{"email":"ana@example.com","password":"correct horse battery"}'
@@ -350,7 +351,10 @@ curl -s http://localhost:9099/deliveries
 The answer to the `PUT` carries the signing secret, once. Each delivery is signed
 (`X-Tramo-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`), attempted up to five times
 (the first try included) with backoff, and can be asked for again with
-`POST /centers/<centerId>/webhook-deliveries/<deliveryId>/redeliver` (ADR 018).
+`POST /centers/<centerId>/webhook-deliveries/<deliveryId>/redeliver` (ADR 018). To verify one,
+compute the HMAC of `"<t>.<raw body>"` with the secret, refuse a `t` more than five minutes away,
+and accept the request when any `v1` matches: for 24 hours after a rotation (configuring the
+webhook again) each delivery carries one `v1` per secret, the new one first.
 
 The center sees its portfolio, and operations their day, in read models built from the events
 (ADR 019); they can be thrown away and rebuilt from the outbox (do it once on a database that

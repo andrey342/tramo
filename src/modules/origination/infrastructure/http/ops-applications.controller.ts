@@ -4,7 +4,12 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, CursorPageQueryDto, Idempotent } from '@shared/infrastructure/http';
+import {
+  ApiCursorPaginated,
+  ApiProblems,
+  CursorPageQueryDto,
+  Idempotent,
+} from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -36,6 +41,7 @@ export class OpsApplicationsController {
 
   @Get('ops/applications/review-queue')
   @ApiProblems(400, 401, 403)
+  @ApiCursorPaginated()
   @ApiOkResponse({ type: ApplicationPageResponse })
   @Roles('ops', 'admin')
   @ApiOperation({ summary: 'Applications waiting for an analyst, longest waiting first' })

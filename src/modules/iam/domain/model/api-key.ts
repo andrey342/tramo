@@ -13,6 +13,8 @@ export interface ApiKeyProps {
   readonly createdAt: Date;
   readonly lastUsedAt: Date | null;
   readonly revokedAt: Date | null;
+  // Chosen when the key is issued; null keeps it valid until revoked.
+  readonly expiresAt: Date | null;
 }
 
 // `tramo_<8 hex prefix>_<43 base64url chars>`: 32 random bytes behind a prefix that is safe to show.
@@ -38,6 +40,7 @@ export class ApiKey extends AggregateRoot {
     scopes: readonly ApiKeyScope[];
     issuedBy: string;
     now: Date;
+    expiresAt?: Date | null;
   }): ApiKey {
     const name = input.name.trim();
     if (name.length === 0 || name.length > 100) {
@@ -45,6 +48,10 @@ export class ApiKey extends AggregateRoot {
     }
     if (input.scopes.length === 0) {
       throw new InvalidValueError('scopes', 'An API key needs at least one scope.');
+    }
+    const expiresAt = input.expiresAt ?? null;
+    if (expiresAt !== null && expiresAt.getTime() <= input.now.getTime()) {
+      throw new InvalidValueError('expiresAt', 'An API key must expire in the future.');
     }
     const key = new ApiKey(input.id, {
       centerId: input.centerId,
@@ -56,6 +63,7 @@ export class ApiKey extends AggregateRoot {
       createdAt: input.now,
       lastUsedAt: null,
       revokedAt: null,
+      expiresAt,
     });
     key.record({
       eventType: IamEvents.ApiKeyIssued,
@@ -113,8 +121,21 @@ export class ApiKey extends AggregateRoot {
     return this.props.revokedAt;
   }
 
+  get expiresAt(): Date | null {
+    return this.props.expiresAt;
+  }
+
+  // Not revoked. An expired key stays active in this sense (it is not revoked, and listings show
+  // its end date); whether it authenticates is isUsableAt.
   get isActive(): boolean {
     return this.props.revokedAt === null;
+  }
+
+  isUsableAt(now: Date): boolean {
+    return (
+      this.isActive &&
+      (this.props.expiresAt === null || now.getTime() < this.props.expiresAt.getTime())
+    );
   }
 
   // Revoking twice is a no-op, so retries and double clicks are harmless.

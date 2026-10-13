@@ -148,7 +148,10 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   Failed requests are not stored, so a client can fix the request and retry with the same key.
   The in-progress record is renewed while the handler runs; if the response cannot be stored after
   a success, the record is left to expire instead of being released: an immediate retry gets 409
-  rather than running the operation a second time.
+  rather than running the operation a second time. The interceptor fails closed: when Redis
+  cannot be read or the key cannot be taken within two seconds (an outage, a host that does not
+  answer), the request is not executed and answers 503 `idempotency_unavailable` with
+  `Retry-After: 5`; a key taken just as Redis came back may answer 409 for up to a minute.
 - **Audit log.** Endpoints marked `@Audited({ action, resource })` write one row to
   `shared.audit_log` per call: actor, action, resource, outcome, error code (the Problem Details
   `code` the client got, `validation_error` for a refused body), request id and the changes the
@@ -156,7 +159,10 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
-  not shift when new rows arrive.
+  not shift when new rows arrive. A cursor that does not decode is a 422 (`cursor` in `errors`).
+- **OpenAPI.** Statuses the pipeline answers are documented by the decorators that cause them:
+  `@Idempotent()` adds 400, 409, 422 and 503, `@ApiCursorPaginated()` (on every list) 400 and 422. `src/openapi.spec.ts` builds the document from every controller and fails when an
+  idempotent or cursor-paginated route lacks them.
 - **Metrics.** `GET /metrics` (Prometheus text) answers a bearer of `METRICS_TOKEN` (32 characters
   or more; production refuses the published one); without a configured token it is a 404, and a
   wrong token a logged 401. Bare statuses, not Problem Details: its only client is a scraper. It is
@@ -184,10 +190,16 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed. A 401 for a missing or
   invalid access token, wrong credentials or a refresh token that no longer works carries
   `WWW-Authenticate: Bearer`.
-- **Reuse.** A rotated refresh token presented again more than 10 seconds after its rotation is
+- **Reuse.** A rotated refresh token presented again more than 2 seconds after its rotation is
   treated as stolen: the whole family is revoked and `RefreshTokenReuseDetected` is published.
-  Within those 10 seconds it is rejected without revocation, because it is almost always the
-  legitimate client retrying a request whose response it lost.
+  Within those 2 seconds it is rejected without revocation, because it is almost always the
+  legitimate client sending two refreshes together or retrying one whose response it lost. The
+  window is short because it also protects a thief who rotated first: the user coming back
+  within it would leave the thief the session (ADR 013).
+- **Signing out everywhere.** `POST /me/sessions/revoke` (any user, audited
+  `session.revoke_all`) revokes every refresh token of every family of the caller, each family
+  under its lock, as disabling an account does; access tokens already issued keep working until
+  they expire.
 - **Lockout.** Sign-in attempts are counted per account, not per IP, so distributed guessing
   cannot avoid them. Each attempt is checked against the lock and counted in one Redis script
   before its password is verified, so parallel requests cannot all slip past the threshold; a
@@ -206,9 +218,15 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   the account just before it was disabled can still open a session, which ends at its first
   refresh, since refreshing checks the account again.
 - **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
-  Routes opened to API keys are not implicitly open to users; they must also name roles.
+  Routes opened to API keys are not implicitly open to users; they must also name roles. A key
+  may be issued with an end date (`expiresAt`, in the future); without one it works until
+  revoked. Authentication refuses a revoked or expired key, and a key whose center is suspended
+  or unknown: the center is read through `CenterDirectory` on each request with a key (one
+  primary-key lookup, after the secret matched), so suspension does not wait for the revocation
+  below.
 - **Suspended centers.** iam consumes `CenterSuspended` (`iam.revoke-suspended-center-keys`) and
-  revokes every active key of the center, each with its `ApiKeyRevoked`; a redelivery finds
+  revokes every active key of the center, each with its `ApiKeyRevoked` (until it has run, the
+  authentication check above already refuses them); a redelivery finds
   nothing left to revoke. No key is issued for a suspended center (`center_suspended`), and the
   revoked ones stay revoked after it is reinstated: its admins issue new ones. Its users keep
   signing in, on purpose: they still follow their contracts, payouts and the suspension itself,
@@ -245,8 +263,10 @@ Training centers and the programs students finance.
 - **Center lifecycle.** An admin registers a center (`pending_verification`). The
   `CenterRegistered` consumer only queues a VAT check on `catalog.vat-checks`; that job asks VIES
   outside any transaction and saves the answer in a short one. A valid number activates the
-  center. While VIES cannot answer, the center is marked `unverified` and the job is retried for
-  about a day and a half (exponential from one minute) before it is dead-lettered; ops can also
+  center. While VIES cannot answer, a center never checked is marked `unverified` (one with an
+  earlier verdict keeps it) and the job, which retries on the registry's answer rather than on
+  what the center keeps, asks again for about a day and a half (exponential from one minute)
+  before it is dead-lettered; ops can also
   ask again with `POST /centers/:id/verify-vat`. A number that stops being valid leaves an active
   center active and emits `CenterVatInvalidated` for ops to decide. Only an admin changes a
   center's fee, payout account or status, and each change is an event (`CenterRenamed`,
@@ -263,6 +283,11 @@ Training centers and the programs students finance.
   with backoff, and a circuit breaker stops calling for 30 s after five failures in a row. Every
   failure becomes an `unavailable` answer: a registry outage never fails a request. `VIES_MODE`
   selects VIES, its test service or a local fake; production accepts only VIES.
+- **Tax id shapes.** `VatNumber` checks each country's shape before VIES is asked (ES: a letter
+  or digit, seven digits, a letter or digit; DE: nine digits); check digits are VIES's call. The
+  test service's three-digit numbers (100, 200, 300...) fit no national shape and are accepted
+  only when the validator in use answers by them (`VatValidator.acceptsTestNumbers`: the test
+  service and the fake), never against live VIES. Numbers already stored are loaded as they are.
 - **Payout IBAN.** Stored encrypted (AES-256-GCM, ADR 014) and bound to its row, with its last four
   characters in clear; responses, events, logs and the audit log only show the masked value.
 - **Programs.** Created as drafts and published once they have a financing option (instalment
@@ -629,7 +654,9 @@ an event of another module; it decides nothing.
   (a new round; ops can too). A round whose job was lost (no attempt for 15 minutes) can be
   redelivered too, and a job that fails before posting on its last attempt closes its round.
   Removing the webhook (idempotent) stops new deliveries; those still pending are given up when
-  their job next runs. In production only
+  their job next runs. Configuring the webhook again rotates the secret; for 24 hours each
+  delivery carries a second `v1` signed with the secret it replaced, so a center verifying with
+  either accepts it while it deploys the new one (ADR 018). In production only
   https to public addresses is posted, checked at configuration and on the address each
   connection uses (ADR 018); the compose stack points centers at the webhook sink. The audit
   entry of a configuration keeps the old and new URL, never the secret, and its answer is not

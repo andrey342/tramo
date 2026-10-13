@@ -10,11 +10,11 @@ import {
   type TrainingCenterRepository,
 } from '../../domain';
 import { type Actor, assertCanOperate } from '../center-access';
-import { type TrainingCenterDto } from '../dto/training-center.dto';
+import { type VatVerificationDto } from '../dto/training-center.dto';
 import { VAT_VALIDATOR, type VatValidator } from '../ports/catalog-ports';
 import { toTrainingCenterDto } from '../training-center.mapping';
 
-export class VerifyCenterVatCommand extends Command<TrainingCenterDto> {
+export class VerifyCenterVatCommand extends Command<VatVerificationDto> {
   constructor(
     readonly actor: Actor,
     readonly centerId: string,
@@ -32,7 +32,7 @@ export class VerifyCenterVatHandler implements ICommandHandler<VerifyCenterVatCo
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async execute(command: VerifyCenterVatCommand): Promise<TrainingCenterDto> {
+  async execute(command: VerifyCenterVatCommand): Promise<VatVerificationDto> {
     assertCanOperate(command.actor, command.centerId);
     const before = await this.load(command.centerId);
     // The registry is asked outside the write transaction; the center is loaded again to apply
@@ -42,7 +42,7 @@ export class VerifyCenterVatHandler implements ICommandHandler<VerifyCenterVatCo
       const center = await this.load(command.centerId);
       center.recordVatCheck(result, this.clock.now(), before.vatNumber);
       await this.centers.save(center);
-      return toTrainingCenterDto(center);
+      return { center: toTrainingCenterDto(center), outcome: result.outcome };
     });
   }
 

@@ -18,7 +18,7 @@ export type CursorIdType = 'uuid' | 'text';
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// A cursor is client input: values that would not cast in SQL are rejected here as a 400, instead
+// A cursor is client input: values that would not cast in SQL are rejected here as a 422, instead
 // of reaching Postgres as a 500.
 function isValidPosition(
   [sortValue, id]: readonly [string, string],

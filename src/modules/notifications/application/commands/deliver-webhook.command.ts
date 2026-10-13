@@ -31,7 +31,8 @@ export class WebhookAttemptFailedError extends Error {
 }
 
 // One attempt of a round of a delivery, made by its job: the body is the event as the center
-// receives it, signed with the center's current secret. The delivery decides what the answer
+// receives it, signed with the center's current secret (and, for a day after a rotation, the one
+// it replaced as well: WebhookSubscription.signingSecrets). The delivery decides what the answer
 // means (WebhookDelivery.recordAttempt); a failed attempt is thrown so the job retries it with
 // backoff. When the job's last attempt fails before anything was recorded (the database, the
 // secret), the round is closed anyway, so the delivery can be redelivered.
@@ -82,7 +83,11 @@ export class DeliverWebhookHandler implements ICommandHandler<DeliverWebhookComm
         await this.deliveries.save(delivery);
         return 'cancelled' as const;
       }
-      return { delivery, url: subscription.url, secret: subscription.secret };
+      return {
+        delivery,
+        url: subscription.url,
+        secrets: subscription.signingSecrets(this.clock.now()),
+      };
     });
     if (target === null) {
       return 'ignored';
@@ -96,7 +101,7 @@ export class DeliverWebhookHandler implements ICommandHandler<DeliverWebhookComm
     try {
       const { statusCode } = await this.sender.post({
         url: target.url,
-        secret: target.secret,
+        secrets: target.secrets,
         deliveryId: delivery.id,
         event: delivery.event,
         body: body(delivery),

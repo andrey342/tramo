@@ -89,11 +89,11 @@ export class CentersController {
     description:
       'A valid number activates a center waiting for verification. When VIES is unavailable the center is marked unverified and nothing fails.',
   })
-  verifyVat(
+  async verifyVat(
     @CurrentPrincipal() actor: Principal,
     @Param('centerId', ParseUUIDPipe) centerId: string,
   ): Promise<TrainingCenterResponse> {
-    return this.commands.execute(new VerifyCenterVatCommand(actor, centerId));
+    return (await this.commands.execute(new VerifyCenterVatCommand(actor, centerId))).center;
   }
 
   @Patch(':centerId')

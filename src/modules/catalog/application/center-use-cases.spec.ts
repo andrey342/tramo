@@ -54,15 +54,17 @@ function setup() {
   const vat = new FakeVatValidator();
   return {
     clock,
+    uow,
     events,
     centers,
     changes,
-    register: new RegisterTrainingCenterHandler(uow, centers, clock),
+    register: new RegisterTrainingCenterHandler(uow, centers, vat, clock),
     verify: new VerifyCenterVatHandler(uow, centers, vat, clock),
     update: new UpdateTrainingCenterHandler(
       uow,
       centers,
       { describeChanges: (change) => changes.push(change) },
+      vat,
       clock,
     ),
     get: new GetTrainingCenterHandler(centers),
@@ -109,6 +111,22 @@ describe('training center use cases', () => {
         ),
       ).rejects.toThrow(InvalidValueError);
     });
+
+    it("should take the registry's test numbers as tax ids only while it is the test service", async () => {
+      const t = setup();
+      const live = new RegisterTrainingCenterHandler(
+        new InlineUnitOfWork(),
+        t.centers,
+        { acceptsTestNumbers: false, check: () => Promise.reject(new Error('not asked')) },
+        t.clock,
+      );
+      const command = new RegisterTrainingCenterCommand(ADMIN, 'X', 'DE', '100', VALID_IBAN, 500);
+
+      await expect(live.execute(command)).rejects.toThrow(InvalidValueError);
+      await expect(t.register.execute(command)).resolves.toMatchObject({
+        centerId: expect.any(String) as string,
+      });
+    });
   });
 
   describe('VerifyCenterVat', () => {
@@ -116,8 +134,11 @@ describe('training center use cases', () => {
       const t = setup();
       const center = await registered(t);
 
-      const result = await t.verify.execute(new VerifyCenterVatCommand(OPS, center.id));
+      const { center: result, outcome } = await t.verify.execute(
+        new VerifyCenterVatCommand(OPS, center.id),
+      );
 
+      expect(outcome).toBe('valid');
       expect(result.status).toBe('active');
       expect(result.vatValidation?.status).toBe('valid');
       expect(t.events.ofType(CatalogEvents.CenterActivated)).toHaveLength(1);
@@ -127,10 +148,39 @@ describe('training center use cases', () => {
       const t = setup();
       const center = await registered(t, aTrainingCenter({ taxId: '300' }));
 
-      const result = await t.verify.execute(new VerifyCenterVatCommand('system', center.id));
+      const { center: result, outcome } = await t.verify.execute(
+        new VerifyCenterVatCommand('system', center.id),
+      );
 
+      expect(outcome).toBe('unavailable');
       expect(result.status).toBe('pending_verification');
       expect(result.vatValidation?.status).toBe('unverified');
+    });
+
+    // The job retries on this answer: the center still shows the earlier verdict.
+    it('should report an unavailable registry when a center pending verification was refused before', async () => {
+      const t = setup();
+      const center = aTrainingCenter({ taxId: '200' });
+      center.recordVatCheck({ outcome: 'invalid', provider: 'fake' }, t.clock.now());
+      await registered(t, center);
+      const down = new VerifyCenterVatHandler(
+        t.uow,
+        t.centers,
+        {
+          acceptsTestNumbers: true,
+          check: () =>
+            Promise.resolve({ outcome: 'unavailable', provider: 'fake', reason: 'TIMEOUT' }),
+        },
+        t.clock,
+      );
+
+      const { center: result, outcome } = await down.execute(
+        new VerifyCenterVatCommand('system', center.id),
+      );
+
+      expect(outcome).toBe('unavailable');
+      expect(result.status).toBe('pending_verification');
+      expect(result.vatValidation?.status).toBe('invalid');
     });
 
     it('should only let staff and the system ask', async () => {

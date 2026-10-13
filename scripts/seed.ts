@@ -83,6 +83,15 @@ const WEBHOOK_URL = process.env['SEED_WEBHOOK_URL'] ?? 'http://webhook-sink:9099
 // Admin of the second center; the first center's admin is the demo account in DEMO_USERS.
 const OTHER_CENTER_ADMIN = 'admin@berlin-code.test';
 
+// The test numbers are tax ids only where the registry answers by them (test and fake).
+const vatNumberOf = (
+  center: { country: string; taxId: (mode: string) => string },
+  mode: string,
+): VatNumber =>
+  unwrap(
+    VatNumber.create(center.country, center.taxId(mode), { registryTestNumbers: mode !== 'live' }),
+  );
+
 const CENTERS = [
   {
     name: 'Codeworks Barcelona',
@@ -191,7 +200,8 @@ const CENTERS = [
       },
     ],
   },
-  // The registry does not know its number: it stays pending, with nothing to publish.
+  // The registry does not know its number: it stays pending, with nothing to publish. Live VIES
+  // takes no test number, and refuses this well-formed one.
   {
     name: 'Nova Cyber Institute',
     country: 'ES',
@@ -334,7 +344,7 @@ async function seed(): Promise<string[]> {
 
     const inactive: string[] = [];
     for (const center of CENTERS) {
-      const vatNumber = unwrap(VatNumber.create(center.country, center.taxId(config.vies.mode)));
+      const vatNumber = vatNumberOf(center, config.vies.mode);
       let existing = await centers.findByVatNumber(vatNumber);
       if (!existing) {
         const { centerId } = await commands.execute(
@@ -356,7 +366,8 @@ async function seed(): Promise<string[]> {
         const centerId = existing.id;
         const attempts = VAT_RETRY_DELAYS_MS.length + 1;
         const checked = await retryWhile(
-          () => commands.execute(new VerifyCenterVatCommand('system', centerId)),
+          async () =>
+            (await commands.execute(new VerifyCenterVatCommand('system', centerId))).center,
           awaitingVat,
           {
             delaysMs: VAT_RETRY_DELAYS_MS,
@@ -411,9 +422,7 @@ async function seed(): Promise<string[]> {
     }
 
     // The demo center posts its events to the compose webhook sink.
-    const codeworks = await centers.findByVatNumber(
-      unwrap(VatNumber.create(CENTERS[0].country, CENTERS[0].taxId(config.vies.mode))),
-    );
+    const codeworks = await centers.findByVatNumber(vatNumberOf(CENTERS[0], config.vies.mode));
     const subscriptions = app.get<WebhookSubscriptionRepository>(WEBHOOK_SUBSCRIPTION_REPOSITORY, {
       strict: false,
     });
@@ -440,9 +449,7 @@ async function seed(): Promise<string[]> {
     const applications = app.get<ApplicationQueries>(APPLICATION_QUERIES, { strict: false });
     const programIds = new Map<string, string>();
     for (const center of CENTERS) {
-      const found = await centers.findByVatNumber(
-        unwrap(VatNumber.create(center.country, center.taxId(config.vies.mode))),
-      );
+      const found = await centers.findByVatNumber(vatNumberOf(center, config.vies.mode));
       const published = found
         ? (await catalog.list({ centerId: found.id }, { limit: 10 })).data
         : [];

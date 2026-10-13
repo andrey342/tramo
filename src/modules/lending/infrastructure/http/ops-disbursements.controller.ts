@@ -4,7 +4,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -30,6 +30,7 @@ export class OpsDisbursementsController {
 
   @Get()
   @ApiProblems(400, 401, 403)
+  @ApiCursorPaginated()
   @ApiOkResponse({ type: DisbursementPageResponse })
   @Roles('ops', 'admin')
   @ApiOperation({ summary: 'Disbursements to centers, newest first, by status' })
@@ -63,7 +64,7 @@ export class OpsDisbursementsController {
 
   @Post(':disbursementId/reconcile')
   @HttpCode(200)
-  @ApiProblems(400, 401, 403, 404)
+  @ApiProblems(400, 401, 403, 404, 422)
   @ApiOkResponse({ type: DisbursementResponse })
   @Roles('ops', 'admin')
   @Audited({

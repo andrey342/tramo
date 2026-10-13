@@ -1,0 +1,19 @@
+meta {
+  name: Sign out everywhere
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/me/sessions/revoke
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{studentToken}}
+}
+
+docs {
+  Ends every session of the signed-in user (204): each refresh token of each sign-in stops working, the one in `refreshToken` included. Access tokens already issued keep working until they expire (15 minutes). Users only; an API key gets 403. Run "Login new student" to get a new session.
+}

@@ -23,7 +23,10 @@ export function aTrainingCenter(
   return TrainingCenter.register({
     id: overrides.id ?? uuidv7(),
     name: overrides.name ?? 'Codeworks Barcelona',
-    vatNumber: unwrap(VatNumber.create('ES', overrides.taxId ?? aTaxId())),
+    // Tests ask the fake registry, which answers by VIES's test numbers ('200', '300').
+    vatNumber: unwrap(
+      VatNumber.create('ES', overrides.taxId ?? aTaxId(), { registryTestNumbers: true }),
+    ),
     payoutIban: unwrap(Iban.create(VALID_IBAN)),
     platformFee: Percentage.fromPercent(overrides.feePercent ?? 5),
     now: NOW,
