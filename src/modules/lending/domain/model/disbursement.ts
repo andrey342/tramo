@@ -182,6 +182,7 @@ export class Disbursement extends AggregateRoot {
         contractId: this.props.contractId,
         centerId: this.props.centerId,
         amountCents: this.props.amount.cents,
+        settledAt: now.toISOString(),
       },
     });
   }

@@ -427,7 +427,9 @@ the repayment plan.
   `PlanCompleted` delivered after the default leaves the contract `defaulted` (the default stands
   and the application stays held), and a write-off after completion leaves it `completed`. A
   payoff is refused while an instalment due is unpaid, since billing is already collecting it.
-- **Activation and plan.** `DisbursementSettled` activates the contract on that day;
+- **Activation and plan.** `DisbursementSettled` activates the contract on the day the transfer
+  settled (`settledAt` in the payload, or the event's `occurredAt` for events recorded before it
+  carried one), not the day the consumer gets to it, so a backlog does not move the schedule;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
   the ISA terms with their running totals, assessed month by month without gaps. `PlanCompleted`
   completes the contract.

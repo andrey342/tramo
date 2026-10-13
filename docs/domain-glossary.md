@@ -228,6 +228,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 
   Each attempt has the idempotency key `<disbursementId>.<attempt>` and fixes its `Creditor`
   (IBAN, holder) before the bank is called; from then on only the bank's answer can fail it.
+  `DisbursementSettled` carries `settledAt`; the contract is activated on that day (UTC).
 
 - **`FinancingPlan`**: how an active contract is repaid, opened on `ContractActivated` (ADR 016).
   `PlanStatus`: `active → completed`, with a completion reason `repaid`, `paid_off`,

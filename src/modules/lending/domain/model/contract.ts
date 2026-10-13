@@ -252,15 +252,16 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // The center has been paid. Repayment counts from this day. Idempotent for a contract activated
-  // already, whatever became of it since: a DisbursementSettled redelivered after the contract
-  // went into arrears or ended changes nothing.
-  activate(now: Date): void {
+  // The center was paid at `settledAt`: repayment counts from that day (UTC), however late the
+  // news is processed. Idempotent for a contract activated already, whatever became of it since:
+  // a DisbursementSettled redelivered after the contract went into arrears or ended changes
+  // nothing.
+  activate(settledAt: Date, now: Date): void {
     if (this.props.activatedOn) {
       return;
     }
     this.assertStatus('signed', 'active');
-    const activatedOn = CalendarDate.fromInstant(now);
+    const activatedOn = CalendarDate.fromInstant(settledAt);
     this.props = { ...this.props, activatedOn };
     this.moveTo('active', now);
     this.record({

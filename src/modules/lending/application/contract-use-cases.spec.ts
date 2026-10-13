@@ -23,6 +23,7 @@ import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shar
 import {
   ContractAccessDeniedError,
   type ContractProduct,
+  type DisbursementSettledPayload,
   EnvelopeNotRecordedError,
   LendingEvents,
   PayoffQuoteChangedError,
@@ -180,7 +181,8 @@ function setup() {
     const disbursement = await disbursementOf(contractId);
     await handlers.execute.execute(new ExecuteDisbursementCommand(disbursement.id));
     await handlers.check.execute(new CheckDisbursementSettlementCommand(disbursement.id));
-    await handlers.activate.execute(new ActivateContractCommand(contractId));
+    const { settledAt } = await disbursementOf(contractId);
+    await handlers.activate.execute(new ActivateContractCommand(contractId, settledAt ?? NOW));
     await handlers.openPlan.execute(new OpenFinancingPlanCommand(contractId));
     return contractId;
   };
@@ -385,7 +387,7 @@ describe('lending use cases', () => {
       const contractId = await t.active();
       const disbursement = await t.disbursementOf(contractId);
       await t.execute.execute(new ExecuteDisbursementCommand(disbursement.id));
-      await t.activate.execute(new ActivateContractCommand(contractId));
+      await t.activate.execute(new ActivateContractCommand(contractId, NOW));
       await t.openPlan.execute(new OpenFinancingPlanCommand(contractId));
 
       const [transfer] = [...t.bank.transfers.values()];
@@ -401,6 +403,26 @@ describe('lending use cases', () => {
       expect(t.plans.all()).toHaveLength(1);
       expect(t.events.ofType(LendingEvents.DisbursementSettled)).toHaveLength(1);
       expect(t.events.ofType(LendingEvents.ContractActivated)).toHaveLength(1);
+    });
+
+    // Settled at 23:50; the consumer only gets to DisbursementSettled the next morning.
+    it('should activate on the settlement day when the settlement is processed the next day', async () => {
+      const t = setup();
+      const contractId = await t.signed();
+      const { id } = await t.disbursementOf(contractId);
+      await t.execute.execute(new ExecuteDisbursementCommand(id));
+      t.clock.set(new Date('2026-10-12T23:50:00Z'));
+      await t.check.execute(new CheckDisbursementSettlementCommand(id));
+      const [settled] = t.events.ofType(LendingEvents.DisbursementSettled);
+      const { settledAt } = settled?.payload as DisbursementSettledPayload;
+      t.clock.set(new Date('2026-10-13T08:00:00Z'));
+
+      await t.activate.execute(new ActivateContractCommand(contractId, new Date(settledAt ?? '')));
+      await t.openPlan.execute(new OpenFinancingPlanCommand(contractId));
+
+      expect(settledAt).toBe('2026-10-12T23:50:00.000Z');
+      expect((await t.contracts.findById(contractId))?.activatedOn?.toString()).toBe('2026-10-12');
+      expect((await t.plans.findByContractId(contractId))?.startsOn.toString()).toBe('2026-10-12');
     });
 
     it('should wait while the bank has not settled the transfer', async () => {

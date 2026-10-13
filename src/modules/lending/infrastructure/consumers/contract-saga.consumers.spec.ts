@@ -5,11 +5,13 @@ import { type OfferAcceptedPayload } from '@modules/origination/domain/events/or
 import { type IntegrationEvent } from '@shared/application';
 import { type EventPayload, Money, Percentage } from '@shared/domain';
 
+import { ActivateContractCommand } from '../../application/commands/activate-contract.command';
 import { CloseDefaultedPlanCommand } from '../../application/commands/close-defaulted-plan.command';
 import { CompleteContractCommand } from '../../application/commands/complete-contract.command';
 import { LendingEvents, type PlanCompletedPayload } from '../../domain';
 
 import {
+  ActivateOnDisbursementSettled,
   ClosePlanOnContractDefaulted,
   CompleteContractOnPlanCompleted,
   toOffer,
@@ -34,6 +36,41 @@ const event = <P extends EventPayload>(eventType: string, payload: P): Integrati
   occurredAt: '2026-11-12T08:00:00.000Z',
   correlationId: null,
   payload,
+});
+
+describe('ActivateOnDisbursementSettled', () => {
+  const settled = { disbursementId: uuidv7(), centerId: uuidv7(), amountCents: 7_125_00 };
+
+  // The event is delivered at 08:00 the next day; the transfer settled the evening before.
+  it('should activate the contract on the settlement instant the event carries', async () => {
+    const { executed, commands } = recordingBus();
+    const contractId = uuidv7();
+
+    await new ActivateOnDisbursementSettled(commands).handle(
+      event(LendingEvents.DisbursementSettled, {
+        ...settled,
+        contractId,
+        settledAt: '2026-11-11T23:50:00.000Z',
+      }),
+    );
+
+    expect(executed).toEqual([
+      new ActivateContractCommand(contractId, new Date('2026-11-11T23:50:00.000Z')),
+    ]);
+  });
+
+  it('should take the time the event occurred when it was recorded without settledAt', async () => {
+    const { executed, commands } = recordingBus();
+    const contractId = uuidv7();
+
+    await new ActivateOnDisbursementSettled(commands).handle(
+      event(LendingEvents.DisbursementSettled, { ...settled, contractId }),
+    );
+
+    expect(executed).toEqual([
+      new ActivateContractCommand(contractId, new Date('2026-11-12T08:00:00.000Z')),
+    ]);
+  });
 });
 
 describe('CompleteContractOnPlanCompleted', () => {

@@ -201,7 +201,7 @@ describe('Contract', () => {
     it('should be activated once signed, on the day the center was paid (UTC)', () => {
       const contract = aSignedContract();
 
-      contract.activate(new Date('2026-10-14T23:30:00Z'));
+      contract.activate(new Date('2026-10-14T23:30:00Z'), new Date('2026-10-14T23:31:00Z'));
 
       expect(contract.status).toBe('active');
       expect(contract.activatedOn?.toString()).toBe('2026-10-14');
@@ -213,10 +213,21 @@ describe('Contract', () => {
       ]);
     });
 
+    // Settled at 23:50, the news processed after midnight (a backlog, a retried consumer).
+    it('should count repayment from the settlement day when the activation is processed later', () => {
+      const contract = aSignedContract();
+
+      contract.activate(new Date('2026-10-14T23:50:00Z'), new Date('2026-10-15T08:00:00Z'));
+
+      expect(contract.activatedOn?.toString()).toBe('2026-10-14');
+      expect(contract.statusChangedAt).toEqual(new Date('2026-10-15T08:00:00Z'));
+      expect(contract.pullEvents()[0]?.payload).toMatchObject({ activatedOn: '2026-10-14' });
+    });
+
     it('should take a repeated activation or completion as done', () => {
       const contract = anActiveContract();
 
-      contract.activate(LATER);
+      contract.activate(LATER, LATER);
       contract.complete(LATER);
       contract.complete(LATER);
 
@@ -318,7 +329,7 @@ describe('Contract', () => {
       const status = contract.status;
       contract.pullEvents();
 
-      contract.activate(LATER);
+      contract.activate(LATER, LATER);
 
       expect(contract.status).toBe(status);
       expect(contract.activatedOn?.toString()).toBe('2026-10-12');
@@ -347,7 +358,7 @@ describe('Contract', () => {
 
     it('should not be activated before it is signed', () => {
       expect(() => {
-        aContractSentForSignature().activate(NOW);
+        aContractSentForSignature().activate(NOW, NOW);
       }).toThrow(InvalidStateTransitionError);
     });
 

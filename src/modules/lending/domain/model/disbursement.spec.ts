@@ -34,7 +34,10 @@ describe('Disbursement', () => {
       }),
       expect.objectContaining({
         eventType: LendingEvents.DisbursementSettled,
-        payload: expect.objectContaining({ amountCents: 7_125_00 }),
+        payload: expect.objectContaining({
+          amountCents: 7_125_00,
+          settledAt: LATER.toISOString(),
+        }),
       }),
     ]);
   });

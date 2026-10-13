@@ -149,7 +149,8 @@ describe('Contracts (e2e)', () => {
     );
     await commands.execute(new ExecuteDisbursementCommand(disbursement!.id));
     await commands.execute(new CheckDisbursementSettlementCommand(disbursement!.id));
-    await commands.execute(new ActivateContractCommand(contractId));
+    // The simulated bank settles at once: the transfer settled just now.
+    await commands.execute(new ActivateContractCommand(contractId, new Date()));
     await commands.execute(new OpenFinancingPlanCommand(contractId));
   }
 
