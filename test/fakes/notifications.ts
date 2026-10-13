@@ -20,6 +20,7 @@ import {
   type EmailNotification,
   type EmailNotificationRepository,
   type EmailTemplate,
+  type PendingEmail,
   type WebhookDelivery,
   type WebhookDeliveryRepository,
   type WebhookSubscription,
@@ -81,13 +82,20 @@ export class InMemoryEmailNotificationRepository
     );
   }
 
-  findPendingIds(before: Date, limit: number): Promise<string[]> {
+  findStale(now: Date, limit: number, after: PendingEmail | null): Promise<PendingEmail[]> {
+    const position = (item: PendingEmail) => [item.createdAt.getTime(), item.id] as const;
+    const isAfter = (item: PendingEmail) => {
+      if (!after) return true;
+      const [at, id] = position(item);
+      const [afterAt, afterId] = position(after);
+      return at > afterAt || (at === afterAt && id > afterId);
+    };
     return Promise.resolve(
       this.all()
-        .filter((item) => item.pending && item.createdAt < before)
+        .filter((item) => item.isStale(now) && isAfter(item))
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
         .slice(0, limit)
-        .map((item) => item.id),
+        .map((item) => ({ id: item.id, createdAt: item.createdAt })),
     );
   }
 

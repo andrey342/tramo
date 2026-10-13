@@ -65,6 +65,12 @@ export class CollectDueChargesHandler implements ICommandHandler<CollectDueCharg
 
   private submit(chargeId: string): Promise<boolean> {
     return this.uow.run(async () => {
+      const found = await this.charges.findById(chargeId);
+      if (!found) {
+        return false;
+      }
+      // The payoff and the mandate are read under the contract's lock, then the charge as it is.
+      await this.charges.lockContract(found.contractId);
       const charge = await this.charges.findById(chargeId);
       if (charge?.status !== 'scheduled') {
         return false;

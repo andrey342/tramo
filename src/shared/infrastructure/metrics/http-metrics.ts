@@ -46,11 +46,12 @@ export class HttpMetricsMiddleware implements NestMiddleware {
 }
 
 // The template the router matched (`/api/v1/centers/:centerId/dashboard`), never the raw path. A
-// request no handler took still carries the route Nest mounts its middleware on (a wildcard).
+// request no Nest handler took (no route, or a router mounted outside Nest such as Bull Board)
+// still carries the route Nest mounts its middleware on, a wildcard, and counts as unmatched.
 function routeOf(req: Request): string {
   const route: unknown = req.route;
   if (route && typeof route === 'object' && 'path' in route && typeof route.path === 'string') {
-    return route.path.includes('*') ? UNMATCHED_ROUTE : `${req.baseUrl}${route.path}`;
+    return route.path.includes('*') ? UNMATCHED_ROUTE : `${req.baseUrl.toLowerCase()}${route.path}`;
   }
   return UNMATCHED_ROUTE;
 }

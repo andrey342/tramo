@@ -122,7 +122,7 @@ export function parseDatabaseConfig(source: Record<string, string | undefined>):
 const PUBLISHED_SECRETS = {
   JWT_ACCESS_SECRET: (value: string) => /change-me/i.test(value),
   BULL_BOARD_PASSWORD: (value: string | undefined) => value === 'tramo-queues',
-  METRICS_TOKEN: (value: string | undefined) => value === 'tramo-metrics-token',
+  METRICS_TOKEN: (value: string | undefined) => value !== undefined && /change-me/i.test(value),
   FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
   ESIGN_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
   PSP_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),

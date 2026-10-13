@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import { type TransactionalAdapterTypeOrm } from '@nestjs-cls/transactional-adapter-typeorm';
-import { LessThan } from 'typeorm';
 
 import { ConcurrentModificationError } from '@shared/domain';
 import {
@@ -13,6 +12,8 @@ import {
   type EmailNotification,
   type EmailNotificationRepository,
   type EmailTemplate,
+  type PendingEmail,
+  staleBefore,
   type WebhookDelivery,
   type WebhookDeliveryRepository,
   type WebhookSubscription,
@@ -134,14 +135,23 @@ export class TypeOrmEmailNotificationRepository implements EmailNotificationRepo
   }
 
   // Served by ix_notifications_notification_log_pending_created_at.
-  async findPendingIds(before: Date, limit: number): Promise<string[]> {
-    const rows = await this.txHost.tx.find(EmailNotificationOrmEntity, {
-      select: { id: true },
-      where: { status: 'pending', createdAt: LessThan(before) },
-      order: { createdAt: 'ASC', id: 'ASC' },
-      take: limit,
-    });
-    return rows.map((row) => row.id);
+  async findStale(now: Date, limit: number, after: PendingEmail | null): Promise<PendingEmail[]> {
+    const query = this.txHost.tx
+      .createQueryBuilder(EmailNotificationOrmEntity, 'email')
+      .select(['email.id', 'email.createdAt'])
+      .where(`email.status = 'pending'`)
+      .andWhere('email.created_at <= :before', { before: staleBefore(now) })
+      .orderBy('email.created_at', 'ASC')
+      .addOrderBy('email.id', 'ASC')
+      .take(limit);
+    if (after) {
+      query.andWhere('(email.created_at, email.id) > (:afterAt, :afterId)', {
+        afterAt: after.createdAt,
+        afterId: after.id,
+      });
+    }
+    const rows = await query.getMany();
+    return rows.map((row) => ({ id: row.id, createdAt: row.createdAt }));
   }
 
   save(notification: EmailNotification): Promise<void> {

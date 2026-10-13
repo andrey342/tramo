@@ -24,11 +24,30 @@ describe('Metrics (e2e)', () => {
     expect(wrong.text).toBe('');
   });
 
+  it('should not serve metrics at all without a configured token', async () => {
+    const token = process.env.METRICS_TOKEN;
+    process.env.METRICS_TOKEN = '';
+    const untokened = await createApiApp().finally(() => {
+      process.env.METRICS_TOKEN = token;
+    });
+    try {
+      const scrape = await request(untokened.getHttpServer())
+        .get('/metrics')
+        .set('Authorization', `Bearer ${token ?? ''}`);
+
+      expect(scrape.status).toBe(404);
+    } finally {
+      await untokened.close();
+    }
+  });
+
   it('should report request latency by route template, the queues and the outbox', async () => {
     await api().get('/api/v1/programs/0199c1d2-0000-7000-8000-000000000000');
     await api().get('/api/v1/no-such-route/42');
 
-    const scrape = await api().get('/metrics').set('Authorization', 'Bearer test-metrics-token');
+    const scrape = await api()
+      .get('/metrics')
+      .set('Authorization', 'Bearer test-metrics-token-of-at-least-32-chars');
 
     expect(scrape.status).toBe(200);
     expect(scrape.headers['content-type']).toMatch(/^text\/plain/);

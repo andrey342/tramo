@@ -6,6 +6,8 @@ import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/applicati
 import { CLOCK, type Clock, Iban, unwrap } from '@shared/domain';
 
 import {
+  CHARGE_REPOSITORY,
+  type ChargeRepository,
   ContractNotRepayingError,
   PAYMENT_MANDATE_REPOSITORY,
   PaymentMandate,
@@ -36,6 +38,7 @@ export class SignMandateHandler implements ICommandHandler<SignMandateCommand> {
   constructor(
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(PAYMENT_MANDATE_REPOSITORY) private readonly mandates: PaymentMandateRepository,
+    @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -47,6 +50,8 @@ export class SignMandateHandler implements ICommandHandler<SignMandateCommand> {
       if (!COLLECTED_STATUSES.includes(contract.status)) {
         throw new ContractNotRepayingError(contract.status);
       }
+      // Under the contract's lock: a collection reading the mandate in force waits for the swap.
+      await this.charges.lockContract(contract.id);
       const now = this.clock.now();
       const current = await this.mandates.findActiveByContract(contract.id);
       if (current) {

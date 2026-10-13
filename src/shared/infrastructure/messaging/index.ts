@@ -6,3 +6,4 @@ export { EventConsumerProcessor, eventConsumerProcessorFor } from './event-consu
 export { EventSubscriptionRegistry, type Subscriber } from './event-subscription.registry';
 export { MessagingWorkerModule } from './messaging-worker.module';
 export { OutboxPublisher } from './outbox-publisher';
+export { type OutboxBacklog, OutboxBacklogReader } from './outbox-backlog';

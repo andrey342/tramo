@@ -48,17 +48,18 @@ alone.
 
 ### Where to look
 
-| What                                 | URL                                                                         |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| API (versioned)                      | http://localhost:3000/api/v1                                                |
-| OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`)                     |
-| Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                                          |
-| Bull Board (queues, dead letters)    | http://localhost:3000/admin/queues (user `ops`, password `tramo-queues`)    |
-| Prometheus metrics                   | http://localhost:3000/metrics (`Authorization: Bearer tramo-metrics-token`) |
-| Mailpit (captured email)             | http://localhost:8025                                                       |
-| Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                                            |
+| What                                 | URL                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------- |
+| API (versioned)                      | http://localhost:3000/api/v1                                                                |
+| OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`)                                     |
+| Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                                                          |
+| Bull Board (queues, dead letters)    | http://localhost:3000/admin/queues (user `ops`, password `tramo-queues`)                    |
+| Prometheus metrics                   | http://localhost:3000/metrics (`Authorization: Bearer tramo-local-metrics-token-change-me`) |
+| Mailpit (captured email)             | http://localhost:8025                                                                       |
+| Webhook sink (deliveries to centers) | http://localhost:9099/deliveries                                                            |
 
-If a port is already taken on your machine, override it in `.env` (`API_PORT`, `POSTGRES_PORT`,
+Every port is bound to 127.0.0.1, so the demo accounts and development secrets are not reachable
+from the network. If a port is already taken on your machine, override it in `.env` (`API_PORT`, `POSTGRES_PORT`,
 `REDIS_PORT`, `MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`, `WEBHOOK_SINK_PORT`).
 
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
@@ -164,7 +165,7 @@ but real environment variables always win. All variables and their defaults are 
 | `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                                                           | Rate limits per client and proxy setting                                                                                                                                                                                                                                           |
 | `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_ENQUEUE_TIMEOUT_MS`                                           | Worker outbox publisher pacing                                                                                                                                                                                                                                                     |
 | `BULL_BOARD_USERNAME`, `BULL_BOARD_PASSWORD`                                                                          | Basic auth for `/admin/queues`; no password disables it                                                                                                                                                                                                                            |
-| `METRICS_TOKEN`                                                                                                       | Bearer token for `/metrics`; empty disables it                                                                                                                                                                                                                                     |
+| `METRICS_TOKEN`                                                                                                       | Bearer token for `/metrics`, 32+ characters (an older `.env` with a shorter one stops the processes at startup); empty disables it                                                                                                                                                 |
 
 ## Testing
 

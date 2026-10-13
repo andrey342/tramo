@@ -86,7 +86,8 @@ correlation id of the request that caused them, which appears in every log line 
 ## Data model
 
 One Postgres schema per module (ADR 008); tables refer to other modules' rows by id only, never by
-foreign key. Lists are paginated on `(created_at, id)`, so every list has an index in that order.
+foreign key. Lists are paginated on `(created_at, id)` (the ops review queue on
+`(status_changed_at, id)`), each with an index in that order.
 
 | Schema          | Tables                                                                                          | Notes                                                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -133,8 +134,8 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 
 - **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
   all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Routes declare
-  stricter limits with `@Throttle`; health checks are exempt. Exceeding the limit returns 429 with
-  `Retry-After`.
+  stricter limits with `@Throttle`; health checks and `/metrics` are exempt. Exceeding the limit
+  returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
@@ -148,18 +149,27 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   changes the handler described through the `AuditTrail` port. The row is written after the
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
-  (ADR 010); later pages do not shift when new rows arrive.
-- **Metrics.** `GET /metrics` (Prometheus text, for a bearer of `METRICS_TOKEN`; not served
-  without one) reports `tramo_http_request_duration_seconds` by method, route template and
-  status (requests no route matched share `route="unmatched"`), `tramo_queue_jobs` by queue and
-  state, `tramo_outbox_pending_events` and `tramo_outbox_lag_seconds` (age of the oldest event
-  not yet handed to the queues), plus the process defaults. The backlog is read from Redis and
-  Postgres when scraped, so the api's one target covers the worker's queues too.
-- **Query budget.** A list page costs the same statements whatever its size: one query for the
-  page, plus one batched lookup where rows need names from elsewhere (the catalog's center
-  names); `test/e2e/query-budget.e2e-spec.ts` counts them. Every filter and cursor has an index.
-  Batch jobs (billing run, dunning, collection) work one charge per transaction on purpose, so
-  one failure does not undo or block the others.
+  (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
+  not shift when new rows arrive.
+- **Metrics.** `GET /metrics` (Prometheus text) answers a bearer of `METRICS_TOKEN` (32 characters
+  or more; production refuses the published one); without a configured token it is a 404, and a
+  wrong token a logged 401. Bare statuses, not Problem Details: its only client is a scraper. It is
+  exempt from the rate limit, which counts in Redis: a scrape must not depend on the store it
+  reports on. It reports `tramo_http_request_duration_seconds`
+  by method, route template and status (requests no Nest route took, including Bull Board, share
+  `route="unmatched"`), `tramo_queue_jobs` by queue and state, `tramo_outbox_pending_events`
+  (counted up to 10,000) and `tramo_outbox_lag_seconds` (age of the oldest event not yet handed
+  to the queues), plus the process defaults. The backlog is read from Redis and Postgres when
+  scraped, at most every five seconds, so the api's one target covers the worker's queues too; a
+  source that does not answer within five seconds is left out of that scrape instead of holding
+  it.
+- **Query budget.** A list page is one query, plus one batched lookup where rows need names from
+  elsewhere (the catalog's center names), whatever its size; `test/e2e/query-budget.e2e-spec.ts`
+  counts the statements of the catalog and of a student's applications for one row and for
+  four. Each list's scope (center, student, contract, status) and its sort have an index; the
+  narrower filters (modality, price, product, a delivery's status or event) are applied on top
+  of it. Batch jobs work one plan (billing run) or one charge (dunning, collection) per
+  transaction on purpose, so one failure does not undo or block the others.
 
 ## Authentication
 

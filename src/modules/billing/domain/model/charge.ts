@@ -20,6 +20,9 @@ export const CHARGE_STATUSES = [
 ] as const;
 export type ChargeStatus = (typeof CHARGE_STATUSES)[number];
 
+// Owed and not being collected: what a collection can start on, and what a payoff makes unowed.
+export const OPEN_CHARGE_STATUSES: readonly ChargeStatus[] = ['scheduled', 'failed', 'overdue'];
+
 const MAX_REASON_LENGTH = 200;
 
 // One request to the payment provider. Its key is sent with every call for the attempt, so the
@@ -191,7 +194,7 @@ export class Charge extends AggregateRoot {
   }
 
   get collectible(): boolean {
-    return ['scheduled', 'failed', 'overdue'].includes(this.props.status);
+    return OPEN_CHARGE_STATUSES.includes(this.props.status);
   }
 
   // Past the arrears step of dunning, and not paid.
@@ -434,7 +437,7 @@ export class Charge extends AggregateRoot {
     if (this.props.status === 'cancelled') {
       return;
     }
-    if (!['scheduled', 'failed', 'overdue'].includes(this.props.status)) {
+    if (!this.collectible) {
       throw new InvalidStateTransitionError('Charge', this.props.status, 'cancelled');
     }
     this.recordCancelled('plan_ended', now);

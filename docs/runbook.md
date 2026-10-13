@@ -76,15 +76,16 @@ Conventions used below:
 ## Metrics
 
 `GET /metrics` serves Prometheus text to `Authorization: Bearer <METRICS_TOKEN>`
-(`tramo-metrics-token` in compose). Without a configured token it answers 404, and a wrong token
-gets 401. The backlog is read from Redis and Postgres at scrape time, so the api's target covers the
-worker's queues too.
+(`tramo-local-metrics-token-change-me` in compose). Without a configured token it answers 404; a
+wrong token gets 401 and logs `Metrics scrape refused`. The backlog is read from Redis and Postgres
+at scrape time, at most every five seconds, so the api's target covers the worker's queues too.
 
 ```bash
-curl -s -H 'Authorization: Bearer tramo-metrics-token' localhost:3000/metrics | grep -E '^tramo_'
+curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost:3000/metrics | grep -E '^tramo_'
 ```
 
-- `tramo_outbox_pending_events`: events committed and not yet handed to the queues.
+- `tramo_outbox_pending_events`: events committed and not yet handed to the queues, counted up to
+  10,000.
 - `tramo_outbox_lag_seconds`: age of the oldest of them, 0 when none waits. The publisher polls
   every `OUTBOX_POLL_INTERVAL_MS` (500 ms) and drains in batches of `OUTBOX_BATCH_SIZE`; after a
   failure it backs off, doubling up to 30 s. A lag that stays above 30 s, or keeps rising, means
@@ -97,8 +98,9 @@ curl -s -H 'Authorization: Bearer tramo-metrics-token' localhost:3000/metrics | 
     that queue; any value above 0 needs a look.
   - `waiting` rising while `active` stays at 0: the worker is not consuming.
 - `tramo_http_request_duration_seconds{method, route, status}`: latency and 5xx by route template.
-- A series missing from a scrape means its source could not be read; the api logs
-  `Queue metrics unavailable` or `Outbox metrics unavailable`.
+- A series missing from a scrape means its source could not be read within five seconds; the api
+  logs `Queue metrics unavailable`, `Queue metrics timed out` or the same for the outbox. Redis
+  being down shows this way: the queue series disappear while the HTTP and outbox ones remain.
 
 ## Outbox not draining
 
@@ -325,7 +327,7 @@ With `NODE_ENV=production` a process refuses to start, naming each problem, when
 
 - a secret still has the value published in `.env.example` or `docker-compose.yml`:
   `JWT_ACCESS_SECRET`, `ESIGN_WEBHOOK_SECRET` or `PSP_WEBHOOK_SECRET` containing `change-me`,
-  `BULL_BOARD_PASSWORD=tramo-queues`, `METRICS_TOKEN=tramo-metrics-token`, or the development
+  `BULL_BOARD_PASSWORD=tramo-queues`, `METRICS_TOKEN=tramo-local-metrics-token-change-me`, or the development
   `FIELD_ENCRYPTION_KEY`;
 - `WEBHOOK_PRIVATE_TARGETS_ENABLED=true`;
 - `SMTP_HOST` is `localhost` or `mailpit`, or `EMAIL_FROM` is an `@tramo.test` address;
@@ -335,7 +337,7 @@ With `NODE_ENV=production` a process refuses to start, naming each problem, when
 
 Every environment also fails fast on an invalid or missing variable (zod, with its name):
 `JWT_ACCESS_SECRET` and the webhook secrets need 32+ characters, `FIELD_ENCRYPTION_KEY` 32 bytes
-in base64, `METRICS_TOKEN` 12+ and `BULL_BOARD_PASSWORD` 8+. Production also turns off Swagger,
+in base64, `METRICS_TOKEN` 32+ and `BULL_BOARD_PASSWORD` 8+. Production also turns off Swagger,
 future billing runs and private webhook targets by default. The compose stack runs with
 `NODE_ENV=development`.
 
@@ -343,7 +345,7 @@ future billing runs and private webhook targets by default. The compose stack ru
 
 - **Per client**: `THROTTLE_LIMIT` (120) requests per `THROTTLE_TTL_MS` (60 s) per client and
   route, counted in Redis so every api instance shares the counters. A client is an IPv4 address
-  or an IPv6 /64; behind proxies set `TRUST_PROXY_HOPS`. Health checks and metrics are exempt.
+  or an IPv6 /64; behind proxies set `TRUST_PROXY_HOPS`. Health checks and `/metrics` are exempt.
 - **Credential routes** (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and
   `POST /applications`): `THROTTLE_AUTH_LIMIT` (10) per minute per client on top.
 - What the caller sees: 429 with `Retry-After` and Problem Details code `too_many_requests`.

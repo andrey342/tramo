@@ -11,6 +11,7 @@ import {
   MandateMissingError,
   PAYMENT_MANDATE_REPOSITORY,
   type PaymentMandateRepository,
+  PayoffInProgressError,
 } from '../../domain';
 import { assertStaff } from '../billing-access';
 import { toChargeDto } from '../billing.mapping';
@@ -43,9 +44,20 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
   async execute(command: RetryChargeCommand): Promise<ChargeDto> {
     assertStaff(command.actor);
     return this.uow.run(async () => {
-      const charge = await this.charges.findById(command.chargeId);
-      if (!charge) {
+      const found = await this.charges.findById(command.chargeId);
+      if (!found) {
         throw new EntityNotFoundError('Charge', command.chargeId);
+      }
+      await this.charges.lockContract(found.contractId);
+      const charge = (await this.charges.findById(command.chargeId)) ?? found;
+      // A new attempt would debit again what a payoff covers; asking again about one in
+      // collection (same key) debits nothing new.
+      if (
+        charge.status !== 'pending' &&
+        charge.kind !== 'payoff' &&
+        (await this.charges.hasPayoff(charge.contractId))
+      ) {
+        throw new PayoffInProgressError(charge.contractId);
       }
       const contract = await this.plans.findContract(charge.contractId);
       if (!contract || contract.status === 'defaulted') {

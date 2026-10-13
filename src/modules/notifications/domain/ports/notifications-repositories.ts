@@ -6,6 +6,12 @@ export const WEBHOOK_SUBSCRIPTION_REPOSITORY = Symbol('WEBHOOK_SUBSCRIPTION_REPO
 export const WEBHOOK_DELIVERY_REPOSITORY = Symbol('WEBHOOK_DELIVERY_REPOSITORY');
 export const EMAIL_NOTIFICATION_REPOSITORY = Symbol('EMAIL_NOTIFICATION_REPOSITORY');
 
+// Where a pending email stands in the order the sweep walks them.
+export interface PendingEmail {
+  readonly id: string;
+  readonly createdAt: Date;
+}
+
 export interface WebhookSubscriptionRepository {
   findById(id: string): Promise<WebhookSubscription | null>;
   // One per center, active or removed.
@@ -24,7 +30,7 @@ export interface EmailNotificationRepository {
   findById(id: string): Promise<EmailNotification | null>;
   // One per event, template and recipient.
   exists(eventId: string, template: EmailTemplate, recipient: string): Promise<boolean>;
-  // Ids of emails still pending that were written before `before`, oldest first.
-  findPendingIds(before: Date, limit: number): Promise<string[]>;
+  // Emails still pending that are stale at `now` (staleBefore), oldest first, after `after`.
+  findStale(now: Date, limit: number, after: PendingEmail | null): Promise<PendingEmail[]>;
   save(notification: EmailNotification): Promise<void>;
 }

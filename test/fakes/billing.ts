@@ -20,6 +20,7 @@ import {
   type IncomeDeclaration,
   IncomeAlreadyDeclaredError,
   type IncomeDeclarationRepository,
+  OPEN_CHARGE_STATUSES,
   type PaymentMandate,
   type PaymentMandateRepository,
 } from '../../src/modules/billing/domain';
@@ -85,8 +86,12 @@ export class InMemoryChargeRepository
     );
   }
 
-  // One test, one worker: nothing runs at the same time.
-  lockContract(): Promise<void> {
+  // One test, one worker: nothing runs at the same time. Which contracts were locked is kept, so
+  // tests can check that a path that reads payoffs or mandates takes the lock.
+  readonly locked: string[] = [];
+
+  lockContract(contractId: string): Promise<void> {
+    this.locked.push(contractId);
     return Promise.resolve();
   }
 
@@ -95,8 +100,7 @@ export class InMemoryChargeRepository
       this.all()
         .filter(
           (charge) =>
-            charge.contractId === contractId &&
-            ['scheduled', 'failed', 'overdue'].includes(charge.status),
+            charge.contractId === contractId && OPEN_CHARGE_STATUSES.includes(charge.status),
         )
         .sort((a, b) => (a.id < b.id ? -1 : 1)),
     );

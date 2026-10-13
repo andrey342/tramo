@@ -47,3 +47,15 @@ export async function accessTokenFor(
   }
   return (response.body as { accessToken: string }).accessToken;
 }
+
+// A student who registered through the API and signed in.
+export async function registerStudent(app: INestApplication): Promise<string> {
+  const email = `student-${uuidv7().slice(-12)}@example.com`;
+  const response = await request(app.getHttpServer())
+    .post('/api/v1/auth/register')
+    .send({ email, password: TEST_PASSWORD });
+  if (response.status !== 201) {
+    throw new Error(`Registration failed: ${String(response.status)}`);
+  }
+  return accessTokenFor(app, { email, password: TEST_PASSWORD });
+}

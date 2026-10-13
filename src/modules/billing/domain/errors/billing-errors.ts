@@ -88,6 +88,17 @@ export class MandateMissingError extends DomainError {
   }
 }
 
+// A payoff of the contract is being collected or was paid: it covers this charge, which is not
+// collected on its own.
+export class PayoffInProgressError extends DomainError {
+  readonly code = 'payoff_in_progress';
+  readonly category = 'conflict';
+
+  constructor(contractId: string) {
+    super('A payoff of the contract covers this charge.', { contractId });
+  }
+}
+
 // Two runs created the same charge at once (unique per contract and reference); the next run
 // finds it.
 export class ConcurrentChargeError extends DomainError {

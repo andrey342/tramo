@@ -23,6 +23,9 @@ const MAX_ERROR_LENGTH = 100;
 // after this long rather than sent a day late.
 export const STALE_EMAIL_MS = 24 * 60 * 60 * 1000;
 
+// Emails written at or before this instant are stale at `now`, if still pending.
+export const staleBefore = (now: Date): Date => new Date(now.getTime() - STALE_EMAIL_MS);
+
 export interface EmailNotificationProps {
   // The event that caused it: one email per event, template and recipient.
   readonly eventId: string;
@@ -165,7 +168,7 @@ export class EmailNotification extends AggregateRoot {
 
   // Still pending long after it was written: its job is gone. Given up, not sent late.
   isStale(now: Date): boolean {
-    return this.pending && now.getTime() - this.props.createdAt.getTime() >= STALE_EMAIL_MS;
+    return this.pending && this.props.createdAt <= staleBefore(now);
   }
 
   abandon(now: Date): void {
