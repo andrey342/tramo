@@ -14,6 +14,3 @@ export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
 export const isRole = (value: string): value is Role =>
   (ROLES as readonly string[]).includes(value);
-
-export const isApiKeyScope = (value: string): value is ApiKeyScope =>
-  (API_KEY_SCOPES as readonly string[]).includes(value);
