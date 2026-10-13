@@ -90,14 +90,15 @@ export class InMemoryChargeRepository
     return Promise.resolve();
   }
 
-  findOpenIds(contractId: string): Promise<string[]> {
+  findOpen(contractId: string): Promise<Charge[]> {
     return Promise.resolve(
-      this.ids(
-        (charge) =>
-          charge.contractId === contractId &&
-          ['scheduled', 'failed', 'overdue'].includes(charge.status),
-        null,
-      ),
+      this.all()
+        .filter(
+          (charge) =>
+            charge.contractId === contractId &&
+            ['scheduled', 'failed', 'overdue'].includes(charge.status),
+        )
+        .sort((a, b) => (a.id < b.id ? -1 : 1)),
     );
   }
 
