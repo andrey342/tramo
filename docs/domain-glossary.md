@@ -279,7 +279,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 
 - **`PaymentMandate`**: the student's SEPA direct debit authorisation for one contract, with an
   encrypted IBAN and a reference `TRAMO-<16 chars>`. `MandateStatus`: `active → revoked`; signing
-  a new mandate revokes the one in force.
+  a new mandate revokes the one in force, and a contract cancelled before it took effect revokes
+  its mandate.
 - **`Charge`**: an amount a student owes on a due date, and its collection. `ChargeKind`:
   `installment`, `isa`, `payoff`. Unique per contract and `reference` (`installment:3`,
   `isa:2026-07`, `payoff:<request>`), so a repeated run creates nothing.
@@ -351,7 +352,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   on `notifications.emails`. `EmailTemplate`: `welcome`, `application_received`,
   `application_decided`, `contract_ready_to_sign`, `disbursement_settled`,
   `installment_reminder`, `installment_collected`, `payment_overdue`, `contract_in_arrears`,
-  `isa_declaration_reminder`, `isa_declaration_overdue`.
+  `isa_declaration_reminder`, `isa_declaration_overdue`, `payment_returned`.
 
   ```text
   pending → sent                           the SMTP server took it

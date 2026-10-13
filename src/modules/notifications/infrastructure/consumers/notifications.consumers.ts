@@ -5,6 +5,7 @@ import {
   BillingEvents,
   type ChargeDueSoonPayload,
   type ChargeOverduePayload,
+  type ChargeReturnedPayload,
   type ChargePaidPayload,
   type ContractInArrearsPayload,
   type IncomeDeclarationDuePayload,
@@ -260,6 +261,27 @@ export class EmailOnChargeOverdue
   }
 }
 
+// The bank returned a debit already collected (billing reopened the charge): the student hears
+// why it is owed again before dunning starts over.
+@Injectable()
+@EventSubscriber({
+  event: BillingEvents.ChargeReturned,
+  consumer: 'notifications.email-charge-returned',
+})
+export class EmailOnChargeReturned
+  extends EmailConsumer<ChargeReturnedPayload>
+  implements EventHandler<ChargeReturnedPayload>
+{
+  protected request(payload: ChargeReturnedPayload): Omit<EmailRequest, 'eventId'> {
+    return {
+      template: 'payment_returned',
+      to: { userId: payload.studentId },
+      reference: payload.contractId,
+      data: { amountCents: payload.amountCents, kind: payload.kind, reason: payload.reason },
+    };
+  }
+}
+
 @Injectable()
 @EventSubscriber({
   event: BillingEvents.ContractInArrears,
@@ -511,6 +533,7 @@ export const NOTIFICATION_CONSUMERS = [
   EmailOnChargeDueSoon,
   EmailOnChargePaid,
   EmailOnChargeOverdue,
+  EmailOnChargeReturned,
   EmailOnContractInArrears,
   EmailOnIncomeDeclarationDue,
   EmailOnIsaDeclarationOverdue,
