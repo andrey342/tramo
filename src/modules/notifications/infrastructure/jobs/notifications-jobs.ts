@@ -98,9 +98,8 @@ export class EmailProcessor extends QueueProcessor<EmailJob> {
       const result = await this.commands.execute(new AbandonStaleEmailsCommand());
       // The sweep went past them; failing the job puts them in front of operations.
       if (result.failedIds.length > 0) {
-        throw new Error(
-          `${String(result.failedIds.length)} stale emails not given up: ${result.failedIds.join(', ')}`,
-        );
+        const shown = result.failedIds.slice(0, 20).join(', ');
+        throw new Error(`${String(result.failedIds.length)} stale emails not given up: ${shown}`);
       }
       return result;
     }
