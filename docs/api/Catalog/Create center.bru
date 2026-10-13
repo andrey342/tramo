@@ -41,5 +41,5 @@ script:post-response {
 docs {
   Admin only. `country` is ES or DE; `platformFeeBasisPoints` is at most 3000. The center starts as `pending_verification` and the worker checks the VAT number against VIES. Stores the id in `newCenterId`.
 
-  With `VIES_MODE=test` (compose default) the VIES test service answers 100 as valid, 200 as invalid and anything else as an outage. The seed already uses ES 100, DE 100 and ES 200 (country and number are unique, so reusing them answers 409), so this request sends a random number and the center stays pending with an `unverified` check. The program requests below use the seeded, active Codeworks center instead.
+  This request sends a random number, since country and number are unique (reusing the seed's answers 409). With `VIES_MODE=fake` (compose default, offline) 200 is invalid, 300 an outage and any other number valid, so the center becomes active once the worker has checked it. With `VIES_MODE=test` the VIES test service answers 100 as valid, 200 as invalid and anything else as an outage; the seed already uses ES 100, DE 100 and ES 200, so the center stays pending with an `unverified` check. The program requests below use the seeded, active Codeworks center either way.
 }

@@ -26,7 +26,9 @@ Conventions used below:
     when `GET /health/ready` answers 200: Postgres and Redis each answered a ping within 1.5 s.
   - `worker` starts only once the api is healthy (the api migrates, the worker reads the outbox);
     healthy when its own `GET /health/ready` on port 3100 answers 200.
-  - `seed` runs once the api is healthy, loads the demo data set (idempotent) and exits.
+  - `seed` runs once the api is healthy, loads the demo data set (idempotent) and exits: 0 when
+    done, 1 when it could not finish (`docker compose logs seed` says why, for instance a center
+    the VAT registry did not answer for). Run it again with `docker compose run --rm seed`.
 - **Check**:
 
   ```bash

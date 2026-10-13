@@ -7,8 +7,9 @@ error.
 
 ## Setup
 
-1. Start the stack with `docker compose up -d --build --wait`. The `seed` container loads three
-   centers, six programs and the demo accounts (password `tramo demo password`):
+1. Start the stack with `docker compose up -d --build --wait` and wait for the `seed` container
+   to exit with 0 (`docker compose ps -a seed`; see the Quickstart in the main README). It loads
+   three centers, six programs and the demo accounts (password `tramo demo password`):
    `admin@tramo.test` (admin), `ops@tramo.test` (ops), `admin@codeworks.test` (center admin of
    Codeworks Barcelona), `admin@berlin-code.test`, and the students `ana.garcia`, `bruno.silva`,
    `carla.moreno`, `diego.lopez` and `elena.ruiz` (all `@example.com`).
@@ -74,8 +75,10 @@ contract id is in the `contractId` environment variable after step 7.
 - **Health**: liveness, readiness and Prometheus metrics (outside `/api/v1`; metrics take the
   bearer `tramo-local-metrics-token-change-me`).
 - **Catalog**: an admin registers a center and checks its VAT number; the Codeworks admin creates
-  and publishes a program. With `VIES_MODE=test` only 100 is a valid VAT number and the seed
-  already uses it, so the new center stays pending; the program requests use Codeworks.
+  and publishes a program. With the compose default (`VIES_MODE=fake`) the new center's random
+  number is valid and it becomes active once the worker has checked it; with `VIES_MODE=test`
+  only 100 is valid and the seed already uses it, so it stays pending. The program requests use
+  Codeworks either way.
 - **Applications**: draft updates, cancellation, the ops review queue and manual decisions, and
   the risk policy.
 - **Billing**: dunning, retrying a failed charge and income declarations (ISA contracts only).

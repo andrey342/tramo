@@ -28,7 +28,9 @@ x-app: &app
     DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
     REDIS_URL: redis://redis:6379
     JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-development-secret-change-me-0123456789}
-    VIES_MODE: ${VIES_MODE:-test}
+    # VAT checks answered locally, so the stack works offline; VIES_MODE=test asks the real VIES
+    # test service (internet needed).
+    VIES_MODE: ${VIES_MODE:-fake}
     FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=}
     ESIGN_WEBHOOK_SECRET: ${ESIGN_WEBHOOK_SECRET:-local-esign-webhook-secret-change-me-0123456789}
     PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:-local-psp-webhook-secret-change-me-0123456789}

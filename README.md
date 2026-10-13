@@ -26,7 +26,8 @@ collects monthly instalments or income-share payments afterwards.
   with retries, and dashboards built from the events for centers and operations.
 
 Identity, employment, bureau, e-signature, bank and payment providers are simulated behind ports
-and answer deterministically (see the demo data below); VAT checks use the VIES test service.
+and answer deterministically (see the demo data below). VAT checks are answered by an offline fake
+locally; `VIES_MODE=test` asks the real VIES test service instead (see `VIES_MODE` below).
 
 ## Quickstart
 
@@ -42,9 +43,24 @@ The first start builds the application image and pulls the base images, which ta
 minutes. Later starts take seconds. The stack is ready when `api-1` logs
 `Nest application successfully started` and `http://localhost:3000/health/ready` answers
 `{"status":"ok",...}`. Add `--wait -d` to the last command to block until every container
-reports healthy and get the terminal back. Once the api is healthy, the one-shot `seed` container
-loads the demo data set (accounts below) and exits; it runs on every `up` and leaves what exists
-alone.
+reports healthy and get the terminal back.
+
+Once the api is healthy, the one-shot `seed` container loads the demo data set (accounts below)
+and exits; it runs on every `up` and leaves what exists alone. Wait for it before trying the API:
+
+```bash
+docker compose ps -a seed    # STATUS "Exited (0)": the demo data is in place
+docker compose logs seed     # what it created; the last line is "seed: done"
+```
+
+Until then it shows `Created` (waiting for the api) or `Up` (running). `Exited (1)` means it did
+not finish: its logs end with `seed failed: ...` or `seed incomplete: ...` (a center left
+inactive, so its programs are missing). Fix what the log names and run it again in the
+foreground; it picks up where it stopped:
+
+```bash
+docker compose run --rm seed
+```
 
 ### Where to look
 
@@ -65,6 +81,8 @@ from the network. If a port is already taken on your machine, override it in `.e
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
 
 ## Try it in 2 minutes
+
+Once the seed has exited with 0 (see above):
 
 ```bash
 docker compose exec api node dist/scripts/demo.js   # or `pnpm demo` with Node and pnpm installed
@@ -116,11 +134,13 @@ so the api and worker containers are not started and the host processes own port
 | `pnpm seed`                                | Build, then create the demo data set described below (idempotent)       |
 | `pnpm demo`                                | Walk the happy path against the running stack (see Try it in 2 minutes) |
 
-`pnpm seed` writes the demo data set to the database in `.env`: two training centers verified
-through the VIES test service (Codeworks Barcelona and Berlin Code Academy, three published
+`pnpm seed` writes the demo data set to the database in `.env`: two training centers whose VAT
+numbers are verified (Codeworks Barcelona and Berlin Code Academy, three published
 programs each, from a 4,200 EUR cybersecurity course to a 9,900 EUR data science master), a third
 whose VAT number the registry refuses (it stays pending), Codeworks' webhook pointed at the
 compose sink, and five students whose applications have run through verification and scoring.
+The centers are checked as they are created; a registry that does not answer is asked again three
+times over 14 seconds, after which the seed exits with 1 and can be run again.
 The simulated providers answer from the national id: a number ending in 7 is in the default
 registry and one ending in 9 fails the identity check. All accounts share the password
 `tramo demo password`; local use only.
@@ -159,7 +179,7 @@ but real environment variables always win. All variables and their defaults are 
 | `WEBHOOK_TIMEOUT_MS`, `WEBHOOK_RETRY_DELAY_MS`, `WEBHOOK_PRIVATE_TARGETS_ENABLED`                                     | Webhooks to centers: one attempt timeout, the first retry delay (doubling, five attempts per round), and whether a private address may be the target (on outside production; production refuses to start with it on and posts only https to public addresses)                      |
 | `BILLING_FUTURE_RUNS_ENABLED`                                                                                         | Whether ops may run billing and dunning as of a day still to come (the demo walks the months); on by default outside production                                                                                                                                                    |
 | `PAYMENT_PROVIDER`, `PSP_WEBHOOK_SECRET`, `PSP_WEBHOOK_PREVIOUS_SECRET`, `PSP_CALLBACK_URL`, `SIMULATED_PSP_DELAY_MS` | Direct debits: only `simulated` exists (an amount ending in 13 cents is refused), refused in production; HMAC key of its callbacks to `/webhooks/psp` and the previous one; where the worker reaches the api for them, and after how long                                          |
-| `VIES_MODE`, `VIES_TIMEOUT_MS`                                                                                        | VAT checks of training centers: `live` (VIES), `test` (its test service: only 100 valid and 200 invalid, any other number answers as an outage) or `fake` (same table, offline); production accepts only `live`                                                                    |
+| `VIES_MODE`, `VIES_TIMEOUT_MS`                                                                                        | VAT checks of training centers: `fake` (local default, offline: 200 invalid, 300 an outage, others valid), `test` (the real VIES test service, online: 100 valid, 200 invalid, others an outage) or `live` (VIES; the only mode production accepts). Switch on a fresh database    |
 | `JWT_ACCESS_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS`                                                                    | Session lifetimes (15 minutes, 30 days)                                                                                                                                                                                                                                            |
 | `LOGIN_MAX_FAILURES`, `LOGIN_LOCK_*`                                                                                  | Progressive lockout after failed sign-ins                                                                                                                                                                                                                                          |
 | `THROTTLE_LIMIT`, `THROTTLE_AUTH_LIMIT`, `TRUST_PROXY_HOPS`                                                           | Rate limits per client and proxy setting                                                                                                                                                                                                                                           |
