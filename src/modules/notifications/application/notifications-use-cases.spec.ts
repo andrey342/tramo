@@ -462,6 +462,48 @@ describe('notifications use cases', () => {
       expect(t.events.ofType(NotificationsEvents.EmailFailed)).toHaveLength(1);
     });
 
+    // The database failed before anything was sent: an earlier attempt leaves the email to the
+    // next one, the last gives it up so it does not wait for the stale sweep.
+    it('should give an email up as internal_error when its last attempt fails before sending', async () => {
+      const t = setup();
+      await t.request.execute(
+        new RequestEmailCommand({
+          eventId: uuidv7(),
+          template: 'welcome',
+          to: { address: 'student@example.com' },
+          reference: 'user-1',
+          data: {},
+        }),
+      );
+      const id = t.emails.all()[0]?.id ?? '';
+      const findById = t.emails.findById.bind(t.emails);
+      let reads = 0;
+      // The read before sending fails; the one that records the outcome works.
+      t.emails.findById = (wanted: string) => {
+        reads += 1;
+        return reads % 2 === 1 ? Promise.reject(new Error('pool exhausted')) : findById(wanted);
+      };
+
+      await expect(t.send.execute(new SendEmailCommand(id, false))).rejects.toThrow(
+        'pool exhausted',
+      );
+      const earlier = await findById(id);
+      const afterEarlier = { status: earlier?.status, attempts: earlier?.attempts };
+      reads = 0;
+      await expect(t.send.execute(new SendEmailCommand(id, true))).rejects.toThrow(
+        'pool exhausted',
+      );
+
+      expect(afterEarlier).toEqual({ status: 'pending', attempts: 0 });
+      expect(await findById(id)).toMatchObject({
+        status: 'failed',
+        attempts: 1,
+        lastError: 'internal_error',
+      });
+      expect(t.emailSender.sent).toEqual([]);
+      expect(t.events.ofType(NotificationsEvents.EmailFailed)).toHaveLength(1);
+    });
+
     // An email still pending a day after it was written lost its job: given up, not sent late.
     it('should give up the emails whose job was lost a day ago', async () => {
       const t = setup();
