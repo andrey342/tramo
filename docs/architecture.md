@@ -134,8 +134,8 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 
 - **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
   all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Routes declare
-  stricter limits with `@Throttle`; health checks are exempt. Exceeding the limit returns 429 with
-  `Retry-After`.
+  stricter limits with `@Throttle`; health checks and `/metrics` are exempt. Exceeding the limit
+  returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
@@ -153,8 +153,9 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   not shift when new rows arrive.
 - **Metrics.** `GET /metrics` (Prometheus text) answers a bearer of `METRICS_TOKEN` (32 characters
   or more; production refuses the published one); without a configured token it is a 404, and a
-  wrong token a logged 401. Bare statuses, not Problem Details: its only client is a scraper. It
-  counts toward the rate limit like any route. It reports `tramo_http_request_duration_seconds`
+  wrong token a logged 401. Bare statuses, not Problem Details: its only client is a scraper. It is
+  exempt from the rate limit, which counts in Redis: a scrape must not depend on the store it
+  reports on. It reports `tramo_http_request_duration_seconds`
   by method, route template and status (requests no Nest route took, including Bull Board, share
   `route="unmatched"`), `tramo_queue_jobs` by queue and state, `tramo_outbox_pending_events`
   (counted up to 10,000) and `tramo_outbox_lag_seconds` (age of the oldest event not yet handed

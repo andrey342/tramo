@@ -143,3 +143,12 @@ jobs:
           tags: tramo:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The local stack's target (compose builds it): the application plus the seed and demo.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: demo
+          push: false
+          tags: tramo:ci-demo
+          cache-from: type=gha
