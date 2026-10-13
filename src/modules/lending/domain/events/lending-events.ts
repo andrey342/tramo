@@ -65,8 +65,10 @@ export type ContractActivatedPayload = {
   readonly activatedOn: string;
 };
 
+// Origination closes the application the contract was drawn from.
 export type ContractCompletedPayload = {
   readonly contractId: string;
+  readonly applicationId: string;
   readonly studentId: string;
   readonly centerId: string;
 };

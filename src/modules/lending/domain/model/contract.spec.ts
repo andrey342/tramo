@@ -224,6 +224,19 @@ describe('Contract', () => {
       expect(eventTypes(contract)).toEqual([LendingEvents.ContractCompleted]);
     });
 
+    it('should name the application it was drawn from when it completes', () => {
+      const contract = anActiveContract();
+
+      contract.complete(LATER);
+
+      expect(contract.pullEvents()[0]?.payload).toEqual({
+        contractId: contract.id,
+        applicationId: contract.applicationId,
+        studentId: contract.studentId,
+        centerId: contract.centerId,
+      });
+    });
+
     it('should go into arrears and out of them, idempotently and without events', () => {
       const contract = anActiveContract();
 

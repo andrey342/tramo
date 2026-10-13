@@ -345,6 +345,7 @@ export class Contract extends AggregateRoot {
       occurredAt: now,
       payload: {
         contractId: this.id,
+        applicationId: this.props.applicationId,
         studentId: this.props.studentId,
         centerId: this.props.centerId,
       },
