@@ -138,32 +138,43 @@ export class Program extends AggregateRoot {
   }
 
   updateDetails(changes: Partial<ProgramDetails>, now: Date): void {
-    const details = Program.validDetails({ ...this.details, ...changes });
-    Program.assertFinancingFits(this.props.financing, details);
-    const before = JSON.stringify(this.detailsPayload());
-    this.props = { ...this.props, ...details };
-    const after = this.detailsPayload();
-    if (this.isPublished && JSON.stringify(after) !== before) {
+    this.revise({ details: changes }, now);
+  }
+
+  changeFinancing(financing: FinancingOptions, now: Date): void {
+    this.revise({ financing }, now);
+  }
+
+  // Details and financing change together and are checked once, as they will end up: lowering
+  // the employability rate below what an ISA needs while dropping the ISA is one valid change, not
+  // two of which the first is refused.
+  revise(
+    changes: { readonly details?: Partial<ProgramDetails>; readonly financing?: FinancingOptions },
+    now: Date,
+  ): void {
+    const details = Program.validDetails({ ...this.details, ...changes.details });
+    const financing = changes.financing ?? this.props.financing;
+    Program.assertFinancingFits(financing, details);
+    if (this.isPublished && financing.isEmpty) {
+      throw new InvalidFinancingOptionError('a published program keeps at least one option');
+    }
+    const detailsBefore = JSON.stringify(this.detailsPayload());
+    const financingChanged = !financing.equals(this.props.financing);
+    this.props = { ...this.props, ...details, financing };
+    if (!this.isPublished) {
+      return;
+    }
+    const detailsAfter = this.detailsPayload();
+    if (JSON.stringify(detailsAfter) !== detailsBefore) {
       this.record({
         eventType: CatalogEvents.ProgramDetailsChanged,
         aggregateType: 'Program',
         aggregateId: this.id,
         occurredAt: now,
-        payload: after,
+        payload: detailsAfter,
       });
     }
-  }
-
-  changeFinancing(financing: FinancingOptions, now: Date): void {
-    Program.assertFinancingFits(financing, this.details);
-    if (this.isPublished && financing.isEmpty) {
-      throw new InvalidFinancingOptionError('a published program keeps at least one option');
-    }
-    if (financing.equals(this.props.financing)) {
-      return;
-    }
-    this.props = { ...this.props, financing };
-    if (this.isPublished) {
+    if (financingChanged) {
       this.recordFinancingChanged(now);
     }
   }

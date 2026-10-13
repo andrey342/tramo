@@ -238,7 +238,9 @@ Training centers and the programs students finance.
   terms of 6 to 48 months, or an income share agreement capped at 1.0 to 2.0 times the price,
   offered only when at least 60 % of graduates find a job) and their center is active. The same
   rules are CHECK constraints on `catalog.programs`, and request validation reads its bounds from
-  the domain. Changes to a published program are announced in full (`ProgramDetailsChanged`,
+  the domain. A `PATCH` that changes details and financing is checked once, as the program ends
+  up (`Program.revise`): dropping the ISA while lowering the employability rate below 60 % is one
+  valid change. Changes to a published program are announced in full (`ProgramDetailsChanged`,
   `ProgramFinancingChanged`) so other modules keep their own copy. While a center is suspended,
   only Tramo admins change its programs.
 - **Public catalog.** `GET /programs` reads a SQL read model that maps rows straight to DTOs:
