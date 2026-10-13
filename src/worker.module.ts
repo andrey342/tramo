@@ -6,6 +6,7 @@ import { IamModule } from '@modules/iam/iam.module';
 import { LendingWorkerModule } from '@modules/lending/lending-worker.module';
 import { NotificationsWorkerModule } from '@modules/notifications/notifications-worker.module';
 import { OriginationWorkerModule } from '@modules/origination/origination-worker.module';
+import { ReportingWorkerModule } from '@modules/reporting/reporting-worker.module';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
 
@@ -22,6 +23,7 @@ import { MessagingWorkerModule } from '@shared/infrastructure/messaging';
     LendingWorkerModule,
     BillingWorkerModule,
     NotificationsWorkerModule,
+    ReportingWorkerModule,
   ],
 })
 export class WorkerModule {}
