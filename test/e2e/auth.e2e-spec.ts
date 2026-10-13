@@ -93,6 +93,7 @@ describe('Authentication (e2e)', () => {
       .post('/api/v1/auth/refresh')
       .send({ refreshToken: tokens.refreshToken });
     expect(replay.status).toBe(401);
+    expect(replay.headers['www-authenticate']).toBe('Bearer');
     expect(replay.body.code).toBe('invalid_refresh_token');
     // Revoking the family when an old token comes back after the grace window is covered by the
     // unit tests, which control the clock.

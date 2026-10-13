@@ -180,7 +180,9 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 
 - **Sessions.** Access tokens are HS256 JWTs valid for 15 minutes. Refresh tokens are opaque,
   stored as SHA-256, single use and rotated on every refresh within a family. A family ends
-  `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed.
+  `SESSION_MAX_DAYS` (90) after sign-in however often it is refreshed. A 401 for a missing or
+  invalid access token, wrong credentials or a refresh token that no longer works carries
+  `WWW-Authenticate: Bearer`.
 - **Reuse.** A rotated refresh token presented again more than 10 seconds after its rotation is
   treated as stolen: the whole family is revoked and `RefreshTokenReuseDetected` is published.
   Within those 10 seconds it is rejected without revocation, because it is almost always the
