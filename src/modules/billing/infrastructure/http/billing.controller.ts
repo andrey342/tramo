@@ -93,7 +93,11 @@ export class BillingController {
     resource: 'contract',
     resourceIdParam: 'contractId',
   })
-  @ApiOperation({ summary: 'Declare the income of a month (income share agreements)' })
+  @ApiOperation({
+    summary: 'Declare the income of a month (income share agreements)',
+    description:
+      'A month is declared from its first day until the end of the 4th of the next month (UTC), so a salary paid on the 1st or 2nd is declared in time. On the 5th the month is assessed and its charge falls due; a month undeclared by then is paused. A month whose window closed or that was assessed answers period_not_open with the first open month.',
+  })
   declareIncome(
     @CurrentPrincipal() actor: Principal,
     @Param('contractId', ParseUUIDPipe) contractId: string,

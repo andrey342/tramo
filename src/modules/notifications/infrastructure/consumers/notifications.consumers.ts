@@ -15,6 +15,7 @@ import {
   type ContractSentForSignaturePayload,
   type ContractSignedPayload,
   type DisbursementSettledPayload,
+  type IsaDeclarationOverduePayload,
   LendingEvents,
 } from '@modules/lending/domain/events/lending-events';
 import {
@@ -297,6 +298,27 @@ export class EmailOnIncomeDeclarationDue
   }
 }
 
+// Two ISA months in a row without a declaration (lending's assessment): the student is told once,
+// until a declaration clears it.
+@Injectable()
+@EventSubscriber({
+  event: LendingEvents.IsaDeclarationOverdue,
+  consumer: 'notifications.email-declaration-overdue',
+})
+export class EmailOnIsaDeclarationOverdue
+  extends EmailConsumer<IsaDeclarationOverduePayload>
+  implements EventHandler<IsaDeclarationOverduePayload>
+{
+  protected request(payload: IsaDeclarationOverduePayload): Omit<EmailRequest, 'eventId'> {
+    return {
+      template: 'isa_declaration_overdue',
+      to: { userId: payload.studentId },
+      reference: payload.contractId,
+      data: { missingSince: payload.missingSince },
+    };
+  }
+}
+
 // ---- webhooks to the training center: ids, amounts and states, never the student's data
 
 @Injectable()
@@ -491,6 +513,7 @@ export const NOTIFICATION_CONSUMERS = [
   EmailOnChargeOverdue,
   EmailOnContractInArrears,
   EmailOnIncomeDeclarationDue,
+  EmailOnIsaDeclarationOverdue,
   WebhookOnApplicationSubmitted,
   WebhookOnApplicationApproved,
   WebhookOnApplicationRejected,

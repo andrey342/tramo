@@ -135,7 +135,7 @@ function setup() {
     waiting: new CollectWaitingChargesHandler(uow, charges, mandates, clock),
     execute: new ExecuteChargeCollectionHandler(uow, charges, mandates, gateway),
     result: new RecordPaymentResultHandler(uow, charges, audit, clock),
-    dunning: new RunDunningHandler(uow, charges, mandates, clock),
+    dunning: new RunDunningHandler(uow, charges, mandates, plans, clock),
     retry: new RetryChargeHandler(uow, charges, mandates, plans, clock),
     payoff: new CreatePayoffChargeHandler(uow, charges, mandates, plans, clock),
     cancel: new CancelOpenChargesHandler(uow, charges, clock),
@@ -194,16 +194,46 @@ describe('billing use cases', () => {
       const contractId = t.contract('isa');
 
       const declared = await t.declare.execute(
-        new DeclareIncomeCommand(t.student, contractId, '2026-10', 2_000_00),
+        new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00),
       );
 
-      expect(declared).toMatchObject({ period: '2026-10', grossMonthlyIncomeCents: 2_000_00 });
+      expect(declared).toMatchObject({ period: '2026-11', grossMonthlyIncomeCents: 2_000_00 });
       await expect(
-        t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-10', 1_000_00)),
+        t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 1_000_00)),
       ).rejects.toThrow(IncomeAlreadyDeclaredError);
       await expect(
-        t.declare.execute(new DeclareIncomeCommand(t.student, t.contract(), '2026-10', 1_000_00)),
+        t.declare.execute(new DeclareIncomeCommand(t.student, t.contract(), '2026-11', 1_000_00)),
       ).rejects.toThrow(NotAnIncomeShareError);
+    });
+
+    // A salary paid on the 1st or 2nd is declared in time; from the 5th the month is closed,
+    // even if the cycle has not assessed it yet.
+    it('should take the previous month until the 4th and refuse it from the 5th', async () => {
+      const t = setup();
+      const contractId = uuidv7();
+      t.plans.addContract(
+        {
+          id: contractId,
+          studentId: t.studentId,
+          centerId: t.centerId,
+          product: 'isa',
+          status: 'active',
+        },
+        { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-10' },
+      );
+
+      t.clock.set(new Date('2026-11-04T23:59:00Z'));
+      const inTime = await t.declare.execute(
+        new DeclareIncomeCommand(t.student, contractId, '2026-10', 2_000_00),
+      );
+      t.clock.set(new Date('2026-12-05T00:00:00Z'));
+      const late = t.declare.execute(
+        new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00),
+      );
+
+      expect(inTime.period).toBe('2026-10');
+      await expect(late).rejects.toThrow(PeriodNotOpenError);
+      await expect(late).rejects.toMatchObject({ details: { openFrom: '2026-12' } });
     });
   });
 
@@ -253,9 +283,9 @@ describe('billing use cases', () => {
       expect(fourth?.dueDate.toString()).toBe('2027-02-12');
     });
 
-    // Income of July (2,000) and August (none) are assessed in September. July was due on
-    // 5 August; billed late, it is due on the day of the run.
-    it('should assess every ended month of an ISA on what was declared, and charge the share', async () => {
+    // Income of July (2,000) and August (none) are assessed on 5 September, when August's
+    // declarations close. July was due on 5 August; billed late, it is due on the day of the run.
+    it('should assess every closed month of an ISA on what was declared, and charge the share', async () => {
       const t = setup();
       const contractId = uuidv7();
       t.plans.addContract(
@@ -268,9 +298,10 @@ describe('billing use cases', () => {
         },
         { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-07' },
       );
+      t.clock.set(new Date('2026-07-31T18:00:00Z'));
       await t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-07', 2_000_00));
 
-      const result = await t.cycle.execute(new RunBillingCycleCommand(day('2026-09-01')));
+      const result = await t.cycle.execute(new RunBillingCycleCommand(day('2026-09-05')));
 
       expect(result.chargesCreated).toBe(1);
       expect(t.plans.assessed).toEqual([
@@ -279,7 +310,37 @@ describe('billing use cases', () => {
       ]);
       const july = await t.charges.findByReference(contractId, 'isa:2026-07');
       expect(july?.amount.cents).toBe(200_00);
-      expect(july?.dueDate.toString()).toBe('2026-09-01');
+      expect(july?.dueDate.toString()).toBe('2026-09-05');
+    });
+
+    // The run of the 1st leaves October open, so the salary paid on 2 November is declared on
+    // the 3rd; the run of the 5th assesses it, due that day.
+    it('should not assess a month before its declarations close on the 5th of the next', async () => {
+      const t = setup();
+      const contractId = uuidv7();
+      t.plans.addContract(
+        {
+          id: contractId,
+          studentId: t.studentId,
+          centerId: t.centerId,
+          product: 'isa',
+          status: 'active',
+        },
+        { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-10' },
+      );
+
+      const first = await t.cycle.execute(new RunBillingCycleCommand(day('2026-11-01')));
+      t.clock.set(new Date('2026-11-03T10:00:00Z'));
+      await t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-10', 2_500_00));
+      const fourth = await t.cycle.execute(new RunBillingCycleCommand(day('2026-11-04')));
+      const fifth = await t.cycle.execute(new RunBillingCycleCommand(day('2026-11-05')));
+
+      expect(first.chargesCreated + fourth.chargesCreated).toBe(0);
+      expect(fifth.chargesCreated).toBe(1);
+      expect(t.plans.assessed).toEqual([{ contractId, period: '2026-10', incomeCents: 2_500_00 }]);
+      const october = await t.charges.findByReference(contractId, 'isa:2026-10');
+      expect(october?.amount.cents).toBe(250_00);
+      expect(october?.dueDate.toString()).toBe('2026-11-05');
     });
 
     // July reaches the cap: August is not assessed, and its declaration comes too late.
@@ -298,6 +359,7 @@ describe('billing use cases', () => {
           { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: '2026-07' },
         )
         .endsWith(contractId, '2026-07');
+      t.clock.set(new Date('2026-08-02T10:00:00Z'));
       await t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-07', 2_000_00));
 
       const result = await t.cycle.execute(new RunBillingCycleCommand(day('2026-09-05')));
@@ -313,6 +375,7 @@ describe('billing use cases', () => {
         unpaidInstallments: [],
         nextIsaPeriod: '2026-09',
       });
+      t.clock.set(new Date('2026-09-03T10:00:00Z'));
       await expect(
         t.declare.execute(new DeclareIncomeCommand(t.student, other, '2026-08', 2_000_00)),
       ).rejects.toThrow(PeriodNotOpenError);
@@ -520,6 +583,24 @@ describe('billing use cases', () => {
       expect(retry).toEqual({ chargesReviewed: 1, retries: 1, failedChargeIds: [] });
       expect((await t.charges.findById(charge.id))?.status).toBe('pending');
       expect(t.events.ofType(BillingEvents.ChargeOverdue)).toHaveLength(1);
+    });
+
+    // The other overdue charges of a defaulted contract go to recovery: notices and write-off go
+    // on, the direct debit is not tried again (as ops cannot, with contract_not_repaying).
+    it('should not retry the collection of a charge when the contract has defaulted', async () => {
+      const t = setup();
+      const contractId = t.contract('installments', 'defaulted');
+      await t.mandate(contractId);
+      const charge = await t.charge({ contractId });
+
+      const retry = await t.dunning.execute(new RunDunningCommand(day('2026-11-15')));
+      const end = await t.dunning.execute(new RunDunningCommand(day('2027-02-10')));
+
+      expect(retry).toMatchObject({ retries: 0, failedChargeIds: [] });
+      expect(end.retries).toBe(0);
+      expect(t.events.ofType(BillingEvents.ChargeSubmitted)).toHaveLength(0);
+      expect(t.events.ofType(BillingEvents.ChargeOverdue)).toHaveLength(2);
+      expect((await t.charges.findById(charge.id))?.status).toBe('written_off');
     });
 
     it('should put the contract in arrears at 30 days and write the charge off at 90', async () => {

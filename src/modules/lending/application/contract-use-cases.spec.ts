@@ -39,6 +39,10 @@ import {
   CheckDisbursementSettlementHandler,
 } from './commands/check-disbursement-settlement.command';
 import {
+  CloseDefaultedPlanCommand,
+  CloseDefaultedPlanHandler,
+} from './commands/close-defaulted-plan.command';
+import {
   CompleteContractCommand,
   CompleteContractHandler,
 } from './commands/complete-contract.command';
@@ -143,6 +147,7 @@ function setup() {
     payoff: new RequestPayoffHandler(uow, contracts, plans, clock),
     repayment: new RecordRepaymentHandler(uow, plans, clock),
     collectionStatus: new RecordCollectionStatusHandler(uow, contracts, clock),
+    closeDefaulted: new CloseDefaultedPlanHandler(uow, plans, clock),
   };
 
   // The saga as the consumers and jobs run it.
@@ -653,6 +658,25 @@ describe('lending use cases', () => {
       expect(await status('defaulted')).toBe('defaulted');
       expect(await status('in_arrears')).toBe('defaulted');
       expect(t.events.ofType(LendingEvents.ContractDefaulted)).toHaveLength(1);
+    });
+
+    // The schedule no longer shows the plan active, and billing no longer lists it.
+    it('should close the plan of a defaulted contract once', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.collectionStatus.execute(
+        new RecordCollectionStatusCommand(contractId, 'defaulted', new Date()),
+      );
+
+      await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(contractId));
+      const version = (await t.plans.findByContractId(contractId))?.version;
+      await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(contractId));
+
+      const plan = await t.plans.findByContractId(contractId);
+      expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
+      expect(plan?.version).toBe(version);
+      expect(t.events.ofType(LendingEvents.PlanCompleted)).toHaveLength(1);
+      await t.closeDefaulted.execute(new CloseDefaultedPlanCommand(uuidv7()));
     });
   });
 

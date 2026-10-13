@@ -21,6 +21,7 @@ describe('HandlebarsEmailRenderer', () => {
         daysOverdue: 30,
         secondNotice: false,
         period: '2026-11',
+        missingSince: '2026-09',
       },
       'ref-123',
     );
@@ -51,6 +52,13 @@ describe('HandlebarsEmailRenderer', () => {
     expect(approved.subject).toBe('Your application is approved');
     expect(rejected.subject).toBe('About your application');
     expect(rejected.text).toContain('we cannot offer you financing');
+  });
+
+  it('should tell an ISA student since when declarations are missing and by when to declare', () => {
+    const email = renderer.render('isa_declaration_overdue', { missingSince: '2026-09' }, 'c-1');
+
+    expect(email.subject).toBe('Your income declarations are missing since 2026-09');
+    expect(email.text).toContain('by the 4th of the next month');
   });
 
   it('should escape values in the HTML version only', () => {

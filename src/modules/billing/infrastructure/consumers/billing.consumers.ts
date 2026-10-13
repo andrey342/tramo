@@ -12,10 +12,8 @@ import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shar
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
-import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
-import { RunBillingCycleCommand } from '../../application/commands/run-billing-cycle.command';
 import {
   BillingEvents,
   type ChargeCancelledPayload,
@@ -25,7 +23,7 @@ import {
   type ChargeWrittenOffPayload,
   type MandateSignedPayload,
 } from '../../domain';
-import { CollectionJobs } from '../jobs/billing-jobs';
+import { BillingCycleJobs, CollectionJobs } from '../jobs/billing-jobs';
 import { LedgerWriter } from '../persistence/typeorm-billing.queries';
 
 // A collection attempt started: a job asks the provider, keyed by the attempt.
@@ -82,26 +80,28 @@ export class ChargeOnPayoffRequested implements EventHandler<PayoffRequestedPayl
   }
 }
 
-// Only a payoff makes the open charges unowed: a plan that ends on its last instalment, its cap
-// or its last ISA payment ends with that charge, which is still collected.
 // The payoff was refused: the cycle skipped the plan meanwhile, so the contract is billed and
-// collected as of that day, not on the next 1st.
+// collected as of that day, not on the next run. A job does it, so the plan and each charge get
+// their own transaction rather than joining this consumer's.
 @Injectable()
 @EventSubscriber({ event: LendingEvents.PayoffWithdrawn, consumer: 'billing.rebill-on-withdrawn' })
 export class RebillOnPayoffWithdrawn implements EventHandler<PayoffWithdrawnPayload> {
-  constructor(private readonly commands: CommandBus) {}
+  constructor(private readonly jobs: BillingCycleJobs) {}
 
   async handle(event: IntegrationEvent<PayoffWithdrawnPayload>): Promise<void> {
-    const { contractId } = event.payload;
-    const asOf = CalendarDate.fromInstant(new Date(event.occurredAt));
-    const billed = await this.commands.execute(new RunBillingCycleCommand(asOf, contractId));
-    if (billed.failedContractIds.length > 0) {
-      throw new Error(`Contract ${contractId} not billed after its payoff was withdrawn`);
-    }
-    await this.commands.execute(new CollectDueChargesCommand(asOf, contractId));
+    await this.jobs.rebill(
+      {
+        contractId: event.payload.contractId,
+        asOf: CalendarDate.fromInstant(new Date(event.occurredAt)),
+        eventId: event.eventId,
+      },
+      event.correlationId,
+    );
   }
 }
 
+// Only a payoff makes the open charges unowed: a plan that ends on its last instalment, its cap
+// or its last ISA payment ends with that charge, which is still collected.
 @Injectable()
 @EventSubscriber({ event: LendingEvents.PlanCompleted, consumer: 'billing.close-plan' })
 export class CancelChargesOnPlanCompleted implements EventHandler<PlanCompletedPayload> {

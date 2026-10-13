@@ -224,7 +224,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 
 - **`FinancingPlan`**: how an active contract is repaid, opened on `ContractActivated` (ADR 016).
   `PlanStatus`: `active → completed`, with a completion reason `repaid`, `paid_off`,
-  `cap_reached`, `max_payments` or `window_expired` (`PlanCompleted` completes the contract).
+  `cap_reached`, `max_payments`, `window_expired` (`PlanCompleted` completes the contract) or
+  `defaulted` (the contract defaulted first, `ContractDefaulted` closes the plan; the contract
+  stays `defaulted`).
   - **Instalment schedule** (`InstallmentRow`): French amortisation, a constant instalment with
     each row's interest rounded half-up and the rounding absorbed by the last row. Instalments
     fall due on the activation day of each following month (days 29 to 31 move to the 28th).
@@ -234,8 +236,10 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
     8 years after the program's end. Each month is assessed in order, none skipped
     (`assessPeriod`): with income declared at or above the minimum it is charged the share,
     never past the cap; below the minimum or without a declaration it is `paused`. Two months in
-    a row without a declaration publish `IsaDeclarationOverdue`. The plan ends at the cap, at
-    `maxPayments` or once a month starts after the window.
+    a row without a declaration publish `IsaDeclarationOverdue`, once until a declaration clears
+    it: the student is emailed (`isa_declaration_overdue`) and staff see `declarationOverdue` on
+    the contract's schedule (`GET /contracts/:id/schedule`); the ops overview does not count it.
+    The plan ends at the cap, at `maxPayments` or once a month starts after the window.
 - **Payoff / payoff quote** (`PayoffQuote`): instalments only. What repaying everything costs on
   a day: instalments due and unpaid, the outstanding principal and the interest accrued since the
   last due date, no fee. `POST /contracts/:id/payoff` takes today's quote and records a
@@ -273,11 +277,12 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   mandate it debits, the provider's payment id and its outcome (`pending | succeeded | failed`).
   A repeated call sends the same key and is never collected twice.
 - **Billing cycle / billing run**: no aggregate of its own. `RunBillingCycleCommand` runs as of a
-  day (the `billing.cycle` schedule on the 1st at 03:00 UTC, or ops through
+  day (the `billing.cycle` schedule on the 1st and the 5th at 03:00 UTC, or ops through
   `POST /ops/billing/run`): for each plan being repaid it creates a charge for each instalment
-  falling due by the end of that month, and for an ISA each month of income that has ended,
-  assessed by lending's rules (ADR 017) and due on the 5th of the next month. One plan per
-  transaction; a charge billed late is due on the day of the run.
+  falling due by the end of that month, and for an ISA each month of income whose declarations
+  have closed (`isaPeriodClosesOn`, the 5th of the next month), assessed by lending's rules
+  (ADR 017) and due that day. One plan per transaction; a charge billed late is due on the day of
+  the run.
 - **Collection**: submitting due charges under the mandate in force (`billing.collect`, every day
   at 06:00 UTC, and after each ops billing run). The provider answers later on
   `POST /webhooks/psp`. A charge without a mandate stays `scheduled`.
@@ -286,15 +291,19 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   `POST /ops/dunning/run`): `reminder` at −3 (`ChargeDueSoon`), `first_notice` at +1
   (`ChargeOverdue`, the charge `overdue`), `retry` at +3 and +7, `second_notice` at +15,
   `arrears` at +30 (`ContractInArrears`) and `write_off` at +90 (`ChargeWrittenOff`, the contract
-  defaults). A charge being collected waits for the answer.
+  defaults). A charge being collected waits for the answer. After the default no retry is
+  submitted: the debt goes to recovery and the other charges only get their notices and
+  write-off.
 - **Arrears**: a contract with a charge past the arrears step and unpaid. A payment that leaves no
   other charge of the contract in arrears publishes `ArrearsCleared`.
 - **Write-off**: the end of dunning; the charge is `written_off` with reason `dunning_exhausted`.
 - **`IncomeDeclaration`**: what an ISA student earned in one month (`period` as `YYYY-MM`), one
-  per contract and month, for a month that has started and that lending has not assessed yet
-  (`period_not_open` otherwise). `IncomeSource`: `self | employment_provider`. The amount stays in
-  billing; `IncomeDeclared` says only that a month was declared. On the 25th, students who have
-  not declared the month are reminded once (`IncomeDeclarationDue`).
+  per contract and month. The declaration window of a month runs from its first day to the end
+  of the 4th of the next (`ISA_DUE_DAY`, the 5th, closes it), so a salary paid on the 1st or 2nd
+  is declared in time; a month whose window closed, or that lending has assessed, is refused
+  (`period_not_open`, naming the first open month). `IncomeSource`: `self | employment_provider`.
+  The amount stays in billing; `IncomeDeclared` says only that a month was declared. On the 25th,
+  students who have not declared the month are reminded once (`IncomeDeclarationDue`).
 - **Ledger / statement**: `billing.ledger_entries`, written from the charge events, one entry per
   event (`LedgerEntryType`: `charge`, `payment`, `write_off`, `cancellation`; positive amounts are
   owed, negative ones paid or no longer owed). `GET /contracts/:id/statement` lists them with the
@@ -311,7 +320,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   on `notifications.emails`. `EmailTemplate`: `welcome`, `application_received`,
   `application_decided`, `contract_ready_to_sign`, `disbursement_settled`,
   `installment_reminder`, `installment_collected`, `payment_overdue`, `contract_in_arrears`,
-  `isa_declaration_reminder`.
+  `isa_declaration_reminder`, `isa_declaration_overdue`.
 
   ```text
   pending → sent                           the SMTP server took it

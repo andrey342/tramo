@@ -11,12 +11,11 @@ import {
   type ChargeRepository,
   INCOME_DECLARATION_REPOSITORY,
   type IncomeDeclarationRepository,
+  isaPeriodClosesOn,
 } from '../../domain';
 import { type BillablePlan, REPAYMENT_PLANS, type RepaymentPlans } from '../ports/billing-ports';
 
 const PAGE = 100;
-// An ISA month of income is charged on the 5th of the month after it.
-export const ISA_DUE_DAY = 5;
 
 export interface BillingCycleResult {
   readonly plansBilled: number;
@@ -25,10 +24,11 @@ export interface BillingCycleResult {
   readonly failedContractIds: readonly string[];
 }
 
-// The monthly cycle, as of a day (the 1st in production, any day for a demo): for every plan
-// being repaid (one contract's, when given), a charge for each instalment falling due by the end
-// of that month and not charged yet, and for an ISA each month of income up to the previous one,
-// assessed by lending's rules on what the student declared, until one ends the plan. Each plan
+// The monthly cycle, as of a day (the 1st and the 5th in production, any day for a demo): for
+// every plan being repaid (one contract's, when given), a charge for each instalment falling due
+// by the end of that month and not charged yet, and for an ISA each month of income whose
+// declarations have closed (on the 5th of the next month), assessed by lending's rules on what
+// the student declared, until one ends the plan. Each plan
 // in its own transaction; charges are unique per contract and reference, so a second run of the
 // same month creates nothing. A charge caught up late is due on the day of the run, not before:
 // dunning counts from when the student could have paid.
@@ -103,20 +103,24 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
     return created;
   }
 
-  // Every month of income that has ended and lending has not assessed yet, in order; under the
-  // contract's lock, so the declarations read are the last ones.
+  // Every month of income whose declarations have closed and lending has not assessed yet, in
+  // order; under the contract's lock, so the declarations read are the last ones. A month is due
+  // on the day its declarations close, or on the day of the run when billed late.
   private async billIncomeShare(plan: BillablePlan, asOf: CalendarDate): Promise<number> {
     await this.charges.lockContract(plan.contractId);
     let created = 0;
     let period = plan.nextIsaPeriod;
-    while (period !== null && period < asOf.period) {
+    while (period !== null) {
+      const closesOn = isaPeriodClosesOn(period);
+      if (asOf.isBefore(closesOn)) {
+        break;
+      }
       const declaration = await this.declarations.findByPeriod(plan.contractId, period);
       const assessment = await this.plans.assessIsaPeriod(
         plan.contractId,
         period,
         declaration?.grossMonthlyIncome.cents ?? null,
       );
-      const month = CalendarDate.parse(`${period}-01`);
       if (assessment.outcome === 'charge' && assessment.amountCents > 0) {
         created += await this.create(plan, {
           kind: 'isa',
@@ -124,14 +128,14 @@ export class RunBillingCycleHandler implements ICommandHandler<RunBillingCycleCo
           installmentNumber: null,
           period,
           amount: Money.fromCents(assessment.amountCents),
-          dueDate: latest(month.addMonths(1).withDay(ISA_DUE_DAY), asOf),
+          dueDate: latest(closesOn, asOf),
         });
       }
       // The cap, the last payment or the window: lending has closed the plan.
       if (assessment.planEnded) {
         break;
       }
-      period = month.addMonths(1).period;
+      period = CalendarDate.parse(`${period}-01`).addMonths(1).period;
     }
     return created;
   }

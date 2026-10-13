@@ -7,6 +7,23 @@ export type IncomeSource = 'self' | 'employment_provider';
 
 const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+// A month of income is declared from its first day until the end of the 4th of the next month,
+// so a salary paid on the last days of the month or the first days of the next is declared in
+// time. On the 5th the window has closed: the cycle assesses the month, with or without a
+// declaration, and its charge falls due that day.
+export const ISA_DUE_DAY = 5;
+
+// The day the declarations of a month close, and it is assessed and charged.
+export function isaPeriodClosesOn(period: string): CalendarDate {
+  return CalendarDate.parse(`${period}-01`).addMonths(1).withDay(ISA_DUE_DAY);
+}
+
+// The earliest month still open on a day: the previous one until the 4th, then the current one.
+export function firstDeclarablePeriod(today: CalendarDate): string {
+  const month = today.startOfMonth();
+  return (today.day < ISA_DUE_DAY ? month.addMonths(-1) : month).period;
+}
+
 export interface IncomeDeclarationProps {
   readonly contractId: string;
   readonly studentId: string;
@@ -27,7 +44,8 @@ export class IncomeDeclaration extends AggregateRoot {
     super(id);
   }
 
-  // A month that has started: income is declared for the current month or a past one.
+  // A month that has started and whose window has not closed: the current month, or the previous
+  // one until the 4th.
   static declare(input: {
     id: string;
     contractId: string;
@@ -42,11 +60,15 @@ export class IncomeDeclaration extends AggregateRoot {
     if (!PERIOD.test(input.period)) {
       throw new InvalidPeriodError('expected a month as YYYY-MM');
     }
-    if (input.period > CalendarDate.fromInstant(input.now).period) {
+    const today = CalendarDate.fromInstant(input.now);
+    if (input.period > today.period) {
       throw new InvalidPeriodError('income is declared for a month that has started');
     }
-    if (input.openFrom && input.period < input.openFrom) {
-      throw new PeriodNotOpenError(input.period, input.openFrom);
+    const windowOpenFrom = firstDeclarablePeriod(today);
+    const openFrom =
+      input.openFrom && input.openFrom > windowOpenFrom ? input.openFrom : windowOpenFrom;
+    if (input.period < openFrom) {
+      throw new PeriodNotOpenError(input.period, openFrom);
     }
     if (input.grossMonthlyIncome.isNegative()) {
       throw new InvalidValueError('grossMonthlyIncome', 'Income cannot be negative.');

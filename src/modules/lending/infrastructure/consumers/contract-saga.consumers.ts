@@ -9,6 +9,7 @@ import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shar
 import { Money, Percentage } from '@shared/domain';
 
 import { ActivateContractCommand } from '../../application/commands/activate-contract.command';
+import { CloseDefaultedPlanCommand } from '../../application/commands/close-defaulted-plan.command';
 import { CompleteContractCommand } from '../../application/commands/complete-contract.command';
 import {
   type AcceptedOffer,
@@ -19,6 +20,7 @@ import { RequestDisbursementCommand } from '../../application/commands/request-d
 import {
   type ContractActivatedPayload,
   type ContractCreatedPayload,
+  type ContractDefaultedPayload,
   type ContractSignedPayload,
   type DisbursementRequestedPayload,
   type DisbursementRetriedPayload,
@@ -36,6 +38,7 @@ import { LendingJobs } from '../jobs/lending-jobs';
 //   webhook signed → ContractSigned → disbursement → DisbursementRequested → job: transfer
 //   DisbursementSent → job: check settlement → DisbursementSettled → activate
 //   ContractActivated → open the plan … PlanCompleted → complete the contract
+//   ContractDefaulted → close the plan (`defaulted`)
 
 @Injectable()
 @EventSubscriber({ event: OriginationEvents.OfferAccepted, consumer: 'lending.draw-up-contract' })
@@ -161,7 +164,20 @@ export class OpenPlanOnContractActivated implements EventHandler<ContractActivat
 export class CompleteContractOnPlanCompleted implements EventHandler<PlanCompletedPayload> {
   constructor(private readonly commands: CommandBus) {}
 
+  // A plan closed because the contract defaulted leaves the contract defaulted.
   async handle(event: IntegrationEvent<PlanCompletedPayload>): Promise<void> {
-    await this.commands.execute(new CompleteContractCommand(event.payload.contractId));
+    if (event.payload.reason !== 'defaulted') {
+      await this.commands.execute(new CompleteContractCommand(event.payload.contractId));
+    }
+  }
+}
+
+@Injectable()
+@EventSubscriber({ event: LendingEvents.ContractDefaulted, consumer: 'lending.close-plan' })
+export class ClosePlanOnContractDefaulted implements EventHandler<ContractDefaultedPayload> {
+  constructor(private readonly commands: CommandBus) {}
+
+  async handle(event: IntegrationEvent<ContractDefaultedPayload>): Promise<void> {
+    await this.commands.execute(new CloseDefaultedPlanCommand(event.payload.contractId));
   }
 }

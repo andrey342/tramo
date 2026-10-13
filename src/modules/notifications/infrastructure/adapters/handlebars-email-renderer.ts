@@ -83,6 +83,13 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
       'Declare it in the app before the 5th; a month without a declaration is paused, and two in a row are followed up.',
     ],
   },
+  isa_declaration_overdue: {
+    subject: 'Your income declarations are missing since {{missingSince}}',
+    body: [
+      'We have not received a declaration of your income for your income share agreement since {{missingSince}}. Those months were paused: nothing was charged for them.',
+      'Please declare your gross income every month in the app, by the 4th of the next month, even if it was zero. If something is stopping you, contact us.',
+    ],
+  },
 };
 
 const LAYOUT = Handlebars.compile(

@@ -34,8 +34,8 @@ the charge disagreeing after a failure?
 ## Decision outcome
 
 Option 3. The cycle walks the plans being repaid through `ListBillablePlansQuery` and, for an
-ISA, each month that has ended and lending has not assessed yet, in order: the declaration of the
-month (or none), `AssessIsaPeriodCommand`, and the charge when there is one; the outcome says
+ISA, each month whose declarations have closed (on the 5th of the next month, ADR 016) and
+lending has not assessed yet, in order: the declaration of the month (or none), `AssessIsaPeriodCommand`, and the charge when there is one; the outcome says
 whether that month ended the plan (`planEnded`), where the walk stops. Lending's handler
 joins the transaction billing opened (nested units of work join the outer one), so the plan and
 the charge are committed together, one plan per transaction. The reverse direction stays on

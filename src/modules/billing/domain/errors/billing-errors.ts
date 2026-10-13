@@ -36,8 +36,8 @@ export class IncomeAlreadyDeclaredError extends DomainError {
   }
 }
 
-// A month before the ISA's first one, or one already assessed (the cycle ran without a
-// declaration and paused it).
+// A month before the ISA's first one, one whose window closed on the 5th of the next month, or
+// one already assessed (paused without a declaration).
 export class PeriodNotOpenError extends DomainError {
   readonly code = 'period_not_open';
   readonly category = 'rule_violation';

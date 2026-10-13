@@ -9,10 +9,9 @@ import { type IntegrationEvent } from '@shared/application';
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
-import { CollectDueChargesCommand } from '../../application/commands/collect-due-charges.command';
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
-import { RunBillingCycleCommand } from '../../application/commands/run-billing-cycle.command';
 import { BillingEvents } from '../../domain';
+import { type BillingCycleJobs } from '../jobs/billing-jobs';
 
 import {
   CancelChargesOnPlanCompleted,
@@ -47,7 +46,14 @@ describe('CancelChargesOnPlanCompleted', () => {
     const [paidOff, capped] = [uuidv7(), uuidv7()];
 
     await consumer.handle(completed(paidOff, 'paid_off'));
-    for (const reason of ['repaid', 'cap_reached', 'max_payments', 'window_expired'] as const) {
+    const reasons = [
+      'repaid',
+      'cap_reached',
+      'max_payments',
+      'window_expired',
+      'defaulted',
+    ] as const;
+    for (const reason of reasons) {
       await consumer.handle(completed(capped, reason));
     }
 
@@ -88,30 +94,33 @@ describe('CollectOnMandateSigned', () => {
 });
 
 describe('RebillOnPayoffWithdrawn', () => {
-  it('should bill and collect the contract as of the day its payoff was withdrawn', async () => {
-    const executed: unknown[] = [];
-    const commands = {
-      execute: (command: unknown) => {
-        executed.push(command);
-        return Promise.resolve({ failedContractIds: [] });
+  // Billing and collecting in the consumer would join its transaction: one failed plan or charge
+  // would hold the others back, and a failed collection went unnoticed.
+  it('should queue the billing of the contract as of the day its payoff was withdrawn', async () => {
+    const queued: unknown[] = [];
+    const jobs = {
+      rebill: (request: unknown, correlationId: string | null) => {
+        queued.push({ request, correlationId });
+        return Promise.resolve();
       },
-    } as unknown as CommandBus;
-    const contractId = uuidv7();
-    const day = CalendarDate.parse('2026-11-22');
+    } as unknown as BillingCycleJobs;
+    const [contractId, eventId] = [uuidv7(), uuidv7()];
 
-    await new RebillOnPayoffWithdrawn(commands).handle({
-      eventId: uuidv7(),
+    await new RebillOnPayoffWithdrawn(jobs).handle({
+      eventId,
       eventType: LendingEvents.PayoffWithdrawn,
       aggregateType: 'FinancingPlan',
       aggregateId: uuidv7(),
       occurredAt: '2026-11-22T09:00:00.000Z',
-      correlationId: null,
+      correlationId: 'req-1',
       payload: { planId: uuidv7(), contractId, studentId: uuidv7() },
     });
 
-    expect(executed).toEqual([
-      new RunBillingCycleCommand(day, contractId),
-      new CollectDueChargesCommand(day, contractId),
+    expect(queued).toEqual([
+      {
+        request: { contractId, asOf: CalendarDate.parse('2026-11-22'), eventId },
+        correlationId: 'req-1',
+      },
     ]);
   });
 });

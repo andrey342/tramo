@@ -160,7 +160,8 @@ describe('billing saga (integration)', () => {
         .get<IncomeDeclarationRepository>(INCOME_DECLARATION_REPOSITORY)
         .save(aDeclaration({ contractId: contract.id, period: '2026-07', incomeCents: 2_000_00 }));
     });
-    const asOf = CalendarDate.parse('2026-08-01');
+    // July's declarations close on 5 August, when the month is assessed.
+    const asOf = CalendarDate.parse('2026-08-05');
     const save = jest.spyOn(charges, 'save').mockRejectedValueOnce(new Error('disk full'));
 
     const failed = await commands.execute(new RunBillingNowCommand(OPS, asOf, contract.id));
@@ -198,6 +199,14 @@ describe('billing saga (integration)', () => {
     expect((await charges.findByReference(contractId, 'installment:1'))?.status).toBe(
       'written_off',
     );
+    // The plan closes with the default (lending.close-plan), and the contract stays defaulted.
+    await until(
+      () => plans.findByContractId(contractId),
+      (plan) => {
+        expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
+      },
+    );
+    expect((await contracts.findById(contractId))?.status).toBe('defaulted');
   }, 60_000);
 
   // The payoff charge being collected for a contract (one per request).

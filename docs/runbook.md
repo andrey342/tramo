@@ -152,6 +152,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   | `billing.collect`           | `<chargeId>.<attempt>.collect.<eventId>`            | `POST /charges/:id/retry`                                          |
   | `billing.psp-simulator`     | `<chargeId>.<attempt>.callback`                     | Retry the job once the worker reaches the api (`PSP_CALLBACK_URL`) |
   | `billing.cycle`, `.dunning` | scheduled                                           | `POST /ops/billing/run`, `POST /ops/dunning/run`                   |
+  | `billing.cycle` (rebill)    | `<contractId>.rebill.<eventId>`                     | `POST /ops/billing/run?contractId=` (a payoff was withdrawn)       |
   | `notifications.emails`      | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
   | `notifications.webhooks`    | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
   | `reporting.rebuild`         | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
@@ -219,8 +220,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   - A charge stuck `pending`: the provider never answered (collection retried about two hours,
     then dead-lettered) or its callback did not reach the api. Dunning leaves pending charges
     alone.
-  - Schedules (UTC): cycle on the 1st at 03:00, collection daily at 06:00, dunning daily at 07:00,
-    ISA declaration reminders on the 25th at 09:00. A run that could not bill or dun some items
+  - Schedules (UTC): cycle on the 1st and the 5th at 03:00 (instalments of the month, then the
+    ISA months whose declarations closed on the 4th), collection daily at 06:00, dunning daily at
+    07:00, ISA declaration reminders on the 25th at 09:00. A run that could not bill or dun some items
     reports them and the scheduled job fails, so it shows in the queue and is retried.
 - **Action**:
   - `POST /charges/:id/retry` (ops, admin): a `failed` or `overdue` charge gets a new attempt; a
@@ -234,7 +236,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     (on by default outside production).
   - Dunning steps by days from the due date: reminder at −3, notice at +1 (`overdue`), collection
     retried at +3 and +7, second notice at +15, arrears at +30 (contract `in_arrears`), write-off
-    at +90 (contract `defaulted`). A payment that leaves nothing in arrears clears them.
+    at +90 (contract `defaulted`, its plan closed as `defaulted`). After the default no retry is
+    submitted, by dunning or ops; the other charges still get their notices and write-off. A
+    payment that leaves nothing in arrears clears them.
 
 ## A center's webhook failing
 
