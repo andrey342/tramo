@@ -111,6 +111,11 @@ export const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.string().min(8).optional(),
   ),
+  // GET /metrics answers only a bearer of this token; without one it is not served.
+  METRICS_TOKEN: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(12).optional(),
+  ),
   // Number of reverse proxies in front of the api; the client IP for rate limiting is read from
   // X-Forwarded-For only when this is set.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),

@@ -70,6 +70,12 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010); later pages do not shift when new rows arrive.
+- **Metrics.** `GET /metrics` (Prometheus text, for a bearer of `METRICS_TOKEN`; not served
+  without one) reports `tramo_http_request_duration_seconds` by method, route template and
+  status (requests no route matched share `route="unmatched"`), `tramo_queue_jobs` by queue and
+  state, `tramo_outbox_pending_events` and `tramo_outbox_lag_seconds` (age of the oldest event
+  not yet handed to the queues), plus the process defaults. The backlog is read from Redis and
+  Postgres when scraped, so the api's one target covers the worker's queues too.
 
 ## Authentication
 
