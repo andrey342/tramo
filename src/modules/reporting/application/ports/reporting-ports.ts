@@ -16,7 +16,7 @@ export type ApplicationStatus =
   | 'cancelled'
   | 'expired';
 export type ContractStatus = 'active' | 'in_arrears' | 'completed' | 'defaulted' | 'cancelled';
-export type DisbursementStatus = 'pending' | 'sent' | 'settled' | 'failed';
+export type DisbursementStatus = 'pending' | 'sent' | 'settled' | 'failed' | 'cancelled';
 export type ChargeStatus =
   'scheduled' | 'paid' | 'failed' | 'overdue' | 'written_off' | 'cancelled';
 export type Product = 'installments' | 'isa';

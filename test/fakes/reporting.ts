@@ -111,7 +111,9 @@ export class InMemoryReportingStore implements ReportingStore {
   recordDisbursement(fact: DisbursementFact): Promise<void> {
     this.disbursements.set(
       fact.disbursementId,
-      merge(this.disbursements.get(fact.disbursementId), fact, { terminal: ['settled'] }),
+      merge(this.disbursements.get(fact.disbursementId), fact, {
+        terminal: ['settled', 'cancelled'],
+      }),
     );
     return Promise.resolve();
   }

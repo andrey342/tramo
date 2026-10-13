@@ -78,7 +78,7 @@ const DISBURSEMENT_UPSERT = upsertSql({
   table: 'disbursement_facts',
   key: 'disbursement_id',
   descriptive: ['contract_id', 'center_id', 'amount_cents'],
-  terminal: ['settled'],
+  terminal: ['settled', 'cancelled'],
 });
 const CHARGE_UPSERT = upsertSql({
   table: 'charge_facts',
