@@ -161,11 +161,13 @@ export function centerFigures(rows: CenterRows): CenterFigures {
     if (key) applications[key] += row.count;
   }
   const totals = { contracts: noContracts(), money: noMoney() };
-  const byProduct = new Map(
-    PRODUCTS.map((product) => [product, { contracts: noContracts(), money: noMoney() }]),
-  );
+  const byProduct = PRODUCTS.map((product) => ({
+    product,
+    contracts: noContracts(),
+    money: noMoney(),
+  }));
   const targets = (product: Product | null): (typeof totals)[] => {
-    const own = product ? byProduct.get(product) : undefined;
+    const own = byProduct.find((entry) => entry.product === product);
     return own ? [totals, own] : [totals];
   };
   for (const row of rows.contracts) {
@@ -186,10 +188,6 @@ export function centerFigures(rows: CenterRows): CenterFigures {
     applications,
     contracts: totals.contracts,
     ...totals.money,
-    byProduct: PRODUCTS.map((product) => ({
-      product,
-      contracts: byProduct.get(product)?.contracts ?? noContracts(),
-      ...(byProduct.get(product)?.money ?? noMoney()),
-    })),
+    byProduct: byProduct.map(({ product, contracts, money }) => ({ product, contracts, ...money })),
   };
 }
