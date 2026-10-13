@@ -21,6 +21,9 @@ Arguments: `$ARGUMENTS`. Works against the compose stack (`REDIS_URL`, `DATABASE
    Dead letters live in the `dead-letter` queue with their own ids (shown in the overview).
 4. Decide with the user before acting, then:
    - transient cause fixed: `--retry` (consumers are idempotent, a retry cannot apply twice);
+   - an outage dead-lettered many jobs of one queue: `pnpm queue:inspect <queue> --retry-dead-letters`
+     retries every job whose dead letter came from that queue and removes those letters (an event
+     delivery whose failed copy expired is added again; other expired jobs are kept and listed);
    - permanent cause: fix the code or data first; or discard with `--remove`, and remove its dead
      letter too (`pnpm queue:inspect dead-letter <id> --remove`).
 5. Read the consumer named in the job (`src/modules/<module>/**`, `@EventSubscriber`) when the

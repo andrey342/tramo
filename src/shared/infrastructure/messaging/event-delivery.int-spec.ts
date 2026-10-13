@@ -20,7 +20,7 @@ import { ClockModule } from '../clock/system-clock';
 import { ConfigModule } from '../config';
 import { RequestContextModule } from '../context';
 import { DatabaseModule } from '../database';
-import { QueueNames, QueuesModule } from '../queues';
+import { EVENT_JOB_OPTIONS, QueueNames, QueuesModule } from '../queues';
 
 import { MessagingWorkerModule } from './messaging-worker.module';
 import { MessagingModule } from './messaging.module';
@@ -124,6 +124,22 @@ describe('Event delivery through the outbox (integration)', () => {
     expect(row?.published_at).toBeInstanceOf(Date);
   });
 
+  it('should queue a delivery with the retry schedule of event consumers when it is published', async () => {
+    await publish('DeliveryProbed', 'probe-options');
+    await publisher.publishBatch();
+    const [row] = await db.query<{ id: string }[]>(
+      "SELECT id FROM shared.outbox_messages WHERE aggregate_id = 'probe-options'",
+    );
+
+    const queue = app.get<Queue>(getQueueToken('events.reporting'));
+    const job = await queue.getJob(`${row?.id ?? ''}.reporting.delivery-probe`);
+
+    expect(job?.opts).toMatchObject({
+      attempts: EVENT_JOB_OPTIONS.attempts,
+      backoff: EVENT_JOB_OPTIONS.backoff,
+    });
+  });
+
   it('should run a consumer once when the same event is delivered twice', async () => {
     await publish('DeliveryProbed', 'probe-2');
     await publisher.publishBatch();
@@ -159,6 +175,38 @@ describe('Event delivery through the outbox (integration)', () => {
 
     stalled.mockRestore();
     expect(await publisher.publishBatch()).toBe(1);
+  });
+
+  it('should record the error and send the batch again when Redis refuses it', async () => {
+    const queue = app.get<Queue>(getQueueToken('events.reporting'));
+    const refused = jest
+      .spyOn(queue, 'addBulk')
+      .mockRejectedValueOnce(new Error('READONLY You can not write against a read only replica'));
+    await publish('DeliveryProbed', 'probe-refused');
+
+    await expect(publisher.publishBatch()).rejects.toThrow('READONLY');
+    const [failed] = await db.query<
+      { published_at: Date | null; attempts: number; last_error: string | null }[]
+    >(
+      `SELECT published_at, attempts, last_error FROM shared.outbox_messages
+        WHERE aggregate_id = 'probe-refused'`,
+    );
+    expect(failed).toMatchObject({ published_at: null, attempts: 1 });
+    expect(failed?.last_error).toContain('READONLY');
+
+    refused.mockRestore();
+    expect(await publisher.publishBatch()).toBe(1);
+    const [published] = await db.query<
+      { published_at: Date | null; attempts: number; last_error: string | null }[]
+    >(
+      `SELECT published_at, attempts, last_error FROM shared.outbox_messages
+        WHERE aggregate_id = 'probe-refused'`,
+    );
+    expect(published).toMatchObject({ attempts: 2, last_error: null });
+    expect(published?.published_at).toBeInstanceOf(Date);
+    await eventually(() => {
+      expect(received.some((event) => event.aggregateId === 'probe-refused')).toBe(true);
+    });
   });
 
   it('should mark events without subscribers as published', async () => {

@@ -130,12 +130,19 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     job's id is `<eventId>.<consumer>`, which names the event and the consumer.
   - Bull Board at http://localhost:3000/admin/queues (basic auth, `ops` / `tramo-queues` in
     compose; not served without `BULL_BOARD_PASSWORD`).
-- **How a job ends**: retried with backoff (default five attempts from 2 s; provider calls have
-  their own schedule, below); once out of attempts it stays in its queue's failed set and a copy
-  goes to `dead-letter`, kept until someone removes it.
+- **How a job ends**: retried with backoff. An event delivery (`events.<module>`) gets eight
+  attempts, the delay doubling from 10 s, about 21 minutes in all; work queues without a schedule
+  of their own get five attempts from 2 s (about 30 s); provider calls have their own schedule,
+  below. Once out of attempts it stays in its queue's failed set and a copy goes to
+  `dead-letter`, kept until someone removes it.
 - **Action**, only once the cause is fixed:
   - Retry the job in its own queue: `pnpm queue:inspect <queue> <jobId> --retry`, then remove its
     dead letter: `pnpm queue:inspect dead-letter <deadLetterId> --remove`.
+  - After an outage that dead-lettered many jobs of one queue:
+    `pnpm queue:inspect <queue> --retry-dead-letters` retries every job whose dead letter came
+    from that queue and removes those letters. An event delivery whose failed copy expired
+    (30 days) is added again under its id; an expired job of a work queue is kept and listed, and
+    its lever is the endpoint in the table below.
   - If the effect is no longer wanted, `--remove` the job and its dead letter instead.
   - A retry is safe: an event consumer claims `<eventId, consumer>` in `shared.processed_events`
     in the same transaction as its effects, so an event already applied is skipped; work-queue

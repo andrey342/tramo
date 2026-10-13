@@ -25,7 +25,8 @@ back). Distributed transactions between Postgres and Redis are not an option.
   consumer gets its own job in the queue of its module (`events.<module>`), with job id
   `<eventId>.<consumer>`, so a slow or failing consumer never blocks another one.
 - **At least once in, exactly once effects.** A crash after enqueueing but before the commit
-  republishes rows; BullMQ retries failed jobs (5 attempts, exponential backoff). Consumers claim
+  republishes rows; BullMQ retries failed deliveries (8 attempts, the delay doubling from 10 s:
+  about 21 minutes, so a failover or a restart does not dead-letter them). Consumers claim
   `(eventId, consumer)` in `shared.processed_events` inside the same transaction as their effects,
   so duplicates are skipped and a failed attempt releases its claim.
 - **Dead letters.** After the last attempt, or on an `UnrecoverableError`, the job is copied to the
