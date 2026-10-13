@@ -11,15 +11,15 @@ import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CoreModule } from '@shared/infrastructure/core.module';
 
 import {
-  centersContract,
-  recipientsContract,
-} from '../../../../../test/contracts/notifications-ports.contract';
-import { anActiveTrainingCenter } from '../../../../../test/factories/catalog';
-import { aCenterAdmin, aStudent } from '../../../../../test/factories/iam';
+  CatalogCenters,
+  IamRecipients,
+} from '../../src/modules/notifications/infrastructure/adapters/notifications-lookups';
+import { centersContract, recipientsContract } from '../contracts/notifications-ports.contract';
+import { anActiveTrainingCenter } from '../factories/catalog';
+import { aCenterAdmin, aStudent } from '../factories/iam';
 
-import { CatalogCenters, IamRecipients } from './notifications-lookups';
-
-// The lookups ask iam and catalog through their public queries, on the real modules.
+// The lookups of notifications ask iam and catalog through their public queries, on the real
+// modules. Crosses three modules, so it lives outside them.
 describe('notifications lookups (integration)', () => {
   let app: INestApplicationContext;
 
