@@ -94,7 +94,9 @@ export const envSchema = z.object({
   // (doubling over five attempts), and whether a center may point its webhook at a private
   // address (the compose webhook sink); off by default in production.
   WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
-  WEBHOOK_RETRY_DELAY_MS: z.coerce.number().int().min(10).max(3_600_000).default(30_000),
+  // At most 100 s: the round (5 attempts, the delay doubling) then lasts under 15 minutes, the
+  // time after which a pending round is taken for lost and may be redelivered.
+  WEBHOOK_RETRY_DELAY_MS: z.coerce.number().int().min(10).max(100_000).default(30_000),
   WEBHOOK_PRIVATE_TARGETS_ENABLED: z.stringbool().optional(),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),

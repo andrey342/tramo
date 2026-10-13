@@ -1,4 +1,4 @@
-import { Email, unwrap } from '@shared/domain';
+import { Email } from '@shared/domain';
 
 import { ApiKey, RefreshToken, User } from '../../domain';
 
@@ -9,7 +9,7 @@ import { type UserOrmEntity } from './user.orm-entity';
 export const UserMapper = {
   toDomain(row: UserOrmEntity): User {
     const user = User.reconstitute(row.id, {
-      email: unwrap(Email.create(row.email)),
+      email: Email.reconstitute(row.email),
       passwordHash: row.passwordHash,
       roles: row.roles,
       centerId: row.centerId,

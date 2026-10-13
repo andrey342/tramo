@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { Email, unwrap } from '@shared/domain';
+import { Email } from '@shared/domain';
 import { FieldCipher } from '@shared/infrastructure/crypto';
 
 import { EmailNotification, WebhookDelivery, WebhookSubscription } from '../../domain';
@@ -94,7 +94,7 @@ export const EmailNotificationMapper = {
     const notification = EmailNotification.reconstitute(row.id, {
       eventId: row.eventId,
       template: row.template,
-      recipient: unwrap(Email.create(row.recipient)),
+      recipient: Email.reconstitute(row.recipient),
       reference: row.reference,
       data: row.data,
       status: row.status,

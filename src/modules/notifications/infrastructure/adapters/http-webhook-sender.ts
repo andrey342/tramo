@@ -69,25 +69,39 @@ export function isPrivateAddress(address: string): boolean {
 
 // Resolves like the system does, refuses the name if any of its addresses is private, and hands
 // the connection the address it checked: the check and the connection see the same address, so a
-// name that changes its answer in between (DNS rebinding) cannot slip through.
-const publicLookup: LookupFunction = (hostname, options, callback) => {
-  dnsLookup(hostname, { ...options, all: true }, (error, addresses: LookupAddress[]) => {
-    if (error) {
-      callback(error, '', 0);
-      return;
-    }
-    if (addresses.length === 0 || addresses.some((entry) => isPrivateAddress(entry.address))) {
-      callback(new WebhookPostFailedError('target_not_allowed'), '', 0);
-      return;
-    }
-    if (options.all) {
-      callback(null, addresses);
-      return;
-    }
-    const [first] = addresses;
-    callback(null, first?.address ?? '', first?.family ?? 4);
-  });
-};
+// name that changes its answer in between (DNS rebinding) cannot slip through. A name that does
+// not resolve fails the same way as one refused, so the answer says nothing of which internal
+// names exist.
+type Resolve = (
+  hostname: string,
+  options: { all: true },
+  callback: (error: NodeJS.ErrnoException | null, addresses: LookupAddress[]) => void,
+) => void;
+
+export function publicLookupWith(resolve: Resolve): LookupFunction {
+  return (hostname, options, callback) => {
+    resolve(hostname, { all: true }, (error, addresses) => {
+      if (
+        error ||
+        addresses.length === 0 ||
+        addresses.some((entry) => isPrivateAddress(entry.address))
+      ) {
+        callback(new WebhookPostFailedError('target_unreachable'), '', 0);
+        return;
+      }
+      if (options.all) {
+        callback(null, addresses);
+        return;
+      }
+      const [first] = addresses;
+      callback(null, first?.address ?? '', first?.family ?? 4);
+    });
+  };
+}
+
+const publicLookup = publicLookupWith((hostname, options, callback) => {
+  dnsLookup(hostname, options, callback);
+});
 
 // What the center is shown about an attempt that got no answer: a category, never the error text
 // (which would name internal hosts and addresses).
@@ -109,7 +123,7 @@ function failureCode(error: unknown): string {
     case 'ABORT_ERR':
       return 'timeout';
     default:
-      return typeof code === 'string' && /CERT|SSL|TLS/i.test(code)
+      return typeof code === 'string' && /CERT|SSL|TLS|VERIFY|SELF_SIGNED/i.test(code)
         ? 'tls_failed'
         : 'network_failed';
   }
@@ -170,10 +184,10 @@ export class HttpWebhookSender implements WebhookSender {
 // Names are checked when they are resolved, at connection time (publicLookup).
 export function assertAllowedTarget(url: URL): void {
   if (url.protocol !== 'https:') {
-    throw new WebhookPostFailedError('target_not_allowed');
+    throw new WebhookPostFailedError('target_unreachable');
   }
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host) && isPrivateAddress(host)) {
-    throw new WebhookPostFailedError('target_not_allowed');
+    throw new WebhookPostFailedError('target_unreachable');
   }
 }
