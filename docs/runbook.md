@@ -176,6 +176,17 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   `GET /ops/applications/review-queue` and decide with
   `POST /ops/applications/:applicationId/decide` (outcome and a reason).
 
+## Student cannot apply again for a program
+
+- **Symptom**: `POST /applications` answers `application_already_open` although the student's
+  contract for that program was cancelled or completed.
+- **Check**: `pnpm trace <applicationId>`. The application should have followed the contract:
+  `ContractCancelled` to `withdrawn` (consumer `origination.withdraw-application`),
+  `ContractCompleted` to `closed` (`origination.close-application`). Still `offer_accepted`
+  means that consumer failed on `events.origination` (`pnpm queue:inspect events.origination`).
+- **Action**: retry the consumer's job and remove the dead letter; the transition is idempotent.
+  A defaulted contract keeps the program held on purpose.
+
 ## Disbursement failed
 
 - **Symptom**: a signed contract is not `active`; `GET /ops/overview` shows transfers pending or
