@@ -29,5 +29,5 @@ script:post-response {
 }
 
 docs {
-  Center admin or admin. Issues an integration key for the center; the full `key` is shown only in this response (stored in `apiKey`). Scopes: applications:read, applications:write, programs:read, programs:write, portfolio:read.
+  Center admin or admin. Issues an integration key for the center; the full `key` is shown only in this response (stored in `apiKey`). Scopes: applications:read, applications:write, programs:read, programs:write, portfolio:read. Optional `expiresAt` (ISO 8601, in the future, else 422 `invalid_value`): the key stops working then; without it the key works until revoked.
 }

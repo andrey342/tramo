@@ -65,8 +65,10 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   ends `SESSION_MAX_DAYS` after sign-in, at logout, or when the user signs out everywhere
   (every family of theirs).
 - **`ApiKey`**: a center's integration credential, `tramo_<8 hex prefix>_<secret>`, shown once,
-  stored as a hash, with at least one scope. Revoked keys keep `revokedAt`. Suspending a center
-  revokes all its keys, and a suspended center gets no new ones.
+  stored as a hash, with at least one scope. Revoked keys keep `revokedAt`; an optional
+  `expiresAt`, set on issue, ends it without revoking it. Suspending a center revokes all its
+  keys, and a suspended center gets no new ones; until the revocation has run, authentication
+  refuses a key whose center is suspended.
 - **Lockout**: failed sign-ins counted per account in Redis. See the runbook for durations.
 - Events: `StudentRegistered`, `CenterUserCreated`, `UserDisabled`, `ApiKeyIssued`,
   `ApiKeyRevoked`, `RefreshTokenReuseDetected`.

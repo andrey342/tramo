@@ -218,9 +218,15 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   the account just before it was disabled can still open a session, which ends at its first
   refresh, since refreshing checks the account again.
 - **API keys.** Center keys carry explicit scopes and only reach endpoints that declare them.
-  Routes opened to API keys are not implicitly open to users; they must also name roles.
+  Routes opened to API keys are not implicitly open to users; they must also name roles. A key
+  may be issued with an end date (`expiresAt`, in the future); without one it works until
+  revoked. Authentication refuses a revoked or expired key, and a key whose center is suspended
+  or unknown: the center is read through `CenterDirectory` on each request with a key (one
+  primary-key lookup, after the secret matched), so suspension does not wait for the revocation
+  below.
 - **Suspended centers.** iam consumes `CenterSuspended` (`iam.revoke-suspended-center-keys`) and
-  revokes every active key of the center, each with its `ApiKeyRevoked`; a redelivery finds
+  revokes every active key of the center, each with its `ApiKeyRevoked` (until it has run, the
+  authentication check above already refuses them); a redelivery finds
   nothing left to revoke. No key is issued for a suspended center (`center_suspended`), and the
   revoked ones stay revoked after it is reinstated: its admins issue new ones. Its users keep
   signing in, on purpose: they still follow their contracts, payouts and the suspension itself,

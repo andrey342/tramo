@@ -121,6 +121,7 @@ export class InMemoryApiKeyRepository
         createdAt: key.createdAt,
         lastUsedAt: usedAt,
         revokedAt: key.revokedAt,
+        expiresAt: key.expiresAt,
       });
       stored.markPersisted(key.version);
       this.items.set(id, stored);

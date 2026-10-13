@@ -1,5 +1,5 @@
 import { type Principal } from '@shared/application';
-import { EntityNotFoundError, FixedClock } from '@shared/domain';
+import { EntityNotFoundError, FixedClock, InvalidValueError } from '@shared/domain';
 
 import { aCenterAdmin, aStaffUser, DEFAULT_CENTER_ID } from '../../../../test/factories/iam';
 import {
@@ -41,7 +41,7 @@ const asUser = (user: {
 }): Principal =>
   ({ kind: 'user', userId: user.id, roles: user.roles, centerId: user.centerId }) as Principal;
 
-function setup(knownCenters?: ReadonlySet<string>, suspendedCenters?: ReadonlySet<string>) {
+function setup(knownCenters?: ReadonlySet<string>, suspendedCenters = new Set<string>()) {
   const clock = new FixedClock(new Date('2026-10-09T10:00:00Z'));
   const uow = new InlineUnitOfWork();
   const events = new RecordingEventBus();
@@ -68,7 +68,8 @@ function setup(knownCenters?: ReadonlySet<string>, suspendedCenters?: ReadonlySe
     revoke: new RevokeApiKeyHandler(uow, apiKeys, clock),
     revokeCenterKeys: new RevokeCenterApiKeysHandler(uow, apiKeys, clock),
     list: new ListApiKeysHandler(apiKeys),
-    authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, clock),
+    authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, centers, clock),
+    suspendedCenters,
   };
 }
 
@@ -225,12 +226,16 @@ describe('center access use cases', () => {
   });
 
   describe('AuthenticateApiKey', () => {
-    async function withKey() {
+    async function withKey(expiresAt: Date | null = null) {
       const t = setup();
       const issued = await t.issue.execute(
-        new IssueApiKeyCommand(asUser(centerAdmin), DEFAULT_CENTER_ID, 'ATS', [
-          'applications:write',
-        ]),
+        new IssueApiKeyCommand(
+          asUser(centerAdmin),
+          DEFAULT_CENTER_ID,
+          'ATS',
+          ['applications:write'],
+          expiresAt,
+        ),
       );
       return { ...t, issued };
     }
@@ -260,6 +265,44 @@ describe('center access use cases', () => {
         new RevokeApiKeyCommand(asUser(centerAdmin), DEFAULT_CENTER_ID, t.issued.id),
       );
       expect(await t.authenticate.execute(new AuthenticateApiKeyQuery(t.issued.key))).toBeNull();
+    });
+
+    // Revoking the keys of a suspended center goes through the outbox; until it has, the key
+    // is still active but must not work.
+    it('should reject a key that is not revoked yet when its center is suspended', async () => {
+      const t = await withKey();
+      t.suspendedCenters.add(DEFAULT_CENTER_ID);
+
+      expect(await t.authenticate.execute(new AuthenticateApiKeyQuery(t.issued.key))).toBeNull();
+      expect((await t.apiKeys.findById(t.issued.id))?.lastUsedAt).toBeNull();
+    });
+
+    it('should accept a key until its end date and reject it from then on', async () => {
+      const t = await withKey(new Date('2026-10-10T10:00:00Z'));
+      t.clock.advanceBy(24 * 60 * 60 * 1000 - 1);
+
+      expect(
+        await t.authenticate.execute(new AuthenticateApiKeyQuery(t.issued.key)),
+      ).not.toBeNull();
+      t.clock.advanceBy(1);
+      expect(await t.authenticate.execute(new AuthenticateApiKeyQuery(t.issued.key))).toBeNull();
+    });
+
+    it('should refuse to issue a key whose end date has passed', async () => {
+      const t = setup();
+
+      await expect(
+        t.issue.execute(
+          new IssueApiKeyCommand(
+            asUser(centerAdmin),
+            DEFAULT_CENTER_ID,
+            'ATS',
+            ['applications:read'],
+            t.clock.now(),
+          ),
+        ),
+      ).rejects.toThrow(InvalidValueError);
+      expect(t.apiKeys.all()).toEqual([]);
     });
   });
 });

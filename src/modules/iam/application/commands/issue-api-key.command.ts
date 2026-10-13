@@ -29,6 +29,8 @@ export class IssueApiKeyCommand extends Command<IssuedApiKeyDto> {
     readonly centerId: string,
     readonly name: string,
     readonly scopes: readonly ApiKeyScope[],
+    // None by default: the key works until revoked.
+    readonly expiresAt: Date | null = null,
   ) {
     super();
   }
@@ -65,6 +67,7 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
       scopes: command.scopes,
       issuedBy: actorId(command.actor),
       now: this.clock.now(),
+      expiresAt: command.expiresAt,
     });
     await this.uow.run(() => this.apiKeys.save(apiKey));
     return { ...toApiKeySummary(apiKey), key: secret.value };

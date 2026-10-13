@@ -1,10 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsEmail,
   IsIn,
+  IsISO8601,
+  IsOptional,
   IsString,
   MaxLength,
   MinLength,
@@ -45,6 +47,16 @@ export class IssueApiKeyRequest {
   @ArrayMaxSize(API_KEY_SCOPES.length)
   @IsIn(API_KEY_SCOPES, { each: true })
   scopes!: ApiKeyScope[];
+
+  @ApiPropertyOptional({
+    format: 'date-time',
+    example: '2027-10-01T00:00:00Z',
+    description:
+      'When the key stops working; it must be in the future. Without it the key works until revoked.',
+  })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  expiresAt?: string;
 }
 
 export class ApiKeyResponse {
@@ -71,6 +83,9 @@ export class ApiKeyResponse {
 
   @ApiProperty({ nullable: true, type: Date })
   revokedAt!: Date | null;
+
+  @ApiProperty({ nullable: true, type: Date, description: 'Null: works until revoked' })
+  expiresAt!: Date | null;
 }
 
 export class IssuedApiKeyResponse extends ApiKeyResponse {

@@ -11,5 +11,6 @@ export function toApiKeySummary(apiKey: ApiKey): ApiKeySummaryDto {
     createdAt: apiKey.createdAt,
     lastUsedAt: apiKey.lastUsedAt,
     revokedAt: apiKey.revokedAt,
+    expiresAt: apiKey.expiresAt,
   };
 }

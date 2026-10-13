@@ -169,7 +169,12 @@ export function iamRepositoriesContract(
     });
 
     describe('ApiKeyRepository', () => {
-      const issueKey = (createdBy: string, centerId: string, now: Date): ApiKey =>
+      const issueKey = (
+        createdBy: string,
+        centerId: string,
+        now: Date,
+        expiresAt: Date | null = null,
+      ): ApiKey =>
         ApiKey.issue({
           id: uuidv7(),
           centerId,
@@ -179,7 +184,22 @@ export function iamRepositoriesContract(
           scopes: ['applications:read'],
           issuedBy: createdBy,
           now,
+          expiresAt,
         });
+
+      it('should keep the end date of a key, and none for a key issued without one', async () => {
+        const admin = await saved(aCenterAdmin());
+        const expiring = issueKey(admin.id, DEFAULT_CENTER_ID, NOW, later(86_400_000));
+        const lasting = issueKey(admin.id, DEFAULT_CENTER_ID, NOW);
+        await t.run(async () => {
+          await t.apiKeys.save(expiring);
+          await t.apiKeys.save(lasting);
+        });
+        await t.apiKeys.recordUse(expiring.id, later(1_000));
+
+        expect((await t.apiKeys.findById(expiring.id))?.expiresAt).toEqual(later(86_400_000));
+        expect((await t.apiKeys.findById(lasting.id))?.expiresAt).toBeNull();
+      });
 
       it('should find a key by its prefix', async () => {
         const admin = await saved(aCenterAdmin());

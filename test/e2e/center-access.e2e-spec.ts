@@ -118,6 +118,48 @@ describe('Center users and API keys (e2e)', () => {
     expect(responses.map((response) => response.status)).toEqual(Array(8).fill(200));
   });
 
+  it('should refuse the keys of a center as soon as it is suspended', async () => {
+    const suspendedCenter = await registerCenter(app, adminToken);
+    const issued = await api()
+      .post(`/api/v1/centers/${suspendedCenter}/api-keys`)
+      .set(...bearer(adminToken))
+      .send({ name: 'ATS', scopes: ['applications:read'] });
+    const key = issued.body.key as string;
+    const before = await api().get('/api/v1/me').set('X-Api-Key', key);
+
+    const suspended = await api()
+      .patch(`/api/v1/centers/${suspendedCenter}`)
+      .set(...bearer(adminToken))
+      .send({ status: 'suspended', suspensionReason: 'Audit' });
+    const after = await api().get('/api/v1/me').set('X-Api-Key', key);
+
+    expect([before.status, suspended.status]).toEqual([200, 200]);
+    expect(after.status).toBe(401);
+    expect(after.body.code).toBe('invalid_api_key');
+  });
+
+  it('should issue a key with an end date and refuse an end date that has passed', async () => {
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const issued = await api()
+      .post(`/api/v1/centers/${centerId}/api-keys`)
+      .set(...bearer(adminToken))
+      .send({ name: 'Pilot', scopes: ['applications:read'], expiresAt });
+    const past = await api()
+      .post(`/api/v1/centers/${centerId}/api-keys`)
+      .set(...bearer(adminToken))
+      .send({ name: 'Pilot', scopes: ['applications:read'], expiresAt: '2020-01-01T00:00:00Z' });
+    const me = await api()
+      .get('/api/v1/me')
+      .set('X-Api-Key', issued.body.key as string);
+
+    expect(issued.status).toBe(201);
+    expect(issued.body.expiresAt).toBe(expiresAt);
+    expect(me.status).toBe(200);
+    expect(past.status).toBe(422);
+    expect(past.body.code).toBe('invalid_value');
+  });
+
   it('should keep API keys out of endpoints that do not declare scopes', async () => {
     const issued = await api()
       .post(`/api/v1/centers/${centerId}/api-keys`)

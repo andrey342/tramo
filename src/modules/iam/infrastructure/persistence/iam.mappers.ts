@@ -76,6 +76,7 @@ export const ApiKeyMapper = {
       createdAt: row.createdAt,
       lastUsedAt: row.lastUsedAt,
       revokedAt: row.revokedAt,
+      expiresAt: row.expiresAt,
     });
     apiKey.markPersisted(row.version);
     return apiKey;
@@ -93,6 +94,7 @@ export const ApiKeyMapper = {
       createdAt: apiKey.createdAt,
       lastUsedAt: apiKey.lastUsedAt,
       revokedAt: apiKey.revokedAt,
+      expiresAt: apiKey.expiresAt,
     };
   },
 };

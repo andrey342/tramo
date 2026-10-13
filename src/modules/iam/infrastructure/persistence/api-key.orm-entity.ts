@@ -34,6 +34,9 @@ export class ApiKeyOrmEntity {
   @Column({ type: 'timestamptz', name: 'revoked_at', precision: 3, nullable: true })
   revokedAt: Date | null;
 
+  @Column({ type: 'timestamptz', name: 'expires_at', precision: 3, nullable: true })
+  expiresAt: Date | null;
+
   @Column('integer')
   version: number;
 }
