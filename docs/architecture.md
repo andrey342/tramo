@@ -200,8 +200,8 @@ Known gaps, accepted for now:
 
 - `POST /auth/register` answers 409 for an email that already has an account, so registration
   reveals which emails are registered. Answering the same way in both cases needs an email
-  confirmation step, which comes with the notifications module; until then the auth rate limit
-  slows enumeration down.
+  confirmation step (a link the notifications module would send), which does not exist yet; until
+  then the auth rate limit slows enumeration down.
 - `StudentRegistered` and `CenterUserCreated` carry the email address (the first for the welcome
   email, which is sent before anything else knows the user). Their jobs (and Bull Board, behind
   its own credentials) therefore hold it until completed jobs expire after seven days.
@@ -248,7 +248,9 @@ Training centers and the programs students finance.
   published programs of active centers, filtered by center, modality, product and price, newest
   first with keyset pagination on a partial index.
 - **Optional authentication.** `GET /programs/:id` is open to anonymous callers and also reads
-  the credentials when they are sent (`@OptionalAuthentication()`), so a center sees its own drafts.
+  the credentials when they are sent (`@OptionalAuthentication()`), so whoever manages a program
+  sees it while it is a draft or archived: the center's admins, its API keys and Tramo admins
+  (ops do not manage programs); everybody else gets a 404.
   Invalid credentials are still rejected, but the route is public to the authorization guard, which
   therefore checks no roles or scopes: the use case does (`canSeeUnpublishedPrograms` requires
   `programs:read` or `programs:write` from an API key). Any new optional route has to do the same.

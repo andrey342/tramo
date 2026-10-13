@@ -365,7 +365,7 @@ commands, architecture principles and workflow. Under `.claude/`:
   | `pnpm adr:new "<title>"`                                    | Next decision record and its row in `docs/architecture.md`                                      |
   | `pnpm api:call <METHOD> <path> [body] [--as role]`          | Call the running api as a demo user; tokens and the last response are kept in `.local/`         |
   | `pnpm trace <aggregateId>`                                  | Timeline of an aggregate: events, jobs, consumers, dead letters, audit, mail, webhooks          |
-  | `pnpm queue:inspect [queue] [jobId] [--retry\|--remove]`    | Queue counts, failed jobs with stack traces, outbox backlog and dead letters                    |
+  | `pnpm queue:inspect [queue] [jobId] [--retry\|--remove]`    | Queue counts, failed jobs and their stacks, outbox, dead letters (`--retry-dead-letters`)       |
 
 - `agents/`: read-only reviewers for architecture and security, each with a fixed checklist;
   `/review-module <module>` runs both with the dependency rules and the module's coverage.

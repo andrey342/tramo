@@ -149,20 +149,22 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     jobs are keyed by what they act on and their aggregates ignore a repeated step.
 - For some queues an endpoint is the right lever, not the job:
 
-  | Queue                       | Job id                                              | After the job ran out                                              |
-  | --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
-  | `events.<module>`           | `<eventId>.<consumer>`                              | Retry the job                                                      |
-  | `catalog.vat-checks`        | `<centerId>`, later checks `<centerId>.<eventId>`   | `POST /centers/:id/verify-vat` (admin, ops)                        |
-  | `origination.verifications` | `<applicationId>.<kyc\|employment\|bureau>`         | Retry the job                                                      |
-  | `lending.signatures`        | `<contractId>.send`                                 | Retry the job                                                      |
-  | `lending.disbursements`     | `<disbursementId>.<attempt>.<transfer\|settlement>` | `POST /ops/disbursements/:id/reconcile`                            |
-  | `billing.collect`           | `<chargeId>.<attempt>.collect.<eventId>`            | `POST /charges/:id/retry`                                          |
-  | `billing.psp-simulator`     | `<chargeId>.<attempt>.callback`                     | Retry the job once the worker reaches the api (`PSP_CALLBACK_URL`) |
-  | `billing.cycle`, `.dunning` | scheduled                                           | `POST /ops/billing/run`, `POST /ops/dunning/run`                   |
-  | `billing.cycle` (rebill)    | `<contractId>.rebill.<eventId>`                     | `POST /ops/billing/run?contractId=` (a payoff was withdrawn)       |
-  | `notifications.emails`      | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
-  | `notifications.webhooks`    | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
-  | `reporting.rebuild`         | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
+  | Queue                           | Job id                                              | After the job ran out                                              |
+  | ------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+  | `events.<module>`               | `<eventId>.<consumer>`                              | Retry the job                                                      |
+  | `catalog.vat-checks`            | `<centerId>`, later checks `<centerId>.<eventId>`   | `POST /centers/:id/verify-vat` (admin, ops)                        |
+  | `origination.verifications`     | `<applicationId>.<kyc\|employment\|bureau>`         | Retry the job                                                      |
+  | `lending.signatures`            | `<contractId>.send`                                 | Retry the job                                                      |
+  | `lending.disbursements`         | `<disbursementId>.<attempt>.<transfer\|settlement>` | `POST /ops/disbursements/:id/reconcile`                            |
+  | `billing.collect`               | `<chargeId>.<attempt>.collect.<eventId>`            | `POST /charges/:id/retry`                                          |
+  | `billing.psp-simulator`         | `<chargeId>.<attempt>.callback`                     | Retry the job once the worker reaches the api (`PSP_CALLBACK_URL`) |
+  | `billing.cycle`, `.dunning`     | scheduled                                           | `POST /ops/billing/run`, `POST /ops/dunning/run`                   |
+  | `billing.cycle` (rebill)        | `<contractId>.rebill.<eventId>`                     | `POST /ops/billing/run?contractId=` (a payoff was withdrawn)       |
+  | `billing.declaration-reminders` | scheduled (the 25th)                                | Retry the job: a student reminded this month is skipped            |
+  | `origination.expiry`            | scheduled (hourly, one attempt)                     | None: the next hourly sweep expires what is left                   |
+  | `notifications.emails`          | `<notificationId>.send`                             | None: a failed email is not sent again (see Emails)                |
+  | `notifications.webhooks`        | `<deliveryId>.r<round>`                             | `POST /centers/:id/webhook-deliveries/:deliveryId/redeliver`       |
+  | `reporting.rebuild`             | `reporting.rebuild`                                 | `POST /ops/reporting/rebuild` again                                |
 
 ## Application stuck in verification
 
