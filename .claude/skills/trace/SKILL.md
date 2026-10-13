@@ -18,9 +18,13 @@ Arguments: `$ARGUMENTS` (the id of the aggregate, e.g. the `userId` a registrati
      `origination.verifications` as `<applicationId>.<kyc|employment|bureau>`,
      `lending.signatures` as `<contractId>.send`, `lending.disbursements` as
      `<disbursementId>.<attempt>.<transfer|settlement>`, `billing.collect` and
-     `billing.psp-simulator` as `<chargeId>.<attempt>.<collect|callback>`);
+     `billing.psp-simulator` as `<chargeId>.<attempt>.<collect|callback>`,
+     `notifications.emails` as `<notificationId>.send` and `notifications.webhooks` as
+     `<deliveryId>.r<round>`);
    - `consumer`: consumers that recorded the event as applied (`shared.processed_events`);
    - `audit`: audited actions on it (who, outcome, error code, request id);
+   - `notify`: the emails written down about it (`notifications.notification_log`, by reference)
+     and the webhook deliveries that name it, with their state;
    - `mail`: messages in Mailpit that mention it; `webhook`: deliveries the sink received.
      Lines marked `!!` are broken; the last line names the first one and the command to dig in.
 2. Follow the hint: an unpublished event points at the worker or Redis

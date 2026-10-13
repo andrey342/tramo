@@ -82,6 +82,22 @@ export const envSchema = z.object({
   PSP_CALLBACK_URL: z.url().default('http://localhost:3000'),
   SIMULATED_PSP_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(2_000),
   BILLING_FUTURE_RUNS_ENABLED: z.stringbool().optional(),
+  // The mail server emails go through (Mailpit locally) and the sender they show.
+  SMTP_HOST: z.string().min(1).default('localhost'),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(1025),
+  // TLS from the first byte (port 465); otherwise STARTTLS when the server offers it.
+  SMTP_SECURE: z.stringbool().default(false),
+  SMTP_USER: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
+  SMTP_PASSWORD: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
+  EMAIL_FROM: z.string().min(3).default('Tramo <no-reply@tramo.test>'),
+  // Outgoing webhooks to training centers: how long one attempt may take, the first retry delay
+  // (doubling over five attempts), and whether a center may point its webhook at a private
+  // address (the compose webhook sink); off by default in production.
+  WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
+  // At most 100 s: the round (5 attempts, the delay doubling) then lasts under 15 minutes, the
+  // time after which a pending round is taken for lost and may be redelivered.
+  WEBHOOK_RETRY_DELAY_MS: z.coerce.number().int().min(10).max(100_000).default(30_000),
+  WEBHOOK_PRIVATE_TARGETS_ENABLED: z.stringbool().optional(),
   OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),

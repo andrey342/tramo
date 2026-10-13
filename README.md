@@ -101,6 +101,8 @@ but real environment variables always win. All variables and their defaults are 
 | `FIELD_ENCRYPTION_KEY`                                                                                                | AES-256 key (32 bytes, base64) for encrypted columns such as payout IBANs (ADR 014). The published development value is refused in production                                                                                                                                      |
 | `VERIFICATION_PROVIDERS`, `SIMULATED_PROVIDER_LATENCY_MS`                                                             | Applicant checks (KYC, employment history, credit bureau): only `simulated` exists, and a production process refuses to start with it; how long they take to answer, `min-max` ms                                                                                                  |
 | `LENDING_PROVIDERS`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_WEBHOOK_PREVIOUS_SECRET`                                          | E-signature provider and bank: only `simulated` exists (an IBAN ending in 0000 bounces), refused in production; HMAC key of the provider's callbacks to `/webhooks/esign` (32+ characters; the published value is refused in production) and the one it replaces during a rotation |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`                                   | Mail server of the emails (Mailpit in compose, UI on :8025) and their sender                                                                                                                                                                                                       |
+| `WEBHOOK_TIMEOUT_MS`, `WEBHOOK_RETRY_DELAY_MS`, `WEBHOOK_PRIVATE_TARGETS_ENABLED`                                     | Webhooks to centers: one attempt timeout, the first retry delay (doubling, five attempts per round), and whether a private address may be the target (on outside production; production refuses to start with it on and posts only https to public addresses)                      |
 | `BILLING_FUTURE_RUNS_ENABLED`                                                                                         | Whether ops may run billing and dunning as of a day still to come (the demo walks the months); on by default outside production                                                                                                                                                    |
 | `PAYMENT_PROVIDER`, `PSP_WEBHOOK_SECRET`, `PSP_WEBHOOK_PREVIOUS_SECRET`, `PSP_CALLBACK_URL`, `SIMULATED_PSP_DELAY_MS` | Direct debits: only `simulated` exists (an amount ending in 13 cents is refused), refused in production; HMAC key of its callbacks to `/webhooks/psp` and the previous one; where the worker reaches the api for them, and after how long                                          |
 | `VIES_MODE`, `VIES_TIMEOUT_MS`                                                                                        | VAT checks of training centers: `live` (VIES), `test` (its test service: only 100 valid and 200 invalid, any other number answers as an outage) or `fake` (same table, offline); production accepts only `live`                                                                    |
@@ -139,13 +141,14 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module        | Responsibility                                                                                            | Main endpoints                                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `iam`         | Accounts, sessions, roles, center API keys                                                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
-| `catalog`     | Training centers, VAT verification, programs and their financing options                                  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
-| `origination` | Financing applications, verification saga, risk policies and scoring                                      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
-| `lending`     | Contracts, e-signature, disbursement to the center and the repayment plan                                 | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
-| `billing`     | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
+| Module          | Responsibility                                                                                            | Main endpoints                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `iam`           | Accounts, sessions, roles, center API keys                                                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
+| `catalog`       | Training centers, VAT verification, programs and their financing options                                  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
+| `origination`   | Financing applications, verification saga, risk policies and scoring                                      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
+| `lending`       | Contracts, e-signature, disbursement to the center and the repayment plan                                 | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
+| `billing`       | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
+| `notifications` | Emails to students and centers, signed webhooks to centers with retries and redelivery                    | `/centers/:id/webhook`, `/centers/:id/webhook-deliveries`, `/centers/:id/webhook-deliveries/:deliveryId/redeliver`                    |
 
 ## API overview
 
@@ -220,6 +223,23 @@ instalment marked in the plan and the statement balanced. An amount ending in 13
 and dunning takes over: notices, retries at 3 and 7 days, arrears at 30, default at 90. In
 production the cycle runs on the 1st, collection and dunning every morning. ISA students declare
 their income with `POST /contracts/:id/income-declarations`.
+
+Every step above writes to someone: the student receives emails (welcome, application received,
+decision, contract ready to sign, payment reminders and receipts, overdue notices, ISA declaration
+reminders) and the center's admins the disbursement; they land in Mailpit
+(http://localhost:8025). A center also receives its events by webhook once its admin points it
+at a URL; in compose, the webhook sink stands in for the center:
+
+```bash
+pnpm api:call PUT '/centers/<centerId>/webhook' '{"url":"http://webhook-sink:9099/codeworks"}' --as center
+pnpm api:call GET '/centers/<centerId>/webhook-deliveries' --as center
+curl -s http://localhost:9099/deliveries
+```
+
+The answer to the `PUT` carries the signing secret, once. Each delivery is signed
+(`X-Tramo-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`), retried five times with
+backoff, and can be asked for again with
+`POST /centers/<centerId>/webhook-deliveries/<deliveryId>/redeliver` (ADR 018).
 
 Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
 progressively after five failed attempts.

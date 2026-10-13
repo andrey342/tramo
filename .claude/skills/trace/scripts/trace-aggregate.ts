@@ -41,6 +41,7 @@ void withConnections(async ({ db, redis, queues }) => {
   for (const subject of related) await workJobs(redis, queues, subject, entries);
   await processedMarks(db, events, entries);
   await auditEntries(db, entries);
+  await notificationLog(db, entries);
   await emails(entries);
   await webhooks(entries);
   print(entries);
@@ -209,6 +210,64 @@ async function auditEntries(db: Client, entries: Entry[]): Promise<void> {
       at: row.occurred_at,
       source: 'audit',
       text: `${row.action} ${row.outcome} by ${row.actor_type} ${row.actor_id ?? ''}${row.error_code ? ` (${row.error_code})` : ''} request ${row.request_id ?? '-'}`,
+    });
+  }
+}
+
+// What notifications wrote down about the aggregate: emails (sent, pending or given up) and
+// webhook deliveries to its center (delivered, retrying or failed). The ones that failed are the
+// broken links; pending ones are only notes, their jobs show whether they are moving.
+async function notificationLog(db: Client, entries: Entry[]): Promise<void> {
+  const emails = await db.query<{
+    created_at: Date;
+    sent_at: Date | null;
+    template: string;
+    status: string;
+    attempts: number;
+    last_error: string | null;
+    id: string;
+  }>(
+    `SELECT id, created_at, sent_at, template, status, attempts, last_error
+       FROM notifications.notification_log
+      WHERE reference = $1 OR event_id::text = $1
+      ORDER BY created_at`,
+    [id],
+  );
+  for (const row of emails.rows) {
+    entries.push({
+      at: row.sent_at ?? row.created_at,
+      source: 'notify',
+      text: `email ${row.template} ${row.status} after ${String(row.attempts)} attempt(s)${row.last_error ? ` - ${truncate(row.last_error, 100)}` : ''}`,
+      broken:
+        row.status === 'failed'
+          ? `email ${row.template} was given up: pnpm queue:inspect notifications.emails ${row.id}.send`
+          : undefined,
+    });
+  }
+  const deliveries = await db.query<{
+    id: string;
+    created_at: Date;
+    delivered_at: Date | null;
+    event: string;
+    status: string;
+    round: number;
+    attempts: number;
+  }>(
+    `SELECT id, created_at, delivered_at, event, status, round, jsonb_array_length(attempts) AS attempts
+       FROM notifications.webhook_deliveries
+      WHERE id::text = $1 OR event_id::text = $1 OR center_id::text = $1 OR data::text LIKE '%' || $1 || '%'
+      ORDER BY created_at`,
+    [id],
+  );
+  for (const row of deliveries.rows) {
+    entries.push({
+      at: row.delivered_at ?? row.created_at,
+      source: 'notify',
+      text: `webhook ${row.event} ${row.status} (round ${String(row.round)}, ${String(row.attempts)} attempt(s)) delivery ${row.id}`,
+      broken:
+        row.status === 'failed'
+          ? `webhook ${row.event} failed: is the center endpoint up? redeliver with POST /centers/:centerId/webhook-deliveries/${row.id}/redeliver`
+          : undefined,
     });
   }
 }

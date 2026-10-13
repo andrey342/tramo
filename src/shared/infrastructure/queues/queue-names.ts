@@ -29,6 +29,8 @@ export const QueueNames = {
   BILLING_DUNNING: 'billing.dunning',
   DECLARATION_REMINDERS: 'billing.declaration-reminders',
   PSP_SIMULATOR: 'billing.psp-simulator',
+  EMAILS: 'notifications.emails',
+  WEBHOOK_DELIVERIES: 'notifications.webhooks',
 } as const;
 
 export function eventsQueueForConsumer(consumer: string): string {
@@ -52,4 +54,6 @@ export const ALL_QUEUES: readonly string[] = [
   QueueNames.BILLING_DUNNING,
   QueueNames.DECLARATION_REMINDERS,
   QueueNames.PSP_SIMULATOR,
+  QueueNames.EMAILS,
+  QueueNames.WEBHOOK_DELIVERIES,
 ];

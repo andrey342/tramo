@@ -32,6 +32,11 @@ x-app: &app
     PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:-local-psp-webhook-secret-change-me-0123456789}
     # The worker reaches the api by its service name, whatever .env says for local runs.
     PSP_CALLBACK_URL: http://api:3000
+    # Emails to Mailpit (UI on :8025), and webhooks to the sink by its service name.
+    SMTP_HOST: mailpit
+    SMTP_PORT: 1025
+    EMAIL_FROM: ${EMAIL_FROM:-Tramo <no-reply@tramo.test>}
+    WEBHOOK_RETRY_DELAY_MS: ${WEBHOOK_RETRY_DELAY_MS:-30000}
     BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-ops}
     # Default only when unset; an empty value in .env disables the dashboard.
     BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD-tramo-queues}
@@ -81,8 +86,8 @@ services:
     profiles: [dev, demo]
     restart: unless-stopped
     ports:
-      - '${MAILPIT_UI_PORT:-8025}:8025'
-      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
 
   webhook-sink:
     image: node:24.19.0-alpine
@@ -92,7 +97,7 @@ services:
     environment:
       PORT: 9099
     ports:
-      - '${WEBHOOK_SINK_PORT:-9099}:9099'
+      - '127.0.0.1:${WEBHOOK_SINK_PORT:-9099}:9099'
     volumes:
       - ./docker/webhook-sink/server.mjs:/srv/server.mjs:ro
     healthcheck:
