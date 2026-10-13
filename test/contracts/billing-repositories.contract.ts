@@ -78,21 +78,37 @@ export function billingRepositoriesContract(
       paid.recordSucceeded(paid.submitCollection(uuidv7(), NOW), NOW, false);
       const collecting = aCharge({ contractId, reference: 'installment:4' });
       collecting.submitCollection(uuidv7(), NOW);
+      const failed = aCharge({ contractId, reference: 'installment:5' });
+      failed.recordFailed(
+        failed.submitCollection(uuidv7(), NOW),
+        'insufficient_funds',
+        day('2026-11-12'),
+        NOW,
+      );
       await run(async () => {
-        for (const charge of [due, later, paid, collecting]) await charges.save(charge);
+        for (const charge of [due, later, paid, collecting, failed]) await charges.save(charge);
       });
       const ours = (ids: string[]) =>
-        ids.filter((id) => [due.id, later.id, paid.id, collecting.id].includes(id)).sort();
+        ids
+          .filter((id) => [due.id, later.id, paid.id, collecting.id, failed.id].includes(id))
+          .sort();
 
       expect(ours(await run(() => charges.findDueIds(day('2026-11-12'), 1_000, null)))).toEqual([
         due.id,
       ]);
       expect(ours(await run(() => charges.findUnsettledIds(10_000, null)))).toEqual(
-        [due.id, later.id, collecting.id].sort(),
+        [due.id, later.id, collecting.id, failed.id].sort(),
       );
-      expect((await run(() => charges.findOpen(contractId))).map((charge) => charge.id)).toEqual(
-        [due.id, later.id].sort(),
-      );
+      const open = await run(() => charges.findOpen(contractId));
+      expect(open.map((charge) => charge.id)).toEqual([due.id, later.id, failed.id].sort());
+      // Loaded whole: they come back as saved and can be changed and saved again.
+      const reloaded = open.find((charge) => charge.id === failed.id);
+      expect(reloaded).toMatchObject({
+        status: 'failed',
+        attempts: failed.attempts,
+        amount: failed.amount,
+        dueDate: failed.dueDate,
+      });
       expect(
         await run(() => charges.findDueIds(day('2026-12-31'), 1_000, null, contractId)),
       ).toEqual([due.id, later.id].sort());
@@ -100,11 +116,18 @@ export function billingRepositoriesContract(
         [],
       );
       expect(await run(() => charges.findUnsettledIds(1_000, null, contractId))).toEqual(
-        [due.id, later.id, collecting.id].sort(),
+        [due.id, later.id, collecting.id, failed.id].sort(),
       );
       const page = await run(() => charges.findUnsettledIds(1, null));
       const next = await run(() => charges.findUnsettledIds(1, page[0] ?? null));
       expect(next[0]! > page[0]!).toBe(true);
+      await run(async () => {
+        for (const charge of await charges.findOpen(contractId)) {
+          charge.cancel(NOW);
+          await charges.save(charge);
+        }
+      });
+      expect(await run(() => charges.findOpen(contractId))).toEqual([]);
     });
 
     it('should tell whether other charges keep a contract in arrears', async () => {

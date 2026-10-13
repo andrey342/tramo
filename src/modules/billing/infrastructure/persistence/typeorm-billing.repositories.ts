@@ -17,6 +17,7 @@ import {
   type IncomeDeclaration,
   IncomeAlreadyDeclaredError,
   type IncomeDeclarationRepository,
+  OPEN_CHARGE_STATUSES,
   type PaymentMandate,
   type PaymentMandateRepository,
 } from '../../domain';
@@ -89,7 +90,7 @@ export class TypeOrmChargeRepository implements ChargeRepository {
 
   async findOpen(contractId: string): Promise<Charge[]> {
     const rows = await this.txHost.tx.find(ChargeOrmEntity, {
-      where: { contractId, status: In(['scheduled', 'failed', 'overdue']) },
+      where: { contractId, status: In([...OPEN_CHARGE_STATUSES]) },
       order: { id: 'ASC' },
     });
     return rows.map((row) => ChargeMapper.toDomain(row));

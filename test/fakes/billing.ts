@@ -20,6 +20,7 @@ import {
   type IncomeDeclaration,
   IncomeAlreadyDeclaredError,
   type IncomeDeclarationRepository,
+  OPEN_CHARGE_STATUSES,
   type PaymentMandate,
   type PaymentMandateRepository,
 } from '../../src/modules/billing/domain';
@@ -99,8 +100,7 @@ export class InMemoryChargeRepository
       this.all()
         .filter(
           (charge) =>
-            charge.contractId === contractId &&
-            ['scheduled', 'failed', 'overdue'].includes(charge.status),
+            charge.contractId === contractId && OPEN_CHARGE_STATUSES.includes(charge.status),
         )
         .sort((a, b) => (a.id < b.id ? -1 : 1)),
     );

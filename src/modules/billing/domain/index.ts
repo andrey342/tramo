@@ -6,6 +6,7 @@ export {
   CHARGE_STATUSES,
   type ChargeStatus,
   type CollectionAttempt,
+  OPEN_CHARGE_STATUSES,
 } from './model/charge';
 export {
   IncomeDeclaration,
