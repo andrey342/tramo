@@ -11,6 +11,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 import { CHARGE_STATUSES, type ChargeKind, type ChargeStatus } from '../../domain';
@@ -53,16 +54,23 @@ export class AsOfQueryDto {
   contractId?: string;
 }
 
-// What the payment service provider posts about a collection.
+const PAYMENT_CALLBACK_TYPES = ['payment.succeeded', 'payment.failed', 'payment.returned'] as const;
+type PaymentCallbackType = (typeof PAYMENT_CALLBACK_TYPES)[number];
+
+// What the payment service provider posts about a collection. No amount: the key names the
+// attempt, which was asked for the charge's amount.
 export class PaymentCallbackRequest {
   @ApiProperty({ example: 'sim-pay-0a1b2c.succeeded' })
   @IsString()
   @MaxLength(200)
   eventId!: string;
 
-  @ApiProperty({ enum: ['payment.succeeded', 'payment.failed'] })
-  @IsIn(['payment.succeeded', 'payment.failed'])
-  type!: 'payment.succeeded' | 'payment.failed';
+  @ApiProperty({
+    enum: PAYMENT_CALLBACK_TYPES,
+    description: 'payment.returned: a collected debit sent back by the debtor bank',
+  })
+  @IsIn(PAYMENT_CALLBACK_TYPES)
+  type!: PaymentCallbackType;
 
   @ApiProperty({ example: 'sim-pay-0a1b2c' })
   @IsString()
@@ -80,6 +88,14 @@ export class PaymentCallbackRequest {
   @IsString()
   @MaxLength(200)
   failureReason?: string;
+
+  @ApiPropertyOptional({
+    example: 'MD06',
+    description: 'payment.returned only, and required there: the ISO 20022 return reason code',
+  })
+  @ValidateIf((body: PaymentCallbackRequest) => body.type === 'payment.returned')
+  @Matches(/^[A-Z0-9]{4}$/, { message: 'returnReason must be a four-character reason code' })
+  returnReason?: string;
 
   @ApiProperty({ example: '2026-11-12T08:00:02Z' })
   @IsISO8601({ strict: true })
@@ -176,7 +192,7 @@ class LedgerEntryResponse {
   @ApiProperty()
   occurredAt!: Date;
 
-  @ApiProperty({ enum: ['charge', 'payment', 'write_off', 'cancellation'] })
+  @ApiProperty({ enum: ['charge', 'payment', 'return', 'write_off', 'cancellation'] })
   type!: string;
 
   @ApiProperty({ format: 'uuid' })
@@ -185,7 +201,10 @@ class LedgerEntryResponse {
   @ApiProperty({ example: 'Instalment due 2026-12-12' })
   description!: string;
 
-  @ApiProperty({ example: 337_50, description: 'Positive owed, negative paid or no longer owed' })
+  @ApiProperty({
+    example: 337_50,
+    description: 'Positive owed (a charge, a returned payment), negative paid or no longer owed',
+  })
   amountCents!: number;
 
   @ApiProperty({ example: 337_50 })

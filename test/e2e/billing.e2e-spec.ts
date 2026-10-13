@@ -149,6 +149,56 @@ describe('Billing (e2e)', () => {
     expect(retryPaid.status).toBe(409);
   });
 
+  it('should owe a collected instalment again when the provider reports it returned', async () => {
+    const { token, contractId, firstDue } = await studentWithContract();
+    await api()
+      .post(`/api/v1/contracts/${contractId}/mandate`)
+      .set(...bearer(token))
+      .set('Idempotency-Key', uuidv7())
+      .send({ iban: STUDENT_IBAN });
+    await api()
+      .post(`/api/v1/ops/billing/run?asOf=${firstDue.toString()}&contractId=${contractId}`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7());
+    const pending = await chargeOf(contractId, 'installment:1');
+    const event = (type: string, extra: object = {}) => ({
+      eventId: uuidv7(),
+      type,
+      paymentId: 'psp-returned',
+      reference: pending?.currentAttempt?.key ?? '',
+      occurredAt: new Date().toISOString(),
+      ...extra,
+    });
+
+    const early = await callback(event('payment.returned', { returnReason: 'MD06' }));
+    const paid = await callback(event('payment.succeeded'));
+    const noReason = await callback(event('payment.returned'));
+    const returned = await callback(event('payment.returned', { returnReason: 'MD06' }));
+    const replayed = await callback(event('payment.returned', { returnReason: 'MD06' }));
+    const forged = await callback({
+      ...event('payment.returned', { returnReason: 'MD06' }),
+      paymentId: 'psp-forged',
+    });
+    const charges = await api()
+      .get(`/api/v1/contracts/${contractId}/charges`)
+      .set(...bearer(token));
+
+    // A return before its success is refused, and accepted once the provider retries it later.
+    expect(early.status).toBe(409);
+    expect(early.body.code).toBe('invalid_state_transition');
+    expect(paid.body).toEqual({ id: pending?.id, status: 'paid' });
+    expect(noReason.status).toBe(400);
+    expect(returned.status).toBe(200);
+    expect(returned.body).toEqual({ id: pending?.id, status: 'failed' });
+    expect(replayed.status).toBe(200);
+    expect(replayed.body).toEqual(returned.body);
+    expect(forged.status).toBe(409);
+    expect(forged.body.code).toBe('payment_mismatch');
+    expect(charges.body.data).toEqual([
+      expect.objectContaining({ status: 'failed', paidAt: null, lastFailureReason: 'MD06' }),
+    ]);
+  });
+
   it('should refuse provider callbacks that are unsigned, signed with another key, or unknown', async () => {
     const body = {
       eventId: uuidv7(),

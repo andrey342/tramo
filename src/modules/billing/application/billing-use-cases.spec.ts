@@ -616,6 +616,51 @@ describe('billing use cases', () => {
         ContractNotRepayingError,
       );
     });
+
+    it('should owe a collected charge again, once, when the bank returns the payment', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const charge = await t.charge({ contractId });
+      await t.collect.execute(new CollectDueChargesCommand(day('2026-11-12')));
+      const answer = (
+        outcome: 'succeeded' | 'returned',
+        paymentId = 'pay-1',
+        failureReason: string | null = null,
+      ) =>
+        t.result.execute(
+          new RecordPaymentResultCommand({
+            reference: `${charge.id}.1`,
+            paymentId,
+            outcome,
+            failureReason,
+          }),
+        );
+      await answer('succeeded');
+      t.clock.set(new Date('2026-12-20T09:00:00Z'));
+
+      const returned = await answer('returned', 'pay-1', 'MD06');
+      const replayed = await answer('returned', 'pay-1', 'MD06');
+      const lateSuccess = await answer('succeeded');
+
+      expect(returned).toEqual({ id: charge.id, status: 'failed' });
+      expect(replayed).toEqual(returned);
+      expect(lateSuccess).toEqual(returned);
+      expect(t.events.ofType(BillingEvents.ChargeReturned)).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ reason: 'MD06', dueDate: '2026-12-20' }),
+        }),
+      ]);
+      expect(t.audited).toEqual([
+        { status: { before: 'pending', after: 'paid' } },
+        { status: { before: 'paid', after: 'failed' } },
+      ]);
+      expect(await t.charges.findById(charge.id)).toMatchObject({
+        status: 'failed',
+        paidAt: null,
+      });
+      await expect(answer('returned', 'pay-forged', 'MD06')).rejects.toThrow(PaymentMismatchError);
+    });
   });
 
   describe('dunning', () => {
@@ -1016,6 +1061,30 @@ describe('billing use cases', () => {
           new ListChargesQuery({ ...t.student, userId: uuidv7() }, contractId, { limit: 10 }),
         ),
       ).rejects.toThrow(EntityNotFoundError);
+    });
+
+    it('should owe a payment again on the statement when the bank returned it', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      const chargeId = uuidv7();
+      const line = (type: 'charge' | 'payment' | 'return', amountCents: number) => ({
+        contractId,
+        occurredAt: NOW,
+        type,
+        chargeId,
+        description: type,
+        amountCents,
+      });
+      t.queries.entries.push(
+        line('charge', 337_50),
+        line('payment', -337_50),
+        line('return', 337_50),
+      );
+
+      const statement = await t.statement.execute(new GetStatementQuery(t.student, contractId));
+
+      expect(statement.entries.map((entry) => entry.balanceCents)).toEqual([337_50, 0, 337_50]);
+      expect(statement.balanceCents).toBe(337_50);
     });
 
     it('should refuse a ledger amount that is not whole cents when adding up the balance', async () => {

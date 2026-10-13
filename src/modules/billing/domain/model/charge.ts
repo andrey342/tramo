@@ -7,7 +7,7 @@ import {
 
 import { PaymentMismatchError, UnknownCollectionAttemptError } from '../errors/billing-errors';
 import { BillingEvents, type ChargeKind } from '../events/billing-events';
-import { ARREARS_STEP, dunningStepsDue } from '../services/dunning';
+import { ARREARS_STEP, dunningStepsDue, STEPS_BEFORE_DUE } from '../services/dunning';
 
 export const CHARGE_STATUSES = [
   'scheduled',
@@ -34,7 +34,9 @@ export interface CollectionAttempt {
   readonly mandateId: string;
   readonly submittedAt: Date;
   readonly paymentId: string | null;
-  readonly outcome: 'pending' | 'succeeded' | 'failed';
+  // `returned`: collected, then the debtor's bank sent the debit back.
+  readonly outcome: 'pending' | 'succeeded' | 'failed' | 'returned';
+  // Why it failed, or the bank's return reason code.
   readonly failureReason: string | null;
   readonly settledAt: Date | null;
 }
@@ -305,14 +307,15 @@ export class Charge extends AggregateRoot {
     this.replaceAttempt({ ...attempt, paymentId });
   }
 
-  // The provider collected it. Idempotent. When this charge kept the contract in arrears and no
-  // other does, the contract is current again (ArrearsCleared).
+  // The provider collected it. Idempotent, also once the payment has been returned since. When
+  // this charge kept the contract in arrears and no other does, the contract is current again
+  // (ArrearsCleared).
   recordSucceeded(key: string, now: Date, otherChargesInArrears: boolean): void {
     const attempt = this.attempt(key);
-    if (attempt.outcome === 'succeeded') {
+    if (attempt.outcome === 'succeeded' || attempt.outcome === 'returned') {
       return;
     }
-    if (attempt.outcome === 'failed' || this.props.status !== 'pending') {
+    if (attempt.outcome !== 'pending' || this.props.status !== 'pending') {
       throw new InvalidStateTransitionError('Charge', this.props.status, 'paid');
     }
     const wasInArrears = this.inArrears;
@@ -353,7 +356,7 @@ export class Charge extends AggregateRoot {
     if (attempt.outcome === 'failed') {
       return;
     }
-    if (attempt.outcome === 'succeeded' || this.props.status !== 'pending') {
+    if (attempt.outcome !== 'pending' || this.props.status !== 'pending') {
       throw new InvalidStateTransitionError('Charge', this.props.status, 'failed');
     }
     const failureReason = reason.trim().slice(0, MAX_REASON_LENGTH) || 'unspecified';
@@ -378,6 +381,50 @@ export class Charge extends AggregateRoot {
     if (this.props.kind === 'payoff') {
       this.recordCancelled('payoff_failed', now);
     }
+  }
+
+  // The debtor's bank returned the debit after the provider collected it. Idempotent: the same
+  // attempt returned again writes nothing. The charge is owed again and due that day, so dunning
+  // starts over from the return, as for a charge billed late, rather than at once catching up
+  // with the steps (arrears, write-off) its old due date has long passed. A payoff is not dunned:
+  // the plan it paid off stays ended and ops collect it (ADR 020).
+  recordReturned(key: string, reason: string, today: CalendarDate, now: Date): void {
+    const attempt = this.attempt(key);
+    if (attempt.outcome === 'returned') {
+      return;
+    }
+    if (attempt.outcome !== 'succeeded' || this.props.status !== 'paid') {
+      throw new InvalidStateTransitionError('Charge', this.props.status, 'failed');
+    }
+    const returnReason = reason.trim().slice(0, MAX_REASON_LENGTH) || 'unspecified';
+    this.replaceAttempt({
+      ...attempt,
+      outcome: 'returned',
+      failureReason: returnReason,
+      settledAt: now,
+    });
+    const dueDate = today.isAfter(this.props.dueDate) ? today : this.props.dueDate;
+    this.props = { ...this.props, paidAt: null, dueDate, dunningStep: STEPS_BEFORE_DUE };
+    this.moveTo('failed', now);
+    this.record({
+      eventType: BillingEvents.ChargeReturned,
+      aggregateType: 'Charge',
+      aggregateId: this.id,
+      occurredAt: now,
+      payload: {
+        chargeId: this.id,
+        contractId: this.props.contractId,
+        studentId: this.props.studentId,
+        centerId: this.props.centerId,
+        kind: this.props.kind,
+        installmentNumber: this.props.installmentNumber,
+        amountCents: this.props.amount.cents,
+        attempt: attempt.number,
+        reason: returnReason,
+        dueDate: dueDate.toString(),
+        returnedAt: now.toISOString(),
+      },
+    });
   }
 
   // Applies the dunning steps due on `asOf` that were not applied yet (see DUNNING_STEPS) and

@@ -48,6 +48,7 @@ import {
   LedgerOnChargeCancelled,
   LedgerOnChargeCreated,
   LedgerOnChargePaid,
+  LedgerOnChargeReturned,
   LedgerOnChargeWrittenOff,
 } from './infrastructure/consumers/billing.consumers';
 import { BillingCycleJobs, CollectionJobs } from './infrastructure/jobs/billing-jobs';
@@ -134,6 +135,7 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     CancelChargesOnContractDefaulted,
     LedgerOnChargeCreated,
     LedgerOnChargePaid,
+    LedgerOnChargeReturned,
     LedgerOnChargeWrittenOff,
     LedgerOnChargeCancelled,
   ],

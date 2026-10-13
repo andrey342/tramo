@@ -24,6 +24,10 @@ export const DUNNING_STEPS: readonly DunningStep[] = [
 
 export const ARREARS_STEP = DUNNING_STEPS.findIndex((step) => step.action === 'arrears');
 
+// The steps that come before the due date (the reminder): a charge due again at once, after its
+// payment was returned, starts past them.
+export const STEPS_BEFORE_DUE = DUNNING_STEPS.filter((step) => step.offset <= 0).length;
+
 // The steps due on `asOf` that have not been applied yet (`applied` counts those that have, in
 // order). A run that missed days catches up with every step it passed.
 export function dunningStepsDue(
