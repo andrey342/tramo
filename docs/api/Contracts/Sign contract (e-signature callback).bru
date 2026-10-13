@@ -44,5 +44,7 @@ script:pre-request {
 docs {
   The provider's callback, normally sent by the simulated e-signature service when the student signs. It is authenticated by `X-Esign-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">` with `ESIGN_WEBHOOK_SECRET` (`esignSecret` in the environment, the compose default).
 
+  Answers 200 with the contract's status. A callback about an envelope settled by an earlier one (completed after a decline, expired after signing) also answers 200, with the status as it is, and changes nothing; 409 `envelope_not_recorded` is for an envelope not saved yet, which a retry can fix.
+
   The script needs Developer Mode (sandbox selector next to the environment). If it answers 401 `invalid_webhook_signature`, sign from a terminal instead: `pnpm esign:sign {{contractId}}` (add `--decline` to decline).
 }

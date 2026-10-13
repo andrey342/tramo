@@ -215,7 +215,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 - **Signature envelope** (`Signature`): what was sent to the e-signature provider: provider,
   `envelopeId`, the rendered `document` as sent, its SHA-256 `documentHash`, `sentAt` and, once
   signed, `signedAt`. A callback for another envelope or another hash is refused
-  (`signature_mismatch`); a signing time outside the envelope's life is refused.
+  (`signature_mismatch`); a signing time outside the envelope's life is refused. The first
+  outcome of an envelope (signed, declined or expired) stands: a later callback about it changes
+  nothing and is answered with the contract as it is.
 - **`Disbursement`**: the payment of a signed contract's principal less the platform fee to the
   center, one per contract.
 

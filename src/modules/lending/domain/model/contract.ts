@@ -157,6 +157,13 @@ export class Contract extends AggregateRoot {
     return this.props.createdAt;
   }
 
+  // Only while the envelope is out can a callback about it change the contract. Once it was
+  // signed, declined or expired, the first outcome recorded stands: a later callback (repeated,
+  // or one that lost a race, such as completed after a decline) has nothing left to decide.
+  get awaitsSignature(): boolean {
+    return this.props.status === 'sent_for_signature';
+  }
+
   sentForSignature(
     envelope: { provider: string; envelopeId: string; document: string; documentHash: string },
     now: Date,

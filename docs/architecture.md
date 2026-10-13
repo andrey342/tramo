@@ -403,9 +403,12 @@ the repayment plan.
   and `ESIGN_WEBHOOK_PREVIOUS_SECRET` during a rotation), checked in a guard before the body is
   validated or reaches a command; a signature older than five minutes is refused, so a captured
   callback cannot be replayed later. A completed envelope must carry the hash of the document sent
-  (`signature_mismatch` otherwise) and a signing time within the life of the envelope. Repeated
-  callbacks write nothing; each one that changes a contract is in the audit log. A callback for an
-  envelope not recorded yet is answered 409, which providers retry.
+  (`signature_mismatch` otherwise) and a signing time within the life of the envelope. Providers
+  retry any answer but a 2xx, so a 409 is kept for what a retry can fix: an envelope not recorded
+  yet (`envelope_not_recorded`) or a concurrent write. The first outcome of an envelope stands: a
+  callback once the contract left `sent_for_signature` (repeated, or completed after a decline,
+  expired after signing) is answered 200 with the contract's current status and writes nothing.
+  Each callback that changes a contract is in the audit log.
 - **Disbursement.** `ContractSigned` → one disbursement per contract of the principal less the
   platform fee, `pending → sent → settled | failed`. A job reads the center's payout account
   through catalog (the only module allowed to ask for the full IBAN, by a dependency rule) and

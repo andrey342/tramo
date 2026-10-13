@@ -139,6 +139,23 @@ describe('Contracts (e2e)', () => {
       .send(raw);
   };
 
+  // The provider's callback once the student signed the document they were sent.
+  async function sign(token: string, contractId: string): Promise<request.Response> {
+    const sent = await api()
+      .get(`/api/v1/contracts/${contractId}`)
+      .set(...bearer(token));
+    const document = await api()
+      .get(`/api/v1/contracts/${contractId}/document`)
+      .set(...bearer(token));
+    return callback({
+      eventId: uuidv7(),
+      type: 'envelope.completed',
+      envelopeId: sent.body.signature.envelopeId,
+      documentHash: createHash('sha256').update(document.text).digest('hex'),
+      occurredAt: new Date().toISOString(),
+    });
+  }
+
   async function activate(contractId: string): Promise<void> {
     await commands.execute(new RequestDisbursementCommand(contractId));
     const disbursements = await api()
@@ -302,6 +319,46 @@ describe('Contracts (e2e)', () => {
     expect(unknown.status).toBe(409);
     expect(unknown.body.code).toBe('envelope_not_recorded');
     expect(incomplete.status).toBe(400);
+  });
+
+  // Providers retry anything but a success: a callback that lost the race to another outcome is
+  // answered with the contract as it is, not a conflict retried for ever.
+  it('should answer a callback about an envelope settled earlier with the contract as it is', async () => {
+    const declinedFirst = await contractSentForSignature();
+    const signedFirst = await contractSentForSignature();
+    const late = (contractId: string, type: string) =>
+      callback({
+        eventId: uuidv7(),
+        type,
+        envelopeId: `sim-env-${contractId}`,
+        documentHash: 'f'.repeat(64),
+        occurredAt: new Date().toISOString(),
+      });
+    await late(declinedFirst.contractId, 'envelope.declined');
+    await sign(signedFirst.token, signedFirst.contractId);
+
+    const completedAfterDecline = await late(declinedFirst.contractId, 'envelope.completed');
+    const expiredAfterSigning = await late(signedFirst.contractId, 'envelope.expired');
+    const declined = await api()
+      .get(`/api/v1/contracts/${declinedFirst.contractId}`)
+      .set(...bearer(opsToken));
+    const signed = await api()
+      .get(`/api/v1/contracts/${signedFirst.contractId}`)
+      .set(...bearer(opsToken));
+
+    expect(completedAfterDecline.status).toBe(200);
+    expect(completedAfterDecline.body).toEqual({
+      id: declinedFirst.contractId,
+      status: 'cancelled',
+    });
+    expect(expiredAfterSigning.status).toBe(200);
+    expect(expiredAfterSigning.body).toEqual({ id: signedFirst.contractId, status: 'signed' });
+    expect(declined.body).toMatchObject({
+      status: 'cancelled',
+      cancellationReason: 'signature_declined',
+      signature: { signedAt: null },
+    });
+    expect(signed.body).toMatchObject({ status: 'signed', cancellationReason: null });
   });
 
   it('should keep repayment and payout to the right people', async () => {

@@ -356,6 +356,52 @@ describe('lending use cases', () => {
       });
     });
 
+    // A conflict would be retried by the provider for ever: nothing can make it succeed.
+    it('should answer with the contract as it is when the envelope was settled by an earlier callback', async () => {
+      const t = setup();
+      const declinedId = await t.sent();
+      const declinedEnvelope = `fake-env-${declinedId}`;
+      await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'declined',
+          envelopeId: declinedEnvelope,
+          occurredAt: NOW,
+        }),
+      );
+      const signedId = await t.signed();
+      const signedEnvelope = `fake-env-${signedId}`;
+      const versions = [
+        (await t.contracts.findById(declinedId))?.version,
+        (await t.contracts.findById(signedId))?.version,
+      ];
+      const audited = t.audited.length;
+
+      const completedAfterDecline = await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'signed',
+          envelopeId: declinedEnvelope,
+          documentHash: 'f'.repeat(64),
+          occurredAt: NOW,
+        }),
+      );
+      const expiredAfterSigning = await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'expired',
+          envelopeId: signedEnvelope,
+          occurredAt: NOW,
+        }),
+      );
+
+      expect(completedAfterDecline).toEqual({ id: declinedId, status: 'cancelled' });
+      expect(expiredAfterSigning).toEqual({ id: signedId, status: 'signed' });
+      expect([
+        (await t.contracts.findById(declinedId))?.version,
+        (await t.contracts.findById(signedId))?.version,
+      ]).toEqual(versions);
+      expect(t.audited).toHaveLength(audited);
+      expect(t.events.ofType(LendingEvents.ContractCancelled)).toHaveLength(1);
+    });
+
     it('should report a callback for an unknown envelope as not found', async () => {
       const t = setup();
 

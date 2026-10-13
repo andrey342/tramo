@@ -34,8 +34,11 @@ export class RecordSignatureEventCommand extends Command<{
   }
 }
 
-// Providers deliver callbacks at least once: a repeated "signed" changes nothing (Contract.sign
-// and Contract.cancel are idempotent) and writes nothing. The change of status is recorded in
+// Providers deliver callbacks at least once and retry any answer but a success. A callback about
+// an envelope whose outcome is settled (repeated, or completed after a decline, expired after
+// signing) is answered with the contract as it is and writes nothing: a conflict would be
+// retried for ever, since nothing can make it succeed. A conflict is kept for what a retry can
+// fix (an envelope not recorded yet, a concurrent write). The change of status is recorded in
 // the audit log with the contract it happened to.
 @CommandHandler(RecordSignatureEventCommand)
 export class RecordSignatureEventHandler implements ICommandHandler<RecordSignatureEventCommand> {
@@ -55,6 +58,9 @@ export class RecordSignatureEventHandler implements ICommandHandler<RecordSignat
       if (!contract) {
         throw new EnvelopeNotRecordedError(event.envelopeId);
       }
+      if (!contract.awaitsSignature) {
+        return { id: contract.id, status: contract.status };
+      }
       const before = contract.status;
       const now = this.clock.now();
       if (event.type === 'signed') {
@@ -72,11 +78,8 @@ export class RecordSignatureEventHandler implements ICommandHandler<RecordSignat
           now,
         );
       }
-      // A repeated callback changes nothing: no write, so it cannot collide with the saga.
-      if (contract.hasPendingEvents) {
-        await this.contracts.save(contract);
-        this.audit.describeChanges({ status: { before, after: contract.status } });
-      }
+      await this.contracts.save(contract);
+      this.audit.describeChanges({ status: { before, after: contract.status } });
       return { id: contract.id, status: contract.status };
     });
   }

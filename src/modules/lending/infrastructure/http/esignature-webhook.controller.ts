@@ -87,7 +87,11 @@ export class ESignatureWebhookController {
     required: true,
   })
   @ApiProblems(400, 401, 404, 409, 422)
-  @ApiOkResponse({ type: SignatureCallbackResponse, description: 'Recorded, or already recorded' })
+  @ApiOkResponse({
+    type: SignatureCallbackResponse,
+    description:
+      'Recorded; or the envelope was settled by an earlier callback, and the contract is as it was',
+  })
   // Signing starts a payment: the callback leaves an audit entry, with its contract.
   @Audited({ action: 'contract.signature_callback', resource: 'contract' })
   @ApiOperation({ summary: 'An envelope was signed, declined or expired (the provider calls it)' })

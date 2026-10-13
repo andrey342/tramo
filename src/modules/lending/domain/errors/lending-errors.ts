@@ -21,8 +21,8 @@ export class SignatureMismatchError extends DomainError {
 }
 
 // A callback for an envelope this module has not recorded (yet: the provider may call back
-// before the envelope id is saved). A conflict, which providers retry, rather than a 404 they
-// may take as final.
+// before the envelope id is saved). A conflict, which providers retry and which can succeed once
+// the envelope is saved, rather than a 404 they may take as final.
 export class EnvelopeNotRecordedError extends DomainError {
   readonly code = 'envelope_not_recorded';
   readonly category = 'conflict';
