@@ -183,7 +183,12 @@ async function main(): Promise<void> {
     },
     body: callback,
   });
-  detail(`callback answered ${String(signed.status)}`);
+  if (!signed.ok) {
+    throw new Error(
+      `the signature callback answered ${String(signed.status)}: ${await signed.text()}`,
+    );
+  }
+  detail(`callback answered ${String(signed.status)}: contract signed`);
 
   say('The student authorises the direct debit of the instalments');
   const mandate = await call('POST', `/contracts/${contractId}/mandate`, {
