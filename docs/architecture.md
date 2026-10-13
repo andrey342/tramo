@@ -45,6 +45,7 @@ flowchart LR
 | [016](adr/016-french-amortisation-with-per-row-rounding-and-calendar-month-isa-periods.md) | French amortisation with per-row rounding and calendar-month ISA periods | accepted |
 | [017](adr/017-billing-applies-lendings-isa-rules-through-a-public-command.md)              | Billing applies lending's ISA rules through a public command             | accepted |
 | [018](adr/018-outgoing-webhooks-sign-with-a-per-center-secret-kept-encrypted.md)           | Outgoing webhooks sign with a per-center secret kept encrypted           | accepted |
+| [019](adr/019-reporting-read-models-are-rebuilt-from-the-outbox.md)                        | Reporting read models are rebuilt from the outbox                        | accepted |
 
 ## HTTP pipeline
 
@@ -487,4 +488,48 @@ sequenceDiagram
   Notif->>SMTP: send (job notifications.emails)
   Notif->>Center: POST signed (job notifications.webhooks, 5 attempts per round)
   Center-->>Notif: 2xx (delivered) or anything else (retried, then failed)
+```
+
+## Reporting
+
+The read side: dashboards for centers and operations, built from the events of the other
+modules (ADR 019). It decides nothing and owns no aggregate.
+
+- **Facts.** One row per application, contract, disbursement and charge in the `reporting`
+  schema, written by a consumer per event through `ReportingProjector`. Each event sets what it
+  knows; the status follows the most recent event (time, then event id), so events applied twice
+  or out of order leave the same facts. A charge failure, which does not name the center, is
+  placed by its contract.
+- **Figures.** Computed from the facts when asked:
+  - `GET /centers/:id/dashboard` (the center's admins, its API keys with `portfolio:read`,
+    staff): applications by where they are now, contracts by state, in total and by product,
+    money disbursed (settled transfers), collected, outstanding (charged, not collected) and
+    written off, and the delinquency rate (contracts in arrears among those being repaid).
+  - `GET /centers/:id/programs/:programId/performance`: applications, approval rate (approved
+    among decided), mean ticket, and how applicants scored, an aggregate origination answers
+    (`GetProgramScoresQuery`): scores stay there. A program of another center is a 404.
+  - `GET /ops/overview` (staff): applications waiting for an analyst, collections failed today,
+    transfers to centers pending or failed, contracts in arrears, jobs in the dead-letter queue.
+- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time): the
+  facts are truncated and the history of events, read from the outbox (`EventHistory`), is
+  replayed through the same projector, in one transaction.
+
+Known gaps, accepted for now:
+
+- The outbox is never pruned while it is the history; an archive of published events would keep
+  it small (ADR 019).
+- Figures are aggregated per request and a rebuild is one transaction: fine for the demo's
+  volume, a portfolio of millions of rows would want summary tables and a shadow rebuild.
+
+```mermaid
+sequenceDiagram
+  participant Module as origination / lending / billing
+  participant Outbox as shared.outbox_messages
+  participant Reporting as reporting (worker)
+  participant Api as api
+  Module->>Outbox: event (same transaction as the change)
+  Outbox->>Reporting: events.reporting (one job per consumer and event)
+  Reporting->>Reporting: ReportingProjector: upsert the fact
+  Api->>Reporting: GET /centers/:id/dashboard (figures from the facts)
+  Note over Reporting,Outbox: rebuild: truncate the facts, replay the outbox in order
 ```
