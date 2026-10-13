@@ -1,5 +1,6 @@
 export { AUDIT_TRAIL, type AuditChanges, type AuditTrail } from './audit-trail';
 export { EVENT_BUS, type EventBus } from './event-bus';
+export { EVENT_HISTORY, type EventHistory } from './event-history';
 export {
   type EventHandler,
   EVENT_SUBSCRIBER,

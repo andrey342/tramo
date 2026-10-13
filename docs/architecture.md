@@ -45,6 +45,7 @@ flowchart LR
 | [016](adr/016-french-amortisation-with-per-row-rounding-and-calendar-month-isa-periods.md) | French amortisation with per-row rounding and calendar-month ISA periods | accepted |
 | [017](adr/017-billing-applies-lendings-isa-rules-through-a-public-command.md)              | Billing applies lending's ISA rules through a public command             | accepted |
 | [018](adr/018-outgoing-webhooks-sign-with-a-per-center-secret-kept-encrypted.md)           | Outgoing webhooks sign with a per-center secret kept encrypted           | accepted |
+| [019](adr/019-reporting-read-models-are-rebuilt-from-the-outbox.md)                        | Reporting read models are rebuilt from the outbox                        | accepted |
 
 ## HTTP pipeline
 
@@ -487,4 +488,56 @@ sequenceDiagram
   Notif->>SMTP: send (job notifications.emails)
   Notif->>Center: POST signed (job notifications.webhooks, 5 attempts per round)
   Center-->>Notif: 2xx (delivered) or anything else (retried, then failed)
+```
+
+## Reporting
+
+The read side: dashboards for centers and operations, built from the events of the other
+modules (ADR 019). It decides nothing and owns no aggregate.
+
+- **Facts.** One row per application, contract, disbursement and charge in the `reporting`
+  schema, written by a consumer per event through `ReportingProjector`. The upserts give the same
+  facts whatever the order and repetition of events: each event sets what it knows; the status
+  follows the most recent event but a final one (a contract completed, defaulted or cancelled, a
+  charge paid, written off or cancelled, an application rejected, accepted, cancelled or
+  expired) is never replaced by one that is not; the decision is set once; a charge keeps the
+  day of its latest failure. A charge whose events never named the center is placed by its
+  contract's.
+- **Figures.** Pure functions of the domain over rows the store groups, computed when asked:
+  - `GET /centers/:id/dashboard` (the center's admins, its API keys with `portfolio:read`,
+    staff): applications submitted (drafts are not in the funnel) by where they are now,
+    contracts by state, in total and by product, money disbursed (settled transfers), collected,
+    outstanding (charged, not collected; a payoff being collected is left out, it covers the
+    charges still open) and written off, and the delinquency rate (contracts in arrears among
+    those being repaid).
+  - `GET /centers/:id/programs/:programId/performance`: applications, approval rate (approved
+    among decided), mean ticket, and the mean score of the applicants, which origination gives
+    only from ten scored applicants and in bands of five (`GetProgramScoresQuery`): scores stay
+    there. A program of another center is a 404.
+  - `GET /ops/overview` (staff): applications waiting for an analyst, charges whose collection
+    failed today and are still unpaid, transfers to centers pending or failed, contracts in
+    arrears, jobs in the dead-letter queue.
+- **Rebuild.** `POST /ops/reporting/rebuild` queues `reporting.rebuild` (one at a time). In one
+  REPEATABLE READ transaction the facts are locked against writers (readers still see the old
+  ones), deleted, and the history of events, read from the outbox (`EventHistory`), is replayed
+  through the same projector. A deployment that adds reporting to existing data runs it once.
+
+Known gaps, accepted for now:
+
+- The outbox is never pruned while it is the history; an archive of published events would keep
+  it small (ADR 019).
+- Figures are aggregated per request and a rebuild is one transaction: fine for the demo's
+  volume, a portfolio of millions of rows would want summary tables and a shadow rebuild.
+
+```mermaid
+sequenceDiagram
+  participant Module as origination / lending / billing
+  participant Outbox as shared.outbox_messages
+  participant Reporting as reporting (worker)
+  participant Api as api
+  Module->>Outbox: event (same transaction as the change)
+  Outbox->>Reporting: events.reporting (one job per consumer and event)
+  Reporting->>Reporting: ReportingProjector: upsert the fact
+  Api->>Reporting: GET /centers/:id/dashboard (figures from the facts)
+  Note over Reporting,Outbox: rebuild: delete the facts, replay the outbox in order
 ```

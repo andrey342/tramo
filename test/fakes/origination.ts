@@ -2,6 +2,7 @@ import {
   type ApplicationFilter,
   type ApplicationSummaryDto,
 } from '../../src/modules/origination/application/dto/application.dto';
+import { type ProgramScoresDto } from '../../src/modules/origination/application/dto/program-scores';
 import {
   type ApplicationQueries,
   type ProgramDirectory,
@@ -109,6 +110,21 @@ export class InMemoryApplicationQueries implements ApplicationQueries {
       .filter((application) => application.status === 'needs_review')
       .map(summaryOf);
     return Promise.resolve(paginate(waiting, page, 'statusChangedAt', 'asc'));
+  }
+
+  programScores(programId: string): Promise<ProgramScoresDto> {
+    const scores = this.applications
+      .all()
+      .filter((application) => application.program.programId === programId)
+      .map((application) => application.decision?.score)
+      .filter((score): score is number => score !== undefined);
+    return Promise.resolve({
+      scoredApplications: scores.length,
+      averageScore:
+        scores.length === 0
+          ? null
+          : Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+    });
   }
 }
 

@@ -24,6 +24,7 @@ import {
 import { GetApplicationDecisionHandler } from './application/queries/get-application-decision.query';
 import { GetApplicationHandler } from './application/queries/get-application.query';
 import { GetCurrentRiskPolicyHandler } from './application/queries/get-current-risk-policy.query';
+import { GetProgramScoresHandler } from './application/queries/get-program-scores.query';
 import { GetReviewQueueHandler } from './application/queries/get-review-queue.query';
 import { ListApplicationsHandler } from './application/queries/list-applications.query';
 import { FINANCING_APPLICATION_REPOSITORY, RISK_POLICY_REPOSITORY } from './domain';
@@ -72,6 +73,7 @@ import { TypeOrmRiskPolicyRepository } from './infrastructure/persistence/typeor
     ListApplicationsHandler,
     GetApplicationDecisionHandler,
     GetReviewQueueHandler,
+    GetProgramScoresHandler,
     GetCurrentRiskPolicyHandler,
     IamStudentDirectory,
     CatalogProgramDirectory,

@@ -141,14 +141,15 @@ context is a hexagonal module; layer and module boundaries are enforced by `pnpm
 Decisions are recorded as ADRs in [`docs/adr`](docs/adr) and summarised in
 [`docs/architecture.md`](docs/architecture.md).
 
-| Module          | Responsibility                                                                                            | Main endpoints                                                                                                                        |
-| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `iam`           | Accounts, sessions, roles, center API keys                                                                | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
-| `catalog`       | Training centers, VAT verification, programs and their financing options                                  | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
-| `origination`   | Financing applications, verification saga, risk policies and scoring                                      | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
-| `lending`       | Contracts, e-signature, disbursement to the center and the repayment plan                                 | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
-| `billing`       | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
-| `notifications` | Emails to students and centers, signed webhooks to centers with retries and redelivery                    | `/centers/:id/webhook`, `/centers/:id/webhook-deliveries`, `/centers/:id/webhook-deliveries/:deliveryId/redeliver`                    |
+| Module          | Responsibility                                                                                                        | Main endpoints                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `iam`           | Accounts, sessions, roles, center API keys                                                                            | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
+| `catalog`       | Training centers, VAT verification, programs and their financing options                                              | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
+| `origination`   | Financing applications, verification saga, risk policies and scoring                                                  | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
+| `lending`       | Contracts, e-signature, disbursement to the center and the repayment plan                                             | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
+| `billing`       | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger             | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
+| `notifications` | Emails to students and centers, signed webhooks to centers with retries and redelivery                                | `/centers/:id/webhook`, `/centers/:id/webhook-deliveries`, `/centers/:id/webhook-deliveries/:deliveryId/redeliver`                    |
+| `reporting`     | Read models of the portfolio: center dashboards, program performance and the ops overview, rebuilt from the event log | `/centers/:id/dashboard`, `/centers/:id/programs/:programId/performance`, `/ops/overview`, `/ops/reporting/rebuild`                   |
 
 ## API overview
 
@@ -240,6 +241,17 @@ The answer to the `PUT` carries the signing secret, once. Each delivery is signe
 (`X-Tramo-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`), retried five times with
 backoff, and can be asked for again with
 `POST /centers/<centerId>/webhook-deliveries/<deliveryId>/redeliver` (ADR 018).
+
+The center sees its portfolio, and operations their day, in read models built from the events
+(ADR 019); they can be thrown away and rebuilt from the outbox (do it once on a database that
+already had activity before reporting existed):
+
+```bash
+pnpm api:call GET '/centers/<centerId>/dashboard' --as center
+pnpm api:call GET '/centers/<centerId>/programs/<programId>/performance' --as center
+pnpm api:call GET '/ops/overview' --as ops
+pnpm api:call POST '/ops/reporting/rebuild' --as ops
+```
 
 Sign-in is rate limited per client (`THROTTLE_AUTH_LIMIT`, 10 per minute) and accounts are locked
 progressively after five failed attempts.

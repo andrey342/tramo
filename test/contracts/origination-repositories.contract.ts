@@ -1,3 +1,5 @@
+import { uuidv7 } from 'uuidv7';
+
 import { type ApplicationQueries } from '../../src/modules/origination/application/ports/origination-ports';
 import {
   type FinancingApplication,
@@ -167,6 +169,32 @@ export function originationRepositoriesContract(
 
       // Older suites' rows may be in the queue too; these two are the oldest possible.
       expect(queue.data.map((row) => row.id)).toEqual([waitingLonger.id, waiting.id]);
+    });
+
+    it('should give the mean score of a program, and nothing for one never scored', async () => {
+      const centerId = aProgramSnapshot().centerId;
+      const [first, second] = [
+        decided('approved', centerId, NOW),
+        decided('needs_review', centerId, NOW),
+      ];
+      const program = first.program.programId;
+      const sameProgram = anApplicationInScoring({ program: first.program });
+      await t.run(async () => {
+        await t.applications.save(first);
+        await t.applications.save(second);
+        await t.applications.save(sameProgram);
+      });
+
+      const scores = await t.queries.programScores(program);
+
+      expect(scores).toEqual({
+        scoredApplications: 1,
+        averageScore: Math.round(first.decision?.score ?? -1),
+      });
+      expect(await t.queries.programScores(uuidv7())).toEqual({
+        scoredApplications: 0,
+        averageScore: null,
+      });
     });
 
     it('should keep every policy version and answer with the highest', async () => {
