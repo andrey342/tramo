@@ -6,10 +6,14 @@ import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import { CONTRACT_REPOSITORY, type ContractRepository } from '../../domain';
 
-// The center has been paid: the contract takes effect. Run after DisbursementSettled; a
-// redelivery finds it active and changes nothing.
+// The center has been paid: the contract takes effect, from the day the transfer settled (not
+// the day this runs). Run after DisbursementSettled; a redelivery finds it activated and changes
+// nothing.
 export class ActivateContractCommand extends Command<void> {
-  constructor(readonly contractId: string) {
+  constructor(
+    readonly contractId: string,
+    readonly settledAt: Date,
+  ) {
     super();
   }
 }
@@ -28,7 +32,7 @@ export class ActivateContractHandler implements ICommandHandler<ActivateContract
       if (!contract) {
         throw new EntityNotFoundError('Contract', command.contractId);
       }
-      contract.activate(this.clock.now());
+      contract.activate(command.settledAt, this.clock.now());
       // A redelivery finds it done already: nothing to write.
       if (contract.hasPendingEvents) {
         await this.contracts.save(contract);

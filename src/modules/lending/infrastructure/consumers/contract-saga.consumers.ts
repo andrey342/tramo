@@ -145,7 +145,11 @@ export class ActivateOnDisbursementSettled implements EventHandler<DisbursementS
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<DisbursementSettledPayload>): Promise<void> {
-    await this.commands.execute(new ActivateContractCommand(event.payload.contractId));
+    // An event recorded before the payload carried settledAt occurred when the transfer settled.
+    const settledAt = event.payload.settledAt ?? event.occurredAt;
+    await this.commands.execute(
+      new ActivateContractCommand(event.payload.contractId, new Date(settledAt)),
+    );
   }
 }
 

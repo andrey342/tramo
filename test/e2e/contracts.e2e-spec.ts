@@ -33,6 +33,7 @@ const PROFILE = {
 describe('Contracts (e2e)', () => {
   let app: INestApplication;
   let commands: CommandBus;
+  let adminToken: string;
   let opsToken: string;
   let centerToken: string;
   let centerId: string;
@@ -43,15 +44,28 @@ describe('Contracts (e2e)', () => {
   beforeAll(async () => {
     app = await createApiApp();
     commands = app.get(CommandBus);
-    const adminToken = await accessTokenFor(app, await createStaffUser(app, 'admin'));
+    adminToken = await accessTokenFor(app, await createStaffUser(app, 'admin'));
     opsToken = await accessTokenFor(app, await createStaffUser(app, 'ops'));
-    centerId = await registerCenter(app, adminToken, { name: 'Lending School' });
+    ({ centerId, centerToken, programId } = await centerWithProgram('Lending School'));
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  // An active center with an admin and a published program it finances in 12 instalments.
+  async function centerWithProgram(name: string): Promise<{
+    centerId: string;
+    centerToken: string;
+    programId: string;
+  }> {
+    const centerId = await registerCenter(app, adminToken, { name });
     const centerEmail = `lending-${uuidv7().slice(-12)}@center.test`;
     await api()
       .post(`/api/v1/centers/${centerId}/users`)
       .set(...bearer(adminToken))
       .send({ email: centerEmail, password: TEST_PASSWORD });
-    centerToken = await accessTokenFor(app, { email: centerEmail, password: TEST_PASSWORD });
+    const centerToken = await accessTokenFor(app, { email: centerEmail, password: TEST_PASSWORD });
     const program = await api()
       .post(`/api/v1/centers/${centerId}/programs`)
       .set(...bearer(centerToken))
@@ -66,24 +80,24 @@ describe('Contracts (e2e)', () => {
         avgStartingSalaryCents: 2_800_000,
         financing: { installments: { allowedTerms: [12], annualRateBasisPoints: 900 } },
       });
-    programId = program.body.id as string;
+    const programId = program.body.id as string;
     await api()
       .patch(`/api/v1/programs/${programId}`)
       .set(...bearer(centerToken))
       .send({ status: 'published' });
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
+    return { centerId, centerToken, programId };
+  }
 
   // A student with an accepted offer, and the contract the worker would draw up and send for it
   // (the api process runs the same commands).
-  async function contractSentForSignature(): Promise<{
+  async function contractSentForSignature(
+    at: { centerId: string; programId: string } = { centerId, programId },
+  ): Promise<{
     token: string;
     contractId: string;
     applicationId: string;
   }> {
+    const { centerId, programId } = at;
     const email = `borrower-${uuidv7().slice(-12)}@example.com`;
     await api().post('/api/v1/auth/register').send({ email, password: TEST_PASSWORD });
     const token = await accessTokenFor(app, { email, password: TEST_PASSWORD });
@@ -139,6 +153,23 @@ describe('Contracts (e2e)', () => {
       .send(raw);
   };
 
+  // The provider's callback once the student signed the document they were sent.
+  async function sign(token: string, contractId: string): Promise<request.Response> {
+    const sent = await api()
+      .get(`/api/v1/contracts/${contractId}`)
+      .set(...bearer(token));
+    const document = await api()
+      .get(`/api/v1/contracts/${contractId}/document`)
+      .set(...bearer(token));
+    return callback({
+      eventId: uuidv7(),
+      type: 'envelope.completed',
+      envelopeId: sent.body.signature.envelopeId,
+      documentHash: createHash('sha256').update(document.text).digest('hex'),
+      occurredAt: new Date().toISOString(),
+    });
+  }
+
   async function activate(contractId: string): Promise<void> {
     await commands.execute(new RequestDisbursementCommand(contractId));
     const disbursements = await api()
@@ -149,7 +180,8 @@ describe('Contracts (e2e)', () => {
     );
     await commands.execute(new ExecuteDisbursementCommand(disbursement!.id));
     await commands.execute(new CheckDisbursementSettlementCommand(disbursement!.id));
-    await commands.execute(new ActivateContractCommand(contractId));
+    // The simulated bank settles at once: the transfer settled just now.
+    await commands.execute(new ActivateContractCommand(contractId, new Date()));
     await commands.execute(new OpenFinancingPlanCommand(contractId));
   }
 
@@ -303,6 +335,46 @@ describe('Contracts (e2e)', () => {
     expect(incomplete.status).toBe(400);
   });
 
+  // Providers retry anything but a success: a callback that lost the race to another outcome is
+  // answered with the contract as it is, not a conflict retried for ever.
+  it('should answer a callback about an envelope settled earlier with the contract as it is', async () => {
+    const declinedFirst = await contractSentForSignature();
+    const signedFirst = await contractSentForSignature();
+    const late = (contractId: string, type: string) =>
+      callback({
+        eventId: uuidv7(),
+        type,
+        envelopeId: `sim-env-${contractId}`,
+        documentHash: 'f'.repeat(64),
+        occurredAt: new Date().toISOString(),
+      });
+    await late(declinedFirst.contractId, 'envelope.declined');
+    await sign(signedFirst.token, signedFirst.contractId);
+
+    const completedAfterDecline = await late(declinedFirst.contractId, 'envelope.completed');
+    const expiredAfterSigning = await late(signedFirst.contractId, 'envelope.expired');
+    const declined = await api()
+      .get(`/api/v1/contracts/${declinedFirst.contractId}`)
+      .set(...bearer(opsToken));
+    const signed = await api()
+      .get(`/api/v1/contracts/${signedFirst.contractId}`)
+      .set(...bearer(opsToken));
+
+    expect(completedAfterDecline.status).toBe(200);
+    expect(completedAfterDecline.body).toEqual({
+      id: declinedFirst.contractId,
+      status: 'cancelled',
+    });
+    expect(expiredAfterSigning.status).toBe(200);
+    expect(expiredAfterSigning.body).toEqual({ id: signedFirst.contractId, status: 'signed' });
+    expect(declined.body).toMatchObject({
+      status: 'cancelled',
+      cancellationReason: 'signature_declined',
+      signature: { signedAt: null },
+    });
+    expect(signed.body).toMatchObject({ status: 'signed', cancellationReason: null });
+  });
+
   it('should keep repayment and payout to the right people', async () => {
     const { token, contractId } = await contractSentForSignature();
     const email = `other-${uuidv7().slice(-12)}@example.com`;
@@ -363,5 +435,65 @@ describe('Contracts (e2e)', () => {
 
     expect(retry.status).toBe(409);
     expect(retry.body.code).toBe('invalid_state_transition');
+  });
+
+  // The center closed after the student signed: the disbursement cannot be paid, and only
+  // cancelling the contract frees the student's application.
+  it('should let ops cancel a signed contract whose disbursement failed, and free the application', async () => {
+    const closing = await centerWithProgram('Closing School');
+    const { token, contractId, applicationId } = await contractSentForSignature(closing);
+    await sign(token, contractId);
+    await commands.execute(new RequestDisbursementCommand(contractId));
+    const cancel = (as: string, id = contractId) =>
+      api()
+        .post(`/api/v1/ops/contracts/${id}/cancel`)
+        .set(...bearer(as));
+
+    const whilePending = await cancel(opsToken);
+    await api()
+      .patch(`/api/v1/centers/${closing.centerId}`)
+      .set(...bearer(adminToken))
+      .send({ status: 'suspended', suspensionReason: 'Closed down' });
+    const page = await api()
+      .get('/api/v1/ops/disbursements?status=pending')
+      .set(...bearer(opsToken));
+    const disbursement = (page.body.data as { id: string; contractId: string }[]).find(
+      (item) => item.contractId === contractId,
+    );
+    await commands.execute(new ExecuteDisbursementCommand(disbursement!.id));
+    const asCenter = await cancel(closing.centerToken);
+    const asStudent = await cancel(token);
+    const unknown = await cancel(opsToken, uuidv7());
+    const cancelled = await cancel(opsToken);
+    const again = await cancel(opsToken);
+    const retry = await api()
+      .post(`/api/v1/ops/disbursements/${disbursement!.id}/retry`)
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7());
+    // The worker's consumer of ContractCancelled runs this; the api process runs the same command.
+    await commands.execute(new RecordContractOutcomeCommand(applicationId, 'cancelled'));
+    const application = await api()
+      .get(`/api/v1/applications/${applicationId}`)
+      .set(...bearer(token));
+
+    expect(whilePending.status).toBe(409);
+    expect(whilePending.body.code).toBe('disbursement_not_failed');
+    expect(asCenter.status).toBe(403);
+    expect(asStudent.status).toBe(403);
+    expect(unknown.status).toBe(404);
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body).toMatchObject({
+      id: contractId,
+      status: 'cancelled',
+      cancellationReason: 'disbursement_failed',
+      activatedOn: null,
+      payout: { disbursementStatus: 'cancelled' },
+    });
+    expect(cancelled.body.signature.signedAt).not.toBeNull();
+    expect(again.status).toBe(200);
+    expect(again.body.status).toBe('cancelled');
+    expect(retry.status).toBe(409);
+    expect(retry.body.code).toBe('invalid_state_transition');
+    expect(application.body.status).toBe('withdrawn');
   });
 });

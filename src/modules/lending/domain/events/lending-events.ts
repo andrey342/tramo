@@ -14,6 +14,7 @@ export const LendingEvents = {
   DisbursementSettled: 'DisbursementSettled',
   DisbursementFailed: 'DisbursementFailed',
   DisbursementRetried: 'DisbursementRetried',
+  DisbursementCancelled: 'DisbursementCancelled',
   PayoffRequested: 'PayoffRequested',
   PayoffWithdrawn: 'PayoffWithdrawn',
   IsaDeclarationOverdue: 'IsaDeclarationOverdue',
@@ -94,11 +95,14 @@ export type DisbursementSentPayload = {
   readonly attempt: number;
 };
 
+// The contract is activated on the day of `settledAt`. Optional for the events recorded before
+// it was added: their `occurredAt` is the same instant.
 export type DisbursementSettledPayload = {
   readonly disbursementId: string;
   readonly contractId: string;
   readonly centerId: string;
   readonly amountCents: number;
+  readonly settledAt?: string;
 };
 
 export type DisbursementFailedPayload = {
@@ -111,6 +115,15 @@ export type DisbursementFailedPayload = {
 
 // Ops sent a failed disbursement again, as a new attempt.
 export type DisbursementRetriedPayload = {
+  readonly disbursementId: string;
+  readonly contractId: string;
+  readonly centerId: string;
+  readonly attempt: number;
+};
+
+// Ops gave up on a failed disbursement: the center is not paid and the contract is cancelled
+// (ContractCancelled, `disbursement_failed`).
+export type DisbursementCancelledPayload = {
   readonly disbursementId: string;
   readonly contractId: string;
   readonly centerId: string;

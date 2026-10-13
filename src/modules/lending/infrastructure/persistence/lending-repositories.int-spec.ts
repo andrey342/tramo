@@ -86,4 +86,17 @@ describe('lending repositories (integration)', () => {
         .query(`UPDATE lending.contracts SET signed_at = NULL WHERE id = $1`, [contract.id]),
     ).rejects.toThrow(/ck_lending_contracts_signature_by_status/);
   });
+
+  // Only a contract cancelled because its disbursement failed was signed.
+  it('should refuse at the database a signing time on a contract the student declined', async () => {
+    const contract = aContractSentForSignature();
+    contract.cancel('signature_declined', LATER);
+    await uow.run(() => contracts.save(contract));
+
+    await expect(
+      app
+        .get(DataSource)
+        .query(`UPDATE lending.contracts SET signed_at = now() WHERE id = $1`, [contract.id]),
+    ).rejects.toThrow(/ck_lending_contracts_signature_by_status/);
+  });
 });

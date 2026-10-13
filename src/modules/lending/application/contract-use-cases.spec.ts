@@ -23,6 +23,8 @@ import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shar
 import {
   ContractAccessDeniedError,
   type ContractProduct,
+  DisbursementNotFailedError,
+  type DisbursementSettledPayload,
   EnvelopeNotRecordedError,
   LendingEvents,
   PayoffQuoteChangedError,
@@ -34,6 +36,10 @@ import {
   ActivateContractCommand,
   ActivateContractHandler,
 } from './commands/activate-contract.command';
+import {
+  CancelUndisbursedContractCommand,
+  CancelUndisbursedContractHandler,
+} from './commands/cancel-undisbursed-contract.command';
 import {
   CheckDisbursementSettlementCommand,
   CheckDisbursementSettlementHandler,
@@ -141,6 +147,13 @@ function setup() {
     check,
     reconcile: new ReconcileDisbursementHandler(disbursements, execute, check),
     retry: new RetryDisbursementHandler(uow, disbursements, clock),
+    cancelUndisbursed: new CancelUndisbursedContractHandler(
+      uow,
+      contracts,
+      disbursements,
+      audit,
+      clock,
+    ),
     activate: new ActivateContractHandler(uow, contracts, clock),
     openPlan: new OpenFinancingPlanHandler(uow, contracts, plans, clock),
     complete: new CompleteContractHandler(uow, contracts, clock),
@@ -180,7 +193,8 @@ function setup() {
     const disbursement = await disbursementOf(contractId);
     await handlers.execute.execute(new ExecuteDisbursementCommand(disbursement.id));
     await handlers.check.execute(new CheckDisbursementSettlementCommand(disbursement.id));
-    await handlers.activate.execute(new ActivateContractCommand(contractId));
+    const { settledAt } = await disbursementOf(contractId);
+    await handlers.activate.execute(new ActivateContractCommand(contractId, settledAt ?? NOW));
     await handlers.openPlan.execute(new OpenFinancingPlanCommand(contractId));
     return contractId;
   };
@@ -354,6 +368,52 @@ describe('lending use cases', () => {
       });
     });
 
+    // A conflict would be retried by the provider for ever: nothing can make it succeed.
+    it('should answer with the contract as it is when the envelope was settled by an earlier callback', async () => {
+      const t = setup();
+      const declinedId = await t.sent();
+      const declinedEnvelope = `fake-env-${declinedId}`;
+      await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'declined',
+          envelopeId: declinedEnvelope,
+          occurredAt: NOW,
+        }),
+      );
+      const signedId = await t.signed();
+      const signedEnvelope = `fake-env-${signedId}`;
+      const versions = [
+        (await t.contracts.findById(declinedId))?.version,
+        (await t.contracts.findById(signedId))?.version,
+      ];
+      const audited = t.audited.length;
+
+      const completedAfterDecline = await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'signed',
+          envelopeId: declinedEnvelope,
+          documentHash: 'f'.repeat(64),
+          occurredAt: NOW,
+        }),
+      );
+      const expiredAfterSigning = await t.signature.execute(
+        new RecordSignatureEventCommand({
+          type: 'expired',
+          envelopeId: signedEnvelope,
+          occurredAt: NOW,
+        }),
+      );
+
+      expect(completedAfterDecline).toEqual({ id: declinedId, status: 'cancelled' });
+      expect(expiredAfterSigning).toEqual({ id: signedId, status: 'signed' });
+      expect([
+        (await t.contracts.findById(declinedId))?.version,
+        (await t.contracts.findById(signedId))?.version,
+      ]).toEqual(versions);
+      expect(t.audited).toHaveLength(audited);
+      expect(t.events.ofType(LendingEvents.ContractCancelled)).toHaveLength(1);
+    });
+
     it('should report a callback for an unknown envelope as not found', async () => {
       const t = setup();
 
@@ -385,7 +445,7 @@ describe('lending use cases', () => {
       const contractId = await t.active();
       const disbursement = await t.disbursementOf(contractId);
       await t.execute.execute(new ExecuteDisbursementCommand(disbursement.id));
-      await t.activate.execute(new ActivateContractCommand(contractId));
+      await t.activate.execute(new ActivateContractCommand(contractId, NOW));
       await t.openPlan.execute(new OpenFinancingPlanCommand(contractId));
 
       const [transfer] = [...t.bank.transfers.values()];
@@ -401,6 +461,26 @@ describe('lending use cases', () => {
       expect(t.plans.all()).toHaveLength(1);
       expect(t.events.ofType(LendingEvents.DisbursementSettled)).toHaveLength(1);
       expect(t.events.ofType(LendingEvents.ContractActivated)).toHaveLength(1);
+    });
+
+    // Settled at 23:50; the consumer only gets to DisbursementSettled the next morning.
+    it('should activate on the settlement day when the settlement is processed the next day', async () => {
+      const t = setup();
+      const contractId = await t.signed();
+      const { id } = await t.disbursementOf(contractId);
+      await t.execute.execute(new ExecuteDisbursementCommand(id));
+      t.clock.set(new Date('2026-10-12T23:50:00Z'));
+      await t.check.execute(new CheckDisbursementSettlementCommand(id));
+      const [settled] = t.events.ofType(LendingEvents.DisbursementSettled);
+      const { settledAt } = settled?.payload as DisbursementSettledPayload;
+      t.clock.set(new Date('2026-10-13T08:00:00Z'));
+
+      await t.activate.execute(new ActivateContractCommand(contractId, new Date(settledAt ?? '')));
+      await t.openPlan.execute(new OpenFinancingPlanCommand(contractId));
+
+      expect(settledAt).toBe('2026-10-12T23:50:00.000Z');
+      expect((await t.contracts.findById(contractId))?.activatedOn?.toString()).toBe('2026-10-12');
+      expect((await t.plans.findByContractId(contractId))?.startsOn.toString()).toBe('2026-10-12');
     });
 
     it('should wait while the bank has not settled the transfer', async () => {
@@ -524,6 +604,84 @@ describe('lending use cases', () => {
       await expect(
         t.reconcile.execute(new ReconcileDisbursementCommand(t.student, id)),
       ).rejects.toThrow(ContractAccessDeniedError);
+    });
+
+    // The center closed: its disbursement cannot be paid, and the contract would hold the
+    // student's application for ever.
+    it('should let ops cancel a signed contract when its disbursement failed for good', async () => {
+      const t = setup();
+      t.catalog.addCenter(t.centerId, { active: false });
+      const contractId = await t.signed();
+      const { id } = await t.disbursementOf(contractId);
+      await t.execute.execute(new ExecuteDisbursementCommand(id));
+      t.audited.length = 0;
+
+      const cancelled = await t.cancelUndisbursed.execute(
+        new CancelUndisbursedContractCommand(OPS, contractId),
+      );
+      const again = await t.cancelUndisbursed.execute(
+        new CancelUndisbursedContractCommand(OPS, contractId),
+      );
+
+      expect(cancelled).toMatchObject({
+        status: 'cancelled',
+        cancellationReason: 'disbursement_failed',
+        payout: { disbursementStatus: 'cancelled' },
+      });
+      expect(again).toEqual(cancelled);
+      expect(await t.disbursementOf(contractId)).toMatchObject({
+        status: 'cancelled',
+        failureReason: 'center_not_active',
+      });
+      expect(t.events.ofType(LendingEvents.ContractCancelled)).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ reason: 'disbursement_failed' }),
+        }),
+      ]);
+      expect(t.events.ofType(LendingEvents.DisbursementCancelled)).toHaveLength(1);
+      expect(t.audited).toEqual([{ status: { before: 'signed', after: 'cancelled' } }]);
+      expect(t.plans.all()).toHaveLength(0);
+      await expect(t.retry.execute(new RetryDisbursementCommand(OPS, id))).rejects.toThrow(
+        InvalidStateTransitionError,
+      );
+    });
+
+    it('should not cancel a signed contract when its disbursement may still pay the center', async () => {
+      const t = setup();
+      const settledId = await t.active();
+      t.bank.settleImmediately = false;
+      const pendingId = await t.signed();
+      const sentId = await t.signed();
+      await t.execute.execute(new ExecuteDisbursementCommand((await t.disbursementOf(sentId)).id));
+      await t.check.execute(
+        new CheckDisbursementSettlementCommand((await t.disbursementOf(sentId)).id),
+      );
+
+      for (const contractId of [pendingId, sentId, settledId]) {
+        await expect(
+          t.cancelUndisbursed.execute(new CancelUndisbursedContractCommand(OPS, contractId)),
+        ).rejects.toThrow(DisbursementNotFailedError);
+      }
+      expect((await t.disbursementOf(sentId)).status).toBe('sent');
+      expect((await t.disbursementOf(settledId)).status).toBe('settled');
+      expect((await t.contracts.findById(pendingId))?.status).toBe('signed');
+    });
+
+    it('should let only staff cancel a contract, and report one that does not exist', async () => {
+      const t = setup();
+      t.catalog.addCenter(t.centerId, { active: false });
+      const contractId = await t.signed();
+      await t.execute.execute(
+        new ExecuteDisbursementCommand((await t.disbursementOf(contractId)).id),
+      );
+
+      await expect(
+        t.cancelUndisbursed.execute(new CancelUndisbursedContractCommand(t.student, contractId)),
+      ).rejects.toThrow(ContractAccessDeniedError);
+      await expect(
+        t.cancelUndisbursed.execute(new CancelUndisbursedContractCommand(OPS, uuidv7())),
+      ).rejects.toThrow(EntityNotFoundError);
+      expect((await t.contracts.findById(contractId))?.status).toBe('signed');
     });
 
     it('should let only staff retry a disbursement', async () => {
@@ -658,6 +816,24 @@ describe('lending use cases', () => {
       expect(await status('defaulted')).toBe('defaulted');
       expect(await status('in_arrears')).toBe('defaulted');
       expect(t.events.ofType(LendingEvents.ContractDefaulted)).toHaveLength(1);
+    });
+
+    // ChargeWrittenOff and PlanCompleted on the same day, the write-off delivered first: the
+    // completion must not dead-letter, and the default stands.
+    it('should leave a defaulted contract defaulted when its plan completes afterwards', async () => {
+      const t = setup();
+      const contractId = await t.active();
+      await t.collectionStatus.execute(
+        new RecordCollectionStatusCommand(contractId, 'defaulted', new Date()),
+      );
+      const version = (await t.contracts.findById(contractId))?.version;
+
+      await t.complete.execute(new CompleteContractCommand(contractId));
+
+      const contract = await t.contracts.findById(contractId);
+      expect(contract?.status).toBe('defaulted');
+      expect(contract?.version).toBe(version);
+      expect(t.events.ofType(LendingEvents.ContractCompleted)).toHaveLength(0);
     });
 
     // The schedule no longer shows the plan active, and billing no longer lists it.

@@ -190,9 +190,41 @@ describe('Contract', () => {
       expect(eventTypes(contract)).toEqual([LendingEvents.ContractCancelled]);
     });
 
-    it('should not be cancelled once signed', () => {
+    it('should not be cancelled for its signature once signed', () => {
       expect(() => {
         aSignedContract().cancel('signature_expired', LATER);
+      }).toThrow(InvalidStateTransitionError);
+    });
+
+    it('should be cancelled once signed when its disbursement failed, keeping the signature', () => {
+      const contract = aSignedContract();
+
+      contract.cancel('disbursement_failed', LATER);
+      contract.cancel('disbursement_failed', LATER);
+
+      expect(contract).toMatchObject({
+        status: 'cancelled',
+        cancellationReason: 'disbursement_failed',
+        activatedOn: null,
+      });
+      expect(contract.signature?.signedAt).toEqual(NOW);
+      expect(contract.pullEvents()).toEqual([
+        expect.objectContaining({
+          eventType: LendingEvents.ContractCancelled,
+          payload: expect.objectContaining({
+            applicationId: contract.applicationId,
+            reason: 'disbursement_failed',
+          }),
+        }),
+      ]);
+    });
+
+    it('should refuse a failed disbursement as the reason when the contract is not signed or took effect', () => {
+      expect(() => {
+        aContractSentForSignature().cancel('disbursement_failed', LATER);
+      }).toThrow(InvalidStateTransitionError);
+      expect(() => {
+        anActiveContract().cancel('disbursement_failed', LATER);
       }).toThrow(InvalidStateTransitionError);
     });
   });
@@ -201,7 +233,7 @@ describe('Contract', () => {
     it('should be activated once signed, on the day the center was paid (UTC)', () => {
       const contract = aSignedContract();
 
-      contract.activate(new Date('2026-10-14T23:30:00Z'));
+      contract.activate(new Date('2026-10-14T23:30:00Z'), new Date('2026-10-14T23:31:00Z'));
 
       expect(contract.status).toBe('active');
       expect(contract.activatedOn?.toString()).toBe('2026-10-14');
@@ -213,10 +245,21 @@ describe('Contract', () => {
       ]);
     });
 
+    // Settled at 23:50, the news processed after midnight (a backlog, a retried consumer).
+    it('should count repayment from the settlement day when the activation is processed later', () => {
+      const contract = aSignedContract();
+
+      contract.activate(new Date('2026-10-14T23:50:00Z'), new Date('2026-10-15T08:00:00Z'));
+
+      expect(contract.activatedOn?.toString()).toBe('2026-10-14');
+      expect(contract.statusChangedAt).toEqual(new Date('2026-10-15T08:00:00Z'));
+      expect(contract.pullEvents()[0]?.payload).toMatchObject({ activatedOn: '2026-10-14' });
+    });
+
     it('should take a repeated activation or completion as done', () => {
       const contract = anActiveContract();
 
-      contract.activate(LATER);
+      contract.activate(LATER, LATER);
       contract.complete(LATER);
       contract.complete(LATER);
 
@@ -278,9 +321,51 @@ describe('Contract', () => {
       expect(() => {
         aSignedContract().declareDefault(LATER);
       }).toThrow(InvalidStateTransitionError);
-      expect(() => {
-        contract.complete(LATER);
-      }).toThrow(InvalidStateTransitionError);
+    });
+
+    // A charge written off the day the plan ended: ChargeWrittenOff delivered before
+    // PlanCompleted. The default stands, as a completion stands against a later default.
+    it('should leave a defaulted contract defaulted when its plan ends later', () => {
+      const contract = anActiveContract();
+      contract.declareDefault(LATER);
+      contract.pullEvents();
+
+      contract.complete(LATER);
+
+      expect(contract.status).toBe('defaulted');
+      expect(eventTypes(contract)).toEqual([]);
+    });
+
+    it.each([
+      [
+        'in arrears',
+        (contract: Contract) => {
+          contract.markInArrears(LATER, LATER);
+        },
+      ],
+      [
+        'completed',
+        (contract: Contract) => {
+          contract.complete(LATER);
+        },
+      ],
+      [
+        'defaulted',
+        (contract: Contract) => {
+          contract.declareDefault(LATER);
+        },
+      ],
+    ])('should take a redelivered activation as done when the contract is %s', (_case, moveOn) => {
+      const contract = anActiveContract();
+      moveOn(contract);
+      const status = contract.status;
+      contract.pullEvents();
+
+      contract.activate(LATER, LATER);
+
+      expect(contract.status).toBe(status);
+      expect(contract.activatedOn?.toString()).toBe('2026-10-12');
+      expect(eventTypes(contract)).toEqual([]);
     });
 
     it('should leave a completed contract completed when a charge is written off later', () => {
@@ -305,7 +390,7 @@ describe('Contract', () => {
 
     it('should not be activated before it is signed', () => {
       expect(() => {
-        aContractSentForSignature().activate(NOW);
+        aContractSentForSignature().activate(NOW, NOW);
       }).toThrow(InvalidStateTransitionError);
     });
 

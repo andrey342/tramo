@@ -202,6 +202,25 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 - **Action**: retry the consumer's job and remove the dead letter; the transition is idempotent.
   A defaulted contract keeps the program held on purpose.
 
+## Signature callbacks
+
+- **Symptom**: a contract stays `sent_for_signature` although the student signed, or the provider
+  reports callbacks it keeps retrying.
+- **Check**: the api log of `POST /webhooks/esign` (status and Problem Details `code`), then
+  `pnpm trace <contractId>`.
+  - `401 invalid_webhook_signature`: another secret, or a clock more than five minutes off (see
+    Secret rotation).
+  - `409 envelope_not_recorded`: no contract has that envelope yet. The provider retries and it
+    succeeds once the envelope is saved; if it persists, the envelope is not one of this
+    environment's.
+  - `422 signature_mismatch`: the document signed is not the one sent. A retry cannot fix it;
+    raise it with the provider.
+  - `200` with a status other than the callback's outcome (`cancelled` for a completed envelope,
+    `signed` for an expired one): an earlier callback settled the envelope. Its first outcome
+    stands and nothing is written, so the provider stops retrying.
+- **Action**: a student who signed after declining has no contract in force; their application
+  was withdrawn and they apply again.
+
 ## Disbursement failed
 
 - **Symptom**: a signed contract is not `active`; `GET /ops/overview` shows transfers pending or
@@ -218,7 +237,14 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     day and a half): `POST /ops/disbursements/:id/reconcile`. A pending attempt is sent again
     with its own key, so the bank never pays it twice; a sent one is checked with the bank.
     Nothing is failed blindly, since money may already be out.
-  - Both are audited. A settled disbursement activates the contract and opens its plan.
+  - `failed` for good (the center closed, its account cannot be fixed):
+    `POST /ops/contracts/<contractId>/cancel`. The disbursement becomes `cancelled` (never
+    retried, its failure reason kept) and the contract `cancelled` with `disbursement_failed`;
+    `ContractCancelled` withdraws the application (consumer `origination.withdraw-application`),
+    so the student may apply again. Refused with `disbursement_not_failed` while the disbursement
+    is pending or sent (reconcile it first) or once it settled. A repeated call answers the
+    cancelled contract and changes nothing.
+  - All are audited. A settled disbursement activates the contract and opens its plan.
 
 ## Charges failing and dunning
 

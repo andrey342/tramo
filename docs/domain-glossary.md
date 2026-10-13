@@ -132,7 +132,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   scoring → approved | needs_review | rejected      the scoring engine decides
   needs_review → approved | rejected       an ops analyst, with a reason
   approved → offer_accepted                the student accepts; lending takes over
-  offer_accepted → withdrawn               lending's ContractCancelled (declined or never signed)
+  offer_accepted → withdrawn               lending's ContractCancelled (declined, never signed, or
+                                           its disbursement failed for good)
   offer_accepted → closed                  lending's ContractCompleted (the contract ran its course)
   any non-final → cancelled                the student cancels
   any non-final but needs_review → expired 14 days without a change (hourly sweep)
@@ -198,6 +199,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   ```text
   draft → sent_for_signature → signed → active → completed
   draft | sent_for_signature → cancelled   signature_declined | signature_expired
+  signed → cancelled                       disbursement_failed (ops, once the disbursement failed)
   active → in_arrears                      billing's ContractInArrears (30 days overdue)
   in_arrears → active                      billing's ArrearsCleared
   active | in_arrears → defaulted          billing's ChargeWrittenOff (90 days overdue)
@@ -205,7 +207,10 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   ```
 
   Arrears notices older than the last change are ignored, and an ended contract (`completed`,
-  `defaulted`) ignores them.
+  `defaulted`) ignores them. The first ending recorded is final: a plan that ends after the
+  contract defaulted (a charge written off the same day, delivered first) leaves it `defaulted`,
+  and a charge written off after it completed leaves it `completed`. A contract cancelled after
+  signing (`disbursement_failed`) keeps its signature; it never took effect, so nothing is owed.
 
 - **`ContractTerms`**: fixed at drawing: `principal` (the program price, financed in full), the
   center's `platformFee` at that moment and the `ContractProduct` (instalments: term and TIN;
@@ -213,7 +218,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 - **Signature envelope** (`Signature`): what was sent to the e-signature provider: provider,
   `envelopeId`, the rendered `document` as sent, its SHA-256 `documentHash`, `sentAt` and, once
   signed, `signedAt`. A callback for another envelope or another hash is refused
-  (`signature_mismatch`); a signing time outside the envelope's life is refused.
+  (`signature_mismatch`); a signing time outside the envelope's life is refused. The first
+  outcome of an envelope (signed, declined or expired) stands: a later callback about it changes
+  nothing and is answered with the contract as it is.
 - **`Disbursement`**: the payment of a signed contract's principal less the platform fee to the
   center, one per contract.
 
@@ -222,10 +229,12 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   pending → failed                         only before the transfer started
   sent → failed                            the bank refused it
   failed → pending                         ops retry, as a new attempt
+  failed → cancelled                       ops give up; the contract is cancelled with it
   ```
 
   Each attempt has the idempotency key `<disbursementId>.<attempt>` and fixes its `Creditor`
   (IBAN, holder) before the bank is called; from then on only the bank's answer can fail it.
+  `DisbursementSettled` carries `settledAt`; the contract is activated on that day (UTC).
 
 - **`FinancingPlan`**: how an active contract is repaid, opened on `ContractActivated` (ADR 016).
   `PlanStatus`: `active → completed`, with a completion reason `repaid`, `paid_off`,
@@ -254,6 +263,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 - Events: `ContractCreated`, `ContractSentForSignature`, `ContractSigned`, `ContractCancelled`,
   `ContractActivated`, `ContractCompleted`, `ContractDefaulted`, `DisbursementRequested`,
   `DisbursementSent`, `DisbursementSettled`, `DisbursementFailed`, `DisbursementRetried`,
+  `DisbursementCancelled`,
   `PayoffRequested`, `PayoffWithdrawn`, `IsaDeclarationOverdue`, `PlanCompleted`.
 
 ## billing

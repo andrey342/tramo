@@ -1,6 +1,7 @@
 export * from './errors/lending-errors';
 export * from './events/lending-events';
 export {
+  CANCELLATION_REASONS,
   type CancellationReason,
   Contract,
   type ContractProps,

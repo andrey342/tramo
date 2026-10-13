@@ -391,10 +391,11 @@ Contracts drawn up from accepted offers, their signature, the payment to the tra
 the repayment plan.
 
 - **Contract.** `draft → sent_for_signature → signed → active → completed`; a contract not yet
-  signed is cancelled when the student declines or the envelope expires (`defaulted` comes with
-  billing's dunning). One per accepted offer (unique application id). Its terms are fixed when it
-  is drawn up: the principal (the program price), the center's platform fee at that moment, and
-  the product as accepted (term and TIN, or the ISA's share, threshold, payments, cap and grace).
+  signed is cancelled when the student declines or the envelope expires, and a signed one when
+  ops give up on its failed disbursement (`defaulted` comes with billing's dunning). One per
+  accepted offer (unique application id). Its terms are fixed when it is drawn up: the principal
+  (the program price), the center's platform fee at that moment, and the product as accepted
+  (term and TIN, or the ISA's share, threshold, payments, cap and grace).
 - **Signature.** `ContractCreated` → a job renders the contract text, hashes it (SHA-256) and
   sends the envelope to the e-signature provider; the text is stored with the envelope, so `GET
 /contracts/:id/document` serves what the student signs whatever the code renders later. The
@@ -403,9 +404,12 @@ the repayment plan.
   and `ESIGN_WEBHOOK_PREVIOUS_SECRET` during a rotation), checked in a guard before the body is
   validated or reaches a command; a signature older than five minutes is refused, so a captured
   callback cannot be replayed later. A completed envelope must carry the hash of the document sent
-  (`signature_mismatch` otherwise) and a signing time within the life of the envelope. Repeated
-  callbacks write nothing; each one that changes a contract is in the audit log. A callback for an
-  envelope not recorded yet is answered 409, which providers retry.
+  (`signature_mismatch` otherwise) and a signing time within the life of the envelope. Providers
+  retry any answer but a 2xx, so a 409 is kept for what a retry can fix: an envelope not recorded
+  yet (`envelope_not_recorded`) or a concurrent write. The first outcome of an envelope stands: a
+  callback once the contract left `sent_for_signature` (repeated, or completed after a decline,
+  expired after signing) is answered 200 with the contract's current status and writes nothing.
+  Each callback that changes a contract is in the audit log.
 - **Disbursement.** `ContractSigned` → one disbursement per contract of the principal less the
   platform fee, `pending → sent → settled | failed`. A job reads the center's payout account
   through catalog (the only module allowed to ask for the full IBAN, by a dependency rule) and
@@ -418,14 +422,25 @@ the repayment plan.
   `POST /ops/disbursements/:id/retry`, a new attempt with a new key (the account is read again, so
   a corrected IBAN is used). A disbursement whose jobs ran out stays `pending` or `sent`; ops
   reconcile it with `POST /ops/disbursements/:id/reconcile`, which sends a pending attempt again
-  with its key or asks the bank about a sent one. Both are audited.
+  with its key or asks the bank about a sent one. A disbursement that failed for good (the center
+  closed) would otherwise hold the contract `signed` and the student's application for ever:
+  `POST /ops/contracts/:id/cancel` cancels the disbursement (`failed → cancelled`, never retried)
+  and the contract (`signed → cancelled`, `disbursement_failed`) in one transaction, and only
+  once the disbursement is `failed`; while it is pending or sent money may be on its way
+  (`disbursement_not_failed`). `ContractCancelled` withdraws the application. Nothing is left in
+  billing: the plan opens on activation, so no charge exists; a mandate the student signed for
+  the contract stays recorded but has nothing to collect. All three routes are audited.
 - **Repayment.** Billing collects (see Billing) and lending follows it: `ChargePaid` marks an
   instalment paid (in any order: a retried one may come after the next) or settles a payoff;
   `ContractInArrears` and `ArrearsCleared` move the contract into and out of `in_arrears`;
   `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan (`defaulted`): the
-  schedule shows it ended and billing no longer bills it. A payoff is refused while an instalment
-  due is unpaid, since billing is already collecting it.
-- **Activation and plan.** `DisbursementSettled` activates the contract on that day;
+  schedule shows it ended and billing no longer bills it. The first ending recorded is final: a
+  `PlanCompleted` delivered after the default leaves the contract `defaulted` (the default stands
+  and the application stays held), and a write-off after completion leaves it `completed`. A
+  payoff is refused while an instalment due is unpaid, since billing is already collecting it.
+- **Activation and plan.** `DisbursementSettled` activates the contract on the day the transfer
+  settled (`settledAt` in the payload, or the event's `occurredAt` for events recorded before it
+  carried one), not the day the consumer gets to it, so a backlog does not move the schedule;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
   the ISA terms with their running totals, assessed month by month without gaps. `PlanCompleted`
   completes the contract.

@@ -21,14 +21,25 @@ export class SignatureMismatchError extends DomainError {
 }
 
 // A callback for an envelope this module has not recorded (yet: the provider may call back
-// before the envelope id is saved). A conflict, which providers retry, rather than a 404 they
-// may take as final.
+// before the envelope id is saved). A conflict, which providers retry and which can succeed once
+// the envelope is saved, rather than a 404 they may take as final.
 export class EnvelopeNotRecordedError extends DomainError {
   readonly code = 'envelope_not_recorded';
   readonly category = 'conflict';
 
   constructor(envelopeId: string) {
     super('No contract is waiting on this envelope.', { envelopeId });
+  }
+}
+
+// A signed contract is cancelled only once its disbursement failed: while it is pending or sent
+// money may be on its way to the center, and once settled the contract is in force.
+export class DisbursementNotFailedError extends DomainError {
+  readonly code = 'disbursement_not_failed';
+  readonly category = 'conflict';
+
+  constructor(status: string | null) {
+    super('Only a contract whose disbursement failed can be cancelled.', { status });
   }
 }
 

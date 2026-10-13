@@ -89,7 +89,7 @@ export function aSignedContract(overrides: Parameters<typeof aContract>[0] = {})
 
 export function anActiveContract(overrides: Parameters<typeof aContract>[0] = {}): Contract {
   const contract = aSignedContract(overrides);
-  contract.activate(NOW);
+  contract.activate(NOW, NOW);
   contract.pullEvents();
   return contract;
 }

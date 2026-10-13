@@ -5,6 +5,7 @@ import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
 
 import { ActivateContractHandler } from './application/commands/activate-contract.command';
 import { AssessIsaPeriodHandler } from './application/commands/assess-isa-period.command';
+import { CancelUndisbursedContractHandler } from './application/commands/cancel-undisbursed-contract.command';
 import { CheckDisbursementSettlementHandler } from './application/commands/check-disbursement-settlement.command';
 import { CloseDefaultedPlanHandler } from './application/commands/close-defaulted-plan.command';
 import { CompleteContractHandler } from './application/commands/complete-contract.command';
@@ -117,6 +118,7 @@ function simulated<T>(config: AppConfig, provider: T): T {
     CheckDisbursementSettlementHandler,
     RetryDisbursementHandler,
     ReconcileDisbursementHandler,
+    CancelUndisbursedContractHandler,
     ActivateContractHandler,
     OpenFinancingPlanHandler,
     CompleteContractHandler,

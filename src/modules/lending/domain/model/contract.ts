@@ -18,8 +18,14 @@ import {
 
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
-// Why a contract was cancelled before it took effect.
-export type CancellationReason = 'signature_declined' | 'signature_expired';
+// Why a contract was cancelled before it took effect: the student declined or never signed, or
+// once signed the payment to the center failed for good.
+export const CANCELLATION_REASONS = [
+  'signature_declined',
+  'signature_expired',
+  'disbursement_failed',
+] as const;
+export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
 
 // The envelope sent to the e-signature provider and, once the student signs, when they did.
 export interface Signature {
@@ -55,6 +61,7 @@ export interface ContractProps {
 //
 //   draft → sent_for_signature → signed → active → completed
 //   draft | sent_for_signature → cancelled        (the student declined, or never signed)
+//   signed → cancelled                            (ops: the disbursement failed for good)
 //   active ⇄ in_arrears                           (billing: a charge 30 days overdue, then paid)
 //   active | in_arrears → defaulted               (billing, after dunning runs out)
 //   in_arrears → completed                        (the plan ended while a charge was overdue)
@@ -157,6 +164,13 @@ export class Contract extends AggregateRoot {
     return this.props.createdAt;
   }
 
+  // Only while the envelope is out can a callback about it change the contract. Once it was
+  // signed, declined or expired, the first outcome recorded stands: a later callback (repeated,
+  // or one that lost a race, such as completed after a decline) has nothing left to decide.
+  get awaitsSignature(): boolean {
+    return this.props.status === 'sent_for_signature';
+  }
+
   sentForSignature(
     envelope: { provider: string; envelopeId: string; document: string; documentHash: string },
     now: Date,
@@ -227,13 +241,17 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // Before signing only: a signed contract is undone by paying it off, not by cancelling it.
-  // Idempotent for a contract already cancelled.
+  // Only before the contract took effect; an active one is undone by paying it off. Before
+  // signing, for the signature's outcome; once signed, for a disbursement that failed for good
+  // (the caller checks it failed: the center was never paid, so nothing is owed). Idempotent for
+  // a contract already cancelled.
   cancel(reason: CancellationReason, now: Date): void {
     if (this.props.status === 'cancelled') {
       return;
     }
-    if (this.props.status !== 'draft' && this.props.status !== 'sent_for_signature') {
+    const from: readonly ContractStatus[] =
+      reason === 'disbursement_failed' ? ['signed'] : ['draft', 'sent_for_signature'];
+    if (!from.includes(this.props.status)) {
       throw new InvalidStateTransitionError('Contract', this.props.status, 'cancelled');
     }
     this.props = { ...this.props, cancellationReason: reason };
@@ -252,14 +270,16 @@ export class Contract extends AggregateRoot {
     });
   }
 
-  // The center has been paid. Repayment counts from this day. Idempotent for an active contract
-  // (a redelivered DisbursementSettled).
-  activate(now: Date): void {
-    if (this.props.status === 'active') {
+  // The center was paid at `settledAt`: repayment counts from that day (UTC), however late the
+  // news is processed. Idempotent for a contract activated already, whatever became of it since:
+  // a DisbursementSettled redelivered after the contract went into arrears or ended changes
+  // nothing.
+  activate(settledAt: Date, now: Date): void {
+    if (this.props.activatedOn) {
       return;
     }
     this.assertStatus('signed', 'active');
-    const activatedOn = CalendarDate.fromInstant(now);
+    const activatedOn = CalendarDate.fromInstant(settledAt);
     this.props = { ...this.props, activatedOn };
     this.moveTo('active', now);
     this.record({
@@ -330,8 +350,12 @@ export class Contract extends AggregateRoot {
   }
 
   // The plan has ended: repaid, paid off, or for an ISA its cap, payments or window reached.
+  // Idempotent. A contract that defaulted meanwhile (a charge written off the day the plan ended,
+  // its event delivered first) stays defaulted: the default stands and the debt stays with
+  // collections. declareDefault leaves a completed contract completed in the same way, so the
+  // first ending recorded is final whatever order the two events arrive in.
   complete(now: Date): void {
-    if (this.props.status === 'completed') {
+    if (this.hasEnded) {
       return;
     }
     if (this.props.status !== 'active' && this.props.status !== 'in_arrears') {

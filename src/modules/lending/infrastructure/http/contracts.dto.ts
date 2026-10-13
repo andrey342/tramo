@@ -15,6 +15,7 @@ import {
 import { CursorPageQueryDto } from '@shared/infrastructure/http';
 
 import {
+  CANCELLATION_REASONS,
   type CancellationReason,
   type CompletionReason,
   CONTRACT_STATUSES,
@@ -206,7 +207,7 @@ export class ContractResponse {
   @ApiProperty({ nullable: true, type: String, example: '2026-10-12' })
   activatedOn!: string | null;
 
-  @ApiProperty({ nullable: true, enum: ['signature_declined', 'signature_expired'] })
+  @ApiProperty({ nullable: true, enum: CANCELLATION_REASONS })
   cancellationReason!: CancellationReason | null;
 
   @ApiProperty()
