@@ -19,7 +19,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 FROM deps AS build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
-COPY scripts/seed.ts scripts/demo.ts scripts/demo-users.ts ./scripts/
+COPY scripts/seed.ts scripts/seed-vat.ts scripts/demo.ts scripts/demo-users.ts ./scripts/
 RUN pnpm build
 
 # Production dependencies only. Lifecycle scripts are skipped: husky is a dev tool and the native

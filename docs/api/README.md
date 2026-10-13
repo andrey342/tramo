@@ -7,8 +7,9 @@ error.
 
 ## Setup
 
-1. Start the stack with `docker compose up -d --build --wait`. The `seed` container loads three
-   centers, six programs and the demo accounts (password `tramo demo password`):
+1. Start the stack with `docker compose up -d --build --wait` and wait for the `seed` container
+   to exit with 0 (`docker compose ps -a seed`; see the Quickstart in the main README). It loads
+   three centers, six programs and the demo accounts (password `tramo demo password`):
    `admin@tramo.test` (admin), `ops@tramo.test` (ops), `admin@codeworks.test` (center admin of
    Codeworks Barcelona), `admin@berlin-code.test`, and the students `ana.garcia`, `bruno.silva`,
    `carla.moreno`, `diego.lopez` and `elena.ruiz` (all `@example.com`).
@@ -17,10 +18,14 @@ error.
    variables the scripts fill in: ids, the first due date and so on. Tokens, the API key and
    `esignSecret` are secret variables: Bruno keeps their values out of the collection files, so a
    run never writes a token into the repository.
-4. Run the **Auth** folder first (right click, **Run**). It signs in as admin, ops and the
+4. Run the **Auth** folder once, first (right click, **Run**). It signs in as admin, ops and the
    Codeworks center admin, stores the center id, and registers and signs in a new student, whose
-   token ends up in `studentToken`. Access tokens last 15 minutes; run Auth again when requests
-   start answering 401.
+   token ends up in `studentToken`. Its last two requests rotate that student's refresh token and
+   log the session out: the access token keeps working, the refresh token does not. Access tokens
+   last 15 minutes; when requests start answering 401, run the sign-in requests again (**Login
+   admin**, **Login ops**, **Login center admin**, **Login new student**), not the whole folder:
+   **Register student** would create another student, who does not own the applications and
+   contracts made so far.
 
 Requests that need an `Idempotency-Key` send a fresh `{{$guid}}` each time. Post-response scripts
 copy ids from the answers into the environment, so the requests below can be run one after another
@@ -74,8 +79,10 @@ contract id is in the `contractId` environment variable after step 7.
 - **Health**: liveness, readiness and Prometheus metrics (outside `/api/v1`; metrics take the
   bearer `tramo-local-metrics-token-change-me`).
 - **Catalog**: an admin registers a center and checks its VAT number; the Codeworks admin creates
-  and publishes a program. With `VIES_MODE=test` only 100 is a valid VAT number and the seed
-  already uses it, so the new center stays pending; the program requests use Codeworks.
+  and publishes a program. With the compose default (`VIES_MODE=fake`) the new center's random
+  number is valid and it becomes active once the worker has checked it; with `VIES_MODE=test`
+  only 100 is valid and the seed already uses it, so it stays pending. The program requests use
+  Codeworks either way.
 - **Applications**: draft updates, cancellation, the ops review queue and manual decisions, and
   the risk policy.
 - **Billing**: dunning, retrying a failed charge and income declarations (ISA contracts only).

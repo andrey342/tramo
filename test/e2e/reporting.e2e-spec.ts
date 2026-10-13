@@ -130,10 +130,14 @@ describe('Reporting (e2e)', () => {
     const byCenter = await api()
       .get('/api/v1/ops/overview')
       .set(...bearer(token));
-    const rebuild = await api()
-      .post('/api/v1/ops/reporting/rebuild')
-      .set(...bearer(opsToken))
-      .set('Idempotency-Key', uuidv7());
+    // No worker runs in these tests, so the first rebuild stays queued and the second finds it.
+    const requestRebuild = () =>
+      api()
+        .post('/api/v1/ops/reporting/rebuild')
+        .set(...bearer(opsToken))
+        .set('Idempotency-Key', uuidv7());
+    const rebuild = await requestRebuild();
+    const again = await requestRebuild();
 
     expect(overview.status).toBe(200);
     expect(overview.body).toEqual({
@@ -147,6 +151,8 @@ describe('Reporting (e2e)', () => {
     });
     expect(byCenter.status).toBe(403);
     expect(rebuild.status).toBe(202);
-    expect(rebuild.body).toEqual({ queued: expect.any(Boolean) });
+    expect(rebuild.body).toEqual({ queued: true });
+    expect(again.status).toBe(202);
+    expect(again.body).toEqual({ queued: false });
   });
 });

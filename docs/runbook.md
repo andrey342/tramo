@@ -26,7 +26,9 @@ Conventions used below:
     when `GET /health/ready` answers 200: Postgres and Redis each answered a ping within 1.5 s.
   - `worker` starts only once the api is healthy (the api migrates, the worker reads the outbox);
     healthy when its own `GET /health/ready` on port 3100 answers 200.
-  - `seed` runs once the api is healthy, loads the demo data set (idempotent) and exits.
+  - `seed` runs once the api is healthy, loads the demo data set (idempotent) and exits: 0 when
+    done, 1 when it could not finish (`docker compose logs seed` says why, for instance a center
+    the VAT registry did not answer for). Run it again with `docker compose run --rm seed`.
 - **Check**:
 
   ```bash
@@ -134,7 +136,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   attempts, the delay doubling from 10 s, about 21 minutes in all; work queues without a schedule
   of their own get five attempts from 2 s (about 30 s); provider calls have their own schedule,
   below. Once out of attempts it stays in its queue's failed set and a copy goes to
-  `dead-letter`, kept until someone removes it.
+  `dead-letter`, kept until someone removes it. The exception is `reporting.rebuild`: its job is
+  removed when it fails (so the next request can queue one under the same id), only the dead
+  letter is left, and the lever is asking for a rebuild again (table below).
 - **Action**, only once the cause is fixed:
   - Retry the job in its own queue: `pnpm queue:inspect <queue> <jobId> --retry`, then remove its
     dead letter: `pnpm queue:inspect dead-letter <deadLetterId> --remove`.
@@ -321,6 +325,17 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   it: read `docker compose logs api`.
 - A revert on the compose database is undone at the api's next start, which applies pending
   migrations again.
+- Two downs need care:
+  - `202610130515-allow-isa-declaration-overdue-emails` (notifications) deletes every
+    `notifications.notification_log` row of the `isa_declaration_overdue` template, sent or not,
+    since the CHECK it restores no longer allows them: that email history is lost. Export the rows
+    first if it matters.
+  - `202610102245-allow-invalid-vat-on-active-centers` (catalog) brings back the CHECK that an
+    active center has a valid VAT number, so it fails while an active center has
+    `vat_status = 'invalid'`. List them first
+    (`SELECT id, name FROM catalog.training_centers WHERE status = 'active' AND vat_status = 'invalid'`)
+    and suspend each (`PATCH /centers/:id` with `status: suspended` and a `suspensionReason`),
+    then revert.
 - Never edit a migration that has been applied (or reached `main`); write a new one. New ones are
   verified with `pnpm migration:verify check`, which runs, reverts and runs them again comparing
   schema dumps. `synchronize` and `schema:sync` are never used.
