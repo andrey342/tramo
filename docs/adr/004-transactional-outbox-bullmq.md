@@ -47,6 +47,11 @@ aggregate state they act on.
 - Bad: delivery latency of up to one poll interval (500 ms by default) after an idle period.
 - Bad: two stores to operate (Postgres for the outbox, Redis for the queues), and every consumer has
   to be written for redelivery.
+- Bad: fan-out follows the subscriptions of the worker that publishes. During a rolling deploy an
+  old worker publishes events without the consumers only the new release has, and marks them
+  published. Releases that add a consumer stop the old workers first, or publish the window again
+  afterwards (`published_at = NULL` for those event types and times); idempotent consumers make
+  the replay safe for the others (runbook, "Deploying a release that adds a consumer").
 
 ### Rejected options
 

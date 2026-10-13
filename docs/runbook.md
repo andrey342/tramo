@@ -322,6 +322,37 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   verified with `pnpm migration:verify check`, which runs, reverts and runs them again comparing
   schema dumps. `synchronize` and `schema:sync` are never used.
 
+## Deploying a release that adds a consumer
+
+- **Why it matters**: the outbox publisher hands each event to the consumers that the
+  subscription registry of the worker running it knows, at publish time (ADR 004). While a
+  rolling deploy runs old and new workers side by side, an event published by an old worker never
+  reaches a consumer that only the new release has; nothing retries it later, because the row is
+  marked published. Deploying the worker after the api does not close the gap: the publisher runs
+  in the worker, and old workers keep publishing until the last one stops.
+- **Avoid it**: stop the old workers before starting the new ones. Events wait in the outbox
+  meanwhile (`tramo_outbox_lag_seconds` rises for the length of the switch) and the new workers
+  publish them with the new subscriptions.
+- **Recover** after a rolling deploy: note when the first new worker started and when the last
+  old one stopped, then publish again the rows of the event types the new consumer subscribes to
+  that were published in that window:
+
+  ```sql
+  UPDATE shared.outbox_messages
+     SET published_at = NULL
+   WHERE event_type IN ('<EventType>', '<OtherEventType>')
+     AND published_at >= '<first new worker started>'
+     AND published_at <  '<last old worker stopped>';
+  ```
+
+  The publisher picks them up on its next poll and fans each one out to every current subscriber.
+  This is safe for the consumers that already had it: their job ids (`<eventId>.<consumer>`) are
+  still held by BullMQ for a week, and past that the consumer finds `(eventId, consumer)` in
+  `shared.processed_events` and does nothing. Keep the window and the event types tight all the
+  same, to keep the replay small. Events from before the deploy are history the new consumer
+  never saw either: a read model catches up with its own rebuild (reporting:
+  `POST /ops/reporting/rebuild`).
+
 ## Secret rotation
 
 - **`ESIGN_WEBHOOK_SECRET`**: set the new value and put the old one in
