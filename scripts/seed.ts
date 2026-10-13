@@ -7,6 +7,7 @@ import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { DataSource } from 'typeorm';
 import { uuidv7 } from 'uuidv7';
 
 import { CreateProgramCommand } from '../src/modules/catalog/application/commands/create-program.command';
@@ -300,6 +301,8 @@ const STUDENTS: readonly {
   },
 ];
 
+const DECIDED: readonly string[] = ['approved', 'rejected', 'needs_review'];
+
 async function seed(): Promise<void> {
   loadDotEnv();
   // Checked before the application connects (and possibly migrates) anything.
@@ -318,6 +321,7 @@ async function seed(): Promise<void> {
       strict: false,
     });
     const catalog = app.get<ProgramCatalog>(PROGRAM_CATALOG, { strict: false });
+    const db = app.get(DataSource);
 
     const adminId = await ensureStaff('admin', DEMO_USERS.admin);
     await ensureStaff('ops', DEMO_USERS.ops);
@@ -352,24 +356,28 @@ async function seed(): Promise<void> {
         );
         log(`center admin ${center.admin}`);
       }
-      // Programs are created and published together, only once the center can publish: a run that
-      // stopped between the two would leave drafts the next run does not see, and duplicate them.
+      // Programs are added only once the center can publish, each looked up by name (a draft left
+      // by a run that stopped before publishing it is published, not created again).
       if (center.programs.length === 0) {
         continue;
       }
       if (existing?.status !== 'active') {
         log(`center ${center.name} is not active yet; run the seed again to add its programs`);
-      } else if ((await catalog.list({ centerId: existing.id }, { limit: 1 })).data.length === 0) {
-        for (const program of center.programs) {
-          const { financing, ...details } = program;
-          const draft = await commands.execute(
-            new CreateProgramCommand(admin, existing.id, details, financing),
-          );
-          await commands.execute(
-            new UpdateProgramCommand(admin, draft.id, { status: 'published' }),
-          );
-          log(`program ${program.name}`);
-        }
+        continue;
+      }
+      for (const program of center.programs) {
+        const [found] = await db.query<{ id: string; status: string }[]>(
+          'SELECT id, status FROM catalog.programs WHERE center_id = $1 AND name = $2 LIMIT 1',
+          [existing.id, program.name],
+        );
+        if (found?.status === 'published') continue;
+        const { financing, ...details } = program;
+        const programId =
+          found?.id ??
+          (await commands.execute(new CreateProgramCommand(admin, existing.id, details, financing)))
+            .id;
+        await commands.execute(new UpdateProgramCommand(admin, programId, { status: 'published' }));
+        log(`program ${program.name}`);
       }
     }
 
@@ -394,8 +402,8 @@ async function seed(): Promise<void> {
           WEBHOOK_URL,
         ),
       );
-      // Shown once, as the API does: the sink does not check it, a center would.
-      log(`webhook of ${CENTERS[0].name} -> ${WEBHOOK_URL} (signing secret ${webhook.secret})`);
+      // The signing secret is not printed: the sink does not check signatures, and a log keeps it.
+      log(`webhook of ${CENTERS[0].name} -> ${webhook.url}`);
     }
 
     // Students, each with the applications of their scenario. The verification saga runs here
@@ -423,37 +431,54 @@ async function seed(): Promise<void> {
         roles: ['student'],
         centerId: null,
       };
-      const started =
-        (await applications.list({ applicantId: studentId }, { limit: 1 })).data.length > 0;
-      const ready = student.applications.every((item) => programIds.has(item.program));
-      if (started || !ready) continue;
+      const own = (await applications.list({ applicantId: studentId }, { limit: 50 })).data;
       for (const item of student.applications) {
-        const outcome = await applyAndVerify(
-          actor,
-          programIds.get(item.program) ?? '',
-          item.product,
-          item.profile,
-        );
+        const programId = programIds.get(item.program);
+        if (!programId) continue;
+        // One application per program; a draft left by a run that stopped early is finished.
+        const found = own.find((application) => application.programId === programId);
+        if (found && found.status !== 'draft') continue;
+        const outcome = await applyAndVerify(actor, programId, found?.id ?? null, item);
         log(`application of ${student.email} for ${outcome}`);
       }
     }
 
+    // The verification saga runs here so the seed does not depend on the worker. When the worker is
+    // up it runs the same saga on ApplicationSubmitted; if it gets there first, a step here fails
+    // and the seed waits for its decision instead.
     async function applyAndVerify(
       actor: Principal,
       programId: string,
-      product: RequestedProductDto,
-      profile: ProfileInput,
+      draftId: string | null,
+      item: { readonly product: RequestedProductDto; readonly profile: ProfileInput },
     ): Promise<string> {
-      const draft = await commands.execute(
-        new StartApplicationCommand(actor, { programId, product, profile }),
-      );
-      await commands.execute(new SubmitApplicationCommand(actor, draft.id));
-      for (const type of ['kyc', 'employment', 'bureau'] as const) {
-        await commands.execute(new RunVerificationCommand(draft.id, type));
+      const id =
+        draftId ??
+        (
+          await commands.execute(
+            new StartApplicationCommand(actor, {
+              programId,
+              product: item.product,
+              profile: item.profile,
+            }),
+          )
+        ).id;
+      await commands.execute(new SubmitApplicationCommand(actor, id));
+      const queries = app.get(QueryBus);
+      try {
+        for (const type of ['kyc', 'employment', 'bureau'] as const) {
+          await commands.execute(new RunVerificationCommand(id, type));
+        }
+        await commands.execute(new ScoreApplicationCommand(id));
+      } catch {
+        for (let waited = 0; waited < 60_000; waited += 500) {
+          const current = await queries.execute(new GetApplicationQuery(actor, id));
+          if (DECIDED.includes(current.status)) break;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
-      await commands.execute(new ScoreApplicationCommand(draft.id));
-      const result = await app.get(QueryBus).execute(new GetApplicationQuery(actor, draft.id));
-      return `${draft.programName}: ${result.status}`;
+      const result = await queries.execute(new GetApplicationQuery(actor, id));
+      return `${result.programName}: ${result.status}`;
     }
 
     async function ensureStaff(role: 'admin' | 'ops', email: string): Promise<string> {
