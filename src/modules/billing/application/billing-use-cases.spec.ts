@@ -135,7 +135,7 @@ function setup() {
     waiting: new CollectWaitingChargesHandler(uow, charges, mandates, clock),
     execute: new ExecuteChargeCollectionHandler(uow, charges, mandates, gateway),
     result: new RecordPaymentResultHandler(uow, charges, audit, clock),
-    dunning: new RunDunningHandler(uow, charges, mandates, clock),
+    dunning: new RunDunningHandler(uow, charges, mandates, plans, clock),
     retry: new RetryChargeHandler(uow, charges, mandates, plans, clock),
     payoff: new CreatePayoffChargeHandler(uow, charges, mandates, plans, clock),
     cancel: new CancelOpenChargesHandler(uow, charges, clock),
@@ -583,6 +583,24 @@ describe('billing use cases', () => {
       expect(retry).toEqual({ chargesReviewed: 1, retries: 1, failedChargeIds: [] });
       expect((await t.charges.findById(charge.id))?.status).toBe('pending');
       expect(t.events.ofType(BillingEvents.ChargeOverdue)).toHaveLength(1);
+    });
+
+    // The other overdue charges of a defaulted contract go to recovery: notices and write-off go
+    // on, the direct debit is not tried again (as ops cannot, with contract_not_repaying).
+    it('should not retry the collection of a charge when the contract has defaulted', async () => {
+      const t = setup();
+      const contractId = t.contract('installments', 'defaulted');
+      await t.mandate(contractId);
+      const charge = await t.charge({ contractId });
+
+      const retry = await t.dunning.execute(new RunDunningCommand(day('2026-11-15')));
+      const end = await t.dunning.execute(new RunDunningCommand(day('2027-02-10')));
+
+      expect(retry).toMatchObject({ retries: 0, failedChargeIds: [] });
+      expect(end.retries).toBe(0);
+      expect(t.events.ofType(BillingEvents.ChargeSubmitted)).toHaveLength(0);
+      expect(t.events.ofType(BillingEvents.ChargeOverdue)).toHaveLength(2);
+      expect((await t.charges.findById(charge.id))?.status).toBe('written_off');
     });
 
     it('should put the contract in arrears at 30 days and write the charge off at 90', async () => {

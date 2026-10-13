@@ -10,6 +10,7 @@ import {
   PAYMENT_MANDATE_REPOSITORY,
   type PaymentMandateRepository,
 } from '../../domain';
+import { REPAYMENT_PLANS, type RepaymentPlans } from '../ports/billing-ports';
 
 const PAGE = 200;
 
@@ -22,8 +23,9 @@ export interface DunningResult {
 
 // The daily dunning run, as of a day (for one contract, when given): every charge not settled
 // moves through the steps of the timeline it has reached (Charge.applyDunning), and the retries
-// it calls for are submitted when the contract has a mandate. A contract paying off is not
-// dunned: the payoff covers its charges. Each charge in its own transaction, under the
+// it calls for are submitted when the contract has a mandate and has not defaulted: after the
+// default the debt goes to recovery, and its charges only go on to their notices and write-off.
+// A contract paying off is not dunned: the payoff covers its charges. Each charge in its own transaction, under the
 // contract's lock; steps already applied are not applied again, so the run can repeat.
 export class RunDunningCommand extends Command<DunningResult> {
   constructor(
@@ -42,6 +44,7 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
     @Inject(PAYMENT_MANDATE_REPOSITORY) private readonly mandates: PaymentMandateRepository,
+    @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -83,7 +86,10 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
       const now = this.clock.now();
       const step = charge.dunningStep;
       const { retry } = charge.applyDunning(asOf, now);
-      const mandate = retry ? await this.mandates.findActiveByContract(charge.contractId) : null;
+      const mandate =
+        retry && !(await this.defaulted(charge.contractId))
+          ? await this.mandates.findActiveByContract(charge.contractId)
+          : null;
       if (mandate) {
         charge.submitCollection(mandate.id, now);
       }
@@ -92,5 +98,10 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
       }
       return mandate !== null;
     });
+  }
+
+  // Asked only when a retry is due, which is a few times in a charge's life.
+  private async defaulted(contractId: string): Promise<boolean> {
+    return (await this.plans.findContract(contractId))?.status === 'defaulted';
   }
 }
