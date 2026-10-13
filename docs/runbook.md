@@ -136,7 +136,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   attempts, the delay doubling from 10 s, about 21 minutes in all; work queues without a schedule
   of their own get five attempts from 2 s (about 30 s); provider calls have their own schedule,
   below. Once out of attempts it stays in its queue's failed set and a copy goes to
-  `dead-letter`, kept until someone removes it.
+  `dead-letter`, kept until someone removes it. The exception is `reporting.rebuild`: its job is
+  removed when it fails (so the next request can queue one under the same id), only the dead
+  letter is left, and the lever is asking for a rebuild again (table below).
 - **Action**, only once the cause is fixed:
   - Retry the job in its own queue: `pnpm queue:inspect <queue> <jobId> --retry`, then remove its
     dead letter: `pnpm queue:inspect dead-letter <deadLetterId> --remove`.

@@ -348,8 +348,8 @@ curl -s http://localhost:9099/deliveries
 ```
 
 The answer to the `PUT` carries the signing secret, once. Each delivery is signed
-(`X-Tramo-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`), retried five times with
-backoff, and can be asked for again with
+(`X-Tramo-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`), attempted up to five times
+(the first try included) with backoff, and can be asked for again with
 `POST /centers/<centerId>/webhook-deliveries/<deliveryId>/redeliver` (ADR 018).
 
 The center sees its portfolio, and operations their day, in read models built from the events
