@@ -31,6 +31,7 @@ export const QueueNames = {
   PSP_SIMULATOR: 'billing.psp-simulator',
   EMAILS: 'notifications.emails',
   WEBHOOK_DELIVERIES: 'notifications.webhooks',
+  REPORTING_REBUILD: 'reporting.rebuild',
 } as const;
 
 export function eventsQueueForConsumer(consumer: string): string {
@@ -56,4 +57,5 @@ export const ALL_QUEUES: readonly string[] = [
   QueueNames.PSP_SIMULATOR,
   QueueNames.EMAILS,
   QueueNames.WEBHOOK_DELIVERIES,
+  QueueNames.REPORTING_REBUILD,
 ];
