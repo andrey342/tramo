@@ -159,7 +159,10 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   handler's transaction, so failed and rolled-back attempts are recorded too.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
-  not shift when new rows arrive.
+  not shift when new rows arrive. A cursor that does not decode is a 422 (`cursor` in `errors`).
+- **OpenAPI.** Statuses the pipeline answers are documented by the decorators that cause them:
+  `@Idempotent()` adds 400, 409, 422 and 503, `@ApiCursorPaginated()` (on every list) 400 and 422. `src/openapi.spec.ts` builds the document from every controller and fails when an
+  idempotent or cursor-paginated route lacks them.
 - **Metrics.** `GET /metrics` (Prometheus text) answers a bearer of `METRICS_TOKEN` (32 characters
   or more; production refuses the published one); without a configured token it is a 404, and a
   wrong token a logged 401. Bare statuses, not Problem Details: its only client is a scraper. It is

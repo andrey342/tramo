@@ -2,10 +2,12 @@ export { API_PREFIX, configureHttpApp } from './configure-http-app';
 export { HttpPlatformModule } from './http-platform.module';
 export {
   IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENCY_STATUSES,
   Idempotent,
+  IDEMPOTENT,
   IDEMPOTENT_REPLAYED_HEADER,
 } from './idempotency/idempotent.decorator';
-export { CursorPageQueryDto } from './pagination';
+export { ApiCursorPaginated, CursorPageQueryDto } from './pagination';
 export { AuthRateLimited } from './throttling/throttling.module';
 export { CurrentPrincipal, principalOf, type RequestWithPrincipal } from './principal';
 export * from './problem-details';

@@ -14,7 +14,7 @@ import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagg
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -51,6 +51,7 @@ export class ContractsController {
 
   @Get()
   @ApiProblems(400, 401, 403)
+  @ApiCursorPaginated()
   @ApiOkResponse({ type: ContractPageResponse })
   @Roles('student', 'center_admin', 'ops', 'admin')
   @RequireScopes('portfolio:read')
