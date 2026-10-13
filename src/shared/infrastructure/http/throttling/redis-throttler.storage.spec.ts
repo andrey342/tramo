@@ -14,4 +14,16 @@ describe('RedisThrottlerStorage', () => {
       timeToBlockExpire: 0,
     });
   });
+
+  it('should report a blocked client in seconds when the script answers blocked', async () => {
+    const redis = { eval: jest.fn().mockResolvedValue([2, 59_001, 1, 29_500]) };
+    const storage = new RedisThrottlerStorage(redis as unknown as Redis);
+
+    await expect(storage.increment('client', 60_000, 1, 30_000, 'auth')).resolves.toEqual({
+      totalHits: 2,
+      timeToExpire: 60,
+      isBlocked: true,
+      timeToBlockExpire: 30,
+    });
+  });
 });

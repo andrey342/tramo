@@ -133,9 +133,10 @@ Every request to the api goes through, in order: request id and CLS context, rat
 validation, idempotency, the handler, auditing, and Problem Details rendering of errors.
 
 - **Rate limiting.** A fixed window per client IP and route, counted in Redis by one Lua script so
-  all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Routes declare
-  stricter limits with `@Throttle`; health checks and `/metrics` are exempt. Exceeding the limit
-  returns 429 with `Retry-After`.
+  all api instances share the counters (`THROTTLE_LIMIT` per `THROTTLE_TTL_MS`). Credential
+  routes marked `@AuthRateLimited()` (every `/auth/*` route and `POST /applications`)
+  also count against `THROTTLE_AUTH_LIMIT` per minute; health checks and `/metrics` are exempt.
+  Exceeding either limit returns 429 with `Retry-After`.
 - **Idempotency.** Endpoints marked `@Idempotent()` require an `Idempotency-Key`. The key is
   scoped to the caller (user or API key), so idempotent routes must be authenticated. A short-lived "in progress" record (60 s) makes a
   concurrent duplicate fail fast with 409; a completed response is kept for 24 h and replayed with
