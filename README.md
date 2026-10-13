@@ -85,11 +85,16 @@ Requirements: Node.js 24 (see `.nvmrc`), pnpm through Corepack, Docker.
 ```bash
 corepack enable pnpm
 pnpm install
+cp .env.example .env                 # if not done yet
 docker compose --profile dev up -d   # only postgres, redis, mailpit and the webhook sink
-pnpm start:dev                       # api on :3000, watch mode
 pnpm migration:run                   # create the schema (the compose api does this by itself)
-pnpm worker:dev                      # worker, health on :3100
+SEED_WEBHOOK_URL=http://localhost:9099/codeworks pnpm seed   # optional demo data
+pnpm start:dev                       # api on :3000, watch mode (one terminal)
+pnpm worker:dev                      # worker, health on :3100 (another terminal)
 ```
+
+`SEED_WEBHOOK_URL` points the demo center's webhook at the sink as a worker on the host reaches
+it; the compose seed uses the sink's service name instead.
 
 The `dev` profile on the command line takes precedence over `COMPOSE_PROFILES=demo` from `.env`,
 so the api and worker containers are not started and the host processes own ports 3000 and 3100.
