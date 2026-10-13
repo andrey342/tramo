@@ -137,7 +137,6 @@ function simulated(config: AppConfig, gateway: SimulatedPaymentGateway): Simulat
     CancelChargesOnPlanCompleted,
     CancelChargesOnContractDefaulted,
     RevokeMandateOnContractCancelled,
-    RevokeMandateOnContractCancelled,
     LedgerOnChargeCreated,
     LedgerOnChargePaid,
     LedgerOnChargeReturned,
