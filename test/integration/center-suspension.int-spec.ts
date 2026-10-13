@@ -5,13 +5,20 @@ import { uuidv7 } from 'uuidv7';
 
 import { CatalogModule } from '@modules/catalog/catalog.module';
 import { TRAINING_CENTER_REPOSITORY, type TrainingCenterRepository } from '@modules/catalog/domain';
-import { API_KEY_REPOSITORY, ApiKey, type ApiKeyRepository } from '@modules/iam/domain';
+import {
+  API_KEY_REPOSITORY,
+  ApiKey,
+  type ApiKeyRepository,
+  USER_REPOSITORY,
+  type UserRepository,
+} from '@modules/iam/domain';
 import { IamModule } from '@modules/iam/iam.module';
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/messaging';
 
 import { anActiveTrainingCenter } from '../factories/catalog';
+import { aCenterAdmin } from '../factories/iam';
 import { eventually } from '../helpers/eventually';
 
 // Catalog suspends a center; iam hears it through the outbox and revokes the center's API keys.
@@ -47,6 +54,8 @@ describe('center suspension (integration)', () => {
     const centers = app.get<TrainingCenterRepository>(TRAINING_CENTER_REPOSITORY);
     const apiKeys = app.get<ApiKeyRepository>(API_KEY_REPOSITORY);
     const center = anActiveTrainingCenter();
+    // The key names who issued it (a foreign key to iam.users).
+    const admin = aCenterAdmin({ centerId: center.id });
     const key = ApiKey.issue({
       id: uuidv7(),
       centerId: center.id,
@@ -54,11 +63,12 @@ describe('center suspension (integration)', () => {
       prefix: uuidv7().replace(/-/g, '').slice(-8),
       secretHash: `secret-${uuidv7()}`,
       scopes: ['applications:write'],
-      issuedBy: uuidv7(),
+      issuedBy: admin.id,
       now: new Date(),
     });
     await uow.run(async () => {
       await centers.save(center);
+      await app.get<UserRepository>(USER_REPOSITORY).save(admin);
       await apiKeys.save(key);
     });
 
