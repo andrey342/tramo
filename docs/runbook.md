@@ -413,7 +413,10 @@ future billing runs and private webhook targets by default. The compose stack ru
   a successful sign-in clears them. While locked, sign-in answers 429
   `account_temporarily_locked` with `Retry-After` and "Try again in N seconds", even with the
   right password. No endpoint unlocks an account; the lock expires. Anyone can lock an account by
-  failing on purpose; the attempts are in the logs.
+  failing on purpose. The api logs a warning when an account gets locked
+  (`Failed sign-in limit reached`, with `lockSeconds`) and for each sign-in refused while locked
+  (`Sign-in refused: the account is locked`, with `retryAfterSeconds`), the account masked as
+  `a***@example.com`: `docker compose logs api | grep 'the account is locked'`.
 - **Bull Board**: ten failed sign-ins from one client within 15 minutes refuse every attempt from
   it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
   counted, however many the dashboard sends at once, and clear the failures below the limit.

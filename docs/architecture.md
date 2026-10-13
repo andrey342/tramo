@@ -189,8 +189,8 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   cannot avoid them. Each attempt is checked against the lock and counted in one Redis script
   before its password is verified, so parallel requests cannot all slip past the threshold; a
   success clears the count. The cost is that anyone can lock an account by failing on purpose; the lock is
-  progressive and capped at an hour, the auth routes are rate limited per client, and the attempts
-  are visible in the logs. A per-IP and device-cookie scheme would reduce that risk at the price of
+  progressive and capped at an hour, the auth routes are rate limited per client, and every lock
+  and every sign-in refused while locked is logged (warn, email masked as `a***@example.com`). A per-IP and device-cookie scheme would reduce that risk at the price of
   more state.
 - **Housekeeping.** A daily job (`iam.session-sweep`, 03:30 UTC) deletes the refresh tokens of
   sessions that ended more than 30 days earlier, in batches of 1,000 rows per transaction, along
