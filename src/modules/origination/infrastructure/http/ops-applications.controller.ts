@@ -4,7 +4,7 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, CursorPageQueryDto } from '@shared/infrastructure/http';
+import { ApiProblems, CursorPageQueryDto, Idempotent } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -80,6 +80,8 @@ export class OpsApplicationsController {
   @ApiProblems(400, 401, 403, 409, 422)
   @ApiCreatedResponse({ type: RiskPolicyResponse })
   @Roles('admin')
+  // Each call publishes a new version: a retried request must not publish two.
+  @Idempotent()
   @Audited({ action: 'risk_policy.revise', resource: 'risk_policy' })
   @ApiOperation({
     summary: 'Publish the next version of the risk policy; past decisions keep theirs',

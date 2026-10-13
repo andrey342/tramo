@@ -278,15 +278,23 @@ describe('Applications (e2e)', () => {
     const byOps = await api()
       .post('/api/v1/risk-policies')
       .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7())
+      .send({ approveThreshold: 75 });
+    const withoutKey = await api()
+      .post('/api/v1/risk-policies')
+      .set(...bearer(adminToken))
       .send({ approveThreshold: 75 });
     const invalid = await api()
       .post('/api/v1/risk-policies')
       .set(...bearer(adminToken))
+      .set('Idempotency-Key', uuidv7())
       .send({ approveThreshold: 40 });
 
     expect(current.status).toBe(200);
     expect(current.body.maxFinanceableCents).toBe(1_200_000);
     expect(byOps.status).toBe(403);
+    expect(withoutKey.status).toBe(400);
+    expect(withoutKey.body.code).toBe('idempotency_key_missing');
     expect(invalid.status).toBe(422);
     expect(invalid.body.code).toBe('invalid_risk_policy');
   });
