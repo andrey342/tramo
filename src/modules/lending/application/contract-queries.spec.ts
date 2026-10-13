@@ -24,8 +24,9 @@ import { type Contract, ContractAccessDeniedError, renderContractDocument } from
 
 import { AssessIsaPeriodHandler } from './commands/assess-isa-period.command';
 import { FindContractQuery } from './dto/contract-lookup';
-import { AssessIsaPeriodCommand } from './dto/plan-lookup';
+import { AssessIsaPeriodCommand, FindUnpaidPrincipalQuery } from './dto/plan-lookup';
 import { FindContractHandler } from './queries/find-contract.query';
+import { FindUnpaidPrincipalHandler } from './queries/find-unpaid-principal.query';
 import {
   GetContractDocumentHandler,
   GetContractDocumentQuery,
@@ -243,6 +244,26 @@ describe('lending queries', () => {
   });
 
   describe('facades for billing', () => {
+    // Billing raises a defaulted loan's principal left to bill: the plan has ended by then.
+    it('should tell billing the principal of each unpaid instalment, whatever the plan state', async () => {
+      const t = setup();
+      const plan = aPlan();
+      plan.recordInstallmentPaid(1, NOW);
+      plan.closeOnDefault(NOW);
+      await t.plans.save(plan);
+      const isa = aPlan({ product: anIsa() });
+      await t.plans.save(isa);
+      const handler = new FindUnpaidPrincipalHandler(t.plans);
+
+      const unpaid = await handler.execute(new FindUnpaidPrincipalQuery(plan.contractId));
+
+      const { schedule } = plan.terms.kind === 'installments' ? plan.terms : { schedule: [] };
+      expect(unpaid).toHaveLength(23);
+      expect(unpaid?.[0]).toEqual({ number: 2, principalCents: schedule[1]?.principal.cents });
+      expect(await handler.execute(new FindUnpaidPrincipalQuery(isa.contractId))).toBeNull();
+      expect(await handler.execute(new FindUnpaidPrincipalQuery(uuidv7()))).toBeNull();
+    });
+
     it('should tell billing whose contract it is and in what state', async () => {
       const t = setup();
       const contract = anActiveContract();
