@@ -14,6 +14,7 @@ export * from './problem-details';
 export { API_KEY_HEADER, setupSwagger } from './swagger';
 export { createValidationPipe, ParseIdPipe } from './validation';
 export {
+  signatureFailure,
   signWebhook,
   verifyWebhook,
   WEBHOOK_TOLERANCE_SECONDS,

@@ -15,7 +15,7 @@ const STATUS_BY_CATEGORY: Record<DomainErrorCategory, HttpStatus> = {
 };
 
 // invalid_state_transition -> "Invalid state transition"
-function titleFromCode(code: string): string {
+export function titleFromCode(code: string): string {
   const words = code.replace(/_/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

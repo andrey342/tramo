@@ -130,7 +130,7 @@ describe('ProblemDetailsFilter', () => {
     expect(response.headers['retry-after']).toBe('5');
     expect(response.body).toMatchObject({
       code: 'idempotency_unavailable',
-      title: 'Service Unavailable',
+      title: 'Idempotency unavailable',
     });
   });
 

@@ -24,6 +24,17 @@ export type WebhookVerification =
   | { readonly valid: true }
   | { readonly valid: false; readonly reason: 'malformed' | 'expired' | 'mismatch' };
 
+const FAILURES: Readonly<Record<'malformed' | 'expired' | 'mismatch', string>> = {
+  malformed: 'The webhook signature is malformed.',
+  expired: 'The webhook signature is too old.',
+  mismatch: 'The webhook signature does not match the body.',
+};
+
+// What a refused signature answers, for the problem's detail.
+export function signatureFailure(reason: keyof typeof FAILURES): string {
+  return FAILURES[reason];
+}
+
 // `secrets`: the current one first, then the previous one while senders move to the new one.
 export function verifyWebhook(
   secrets: string | readonly string[],
