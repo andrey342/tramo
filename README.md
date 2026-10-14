@@ -348,8 +348,9 @@ the next month; on the 5th the month is charged. An ISA signed today starts payi
 outside production).
 
 Every step above writes to someone: the student receives emails (welcome, application received,
-decision, contract ready to sign, payment reminders and receipts, overdue notices, ISA declaration
-reminders and missing declarations) and the center's admins the disbursement; they land in Mailpit
+decision, contract ready to sign, payment reminders and receipts, overdue notices, returned
+payments, a default, a payoff that could not be collected, ISA declaration reminders and missing
+declarations) and the center's admins the disbursement; they land in Mailpit
 (http://localhost:8025). A center also receives its events by webhook once its admin points it
 at a URL; in compose, the webhook sink stands in for the center:
 

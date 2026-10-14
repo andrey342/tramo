@@ -362,7 +362,8 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   on `notifications.emails`. `EmailTemplate`: `welcome`, `application_received`,
   `application_decided`, `contract_ready_to_sign`, `disbursement_settled`,
   `installment_reminder`, `installment_collected`, `payment_overdue`, `contract_in_arrears`,
-  `isa_declaration_reminder`, `isa_declaration_overdue`, `payment_returned`.
+  `isa_declaration_reminder`, `isa_declaration_overdue`, `payment_returned`,
+  `contract_defaulted`, `payoff_withdrawn`.
 
   ```text
   pending → sent                           the SMTP server took it

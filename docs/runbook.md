@@ -395,8 +395,9 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     to `active`.
   - `202610130458-add-financing-applications-ended-statuses` (origination) turns `withdrawn` and
     `closed` applications into `cancelled`.
-  - `202610130515-allow-isa-declaration-overdue-emails` and
-    `202610131017-allow-payment-returned-emails` (notifications) delete every
+  - `202610130515-allow-isa-declaration-overdue-emails`,
+    `202610131017-allow-payment-returned-emails` and
+    `202610141800-allow-default-and-payoff-emails` (notifications) delete every
     `notifications.notification_log` row of their template, sent or not: that email history is
     lost.
   - `202610102245-allow-invalid-vat-on-active-centers` (catalog) brings back the CHECK that an
