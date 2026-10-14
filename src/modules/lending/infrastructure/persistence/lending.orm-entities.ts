@@ -58,6 +58,10 @@ export type PlanTermsJson =
       readonly consecutiveMissingDeclarations: number;
       readonly declarationOverdue: boolean;
       readonly lastAssessedPeriod: string | null;
+      // Absent in plans saved before months were tracked one by one.
+      readonly chargedPeriods?: string[];
+      readonly paidPeriods?: string[];
+      readonly assessmentsEnded?: 'cap_reached' | 'max_payments' | 'window_expired' | null;
     };
 
 @Entity({ schema: 'lending', name: 'contracts' })

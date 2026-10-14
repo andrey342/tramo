@@ -68,9 +68,20 @@ describe('Health (e2e)', () => {
       code: 'validation_error',
       errors: [{ field: 'programId', message: 'programId must be a UUID' }],
     });
+    const plainText = await request(server)
+      .post('/api/v1/auth/register')
+      .set('Content-Type', 'text/plain')
+      .send('{"email":"a@b.c","password":"x"}');
+    const form = await request(server)
+      .post('/api/v1/auth/register')
+      .type('form')
+      .send({ email: `form-${String(Date.now())}@example.com`, password: 'Str0ng-passw0rd!' });
+    expect(plainText.status).toBe(415);
+    expect(form.status).toBe(415);
+    expect(form.body.code).toBe('unsupported_media_type');
     expect(tooLarge.status).toBe(413);
     expect(tooLarge.body.code).toBe('payload_too_large');
-    for (const response of [outside, malformed, badId, tooLarge]) {
+    for (const response of [outside, malformed, badId, tooLarge, plainText, form]) {
       expect(response.headers['content-type']).toContain('application/problem+json');
       expect(response.body.requestId).toEqual(response.headers['x-request-id']);
     }

@@ -27,6 +27,17 @@ export class NotAnIncomeShareError extends DomainError {
   }
 }
 
+// The agreement reached its cap, its last payment or the end of its window: no month is charged
+// any more, though what was charged may still be being collected.
+export class IncomeShareAssessedError extends DomainError {
+  readonly code = 'income_share_assessed';
+  readonly category = 'rule_violation';
+
+  constructor() {
+    super('The agreement charges no more months: its cap, last payment or window was reached.');
+  }
+}
+
 export class IncomeAlreadyDeclaredError extends DomainError {
   readonly code = 'income_already_declared';
   readonly category = 'conflict';

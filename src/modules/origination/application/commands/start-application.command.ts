@@ -3,7 +3,7 @@ import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
 import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock } from '@shared/domain';
+import { CLOCK, type Clock, InvalidValueError } from '@shared/domain';
 
 import {
   ApplicationAccessDeniedError,
@@ -90,6 +90,13 @@ export class StartApplicationHandler implements ICommandHandler<StartApplication
     studentEmail: string | undefined,
   ): Promise<{ id: string; origin: ApplicationOrigin }> {
     if (actor.kind === 'user' && actor.roles.includes('student')) {
+      // A student applies for themselves: naming someone else is refused, not ignored.
+      if (studentEmail !== undefined) {
+        throw new InvalidValueError(
+          'studentEmail',
+          'Only a training center names the student it applies for.',
+        );
+      }
       return { id: actor.userId, origin: 'student' };
     }
     if (

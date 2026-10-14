@@ -42,13 +42,13 @@ The same return delivered again writes nothing; a success delivered again after 
 Lending applies `ChargeReturned` to the instalment while the plan takes repayments: active, or
 closed as `defaulted` (it records payments too, which billing keeps collecting after a default).
 A return that arrives before the payment it undoes is refused and retried, so the two land in
-order. An ISA charge changes nothing in the plan: its month was counted towards the cap and the
-payments when it was assessed, as a charge written off is.
+order. A returned ISA charge marks its month uncollected again: its month stays counted towards
+the cap and the payments, and an ISA plan ends only once every month charged is collected.
 
 A plan that ended `repaid` on the payment returned, or `paid_off` by a payoff returned, is not
 reopened: lending logs it and leaves the plan and the contract as they ended. Billing still owes
 the charge: an instalment is dunned like any other (a completed contract ignores the arrears and
-the default, as for the last ISA charge), a payoff, never dunned, waits for ops to collect it
+the default), a payoff, never dunned, waits for ops to collect it
 again (`POST /charges/:id/retry`) or settle it with the student.
 
 Option 2 would reopen a contract the center was told was completed, and its state machine has no

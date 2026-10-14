@@ -28,7 +28,10 @@ export type Repayment =
     }
   | { readonly kind: 'payoff' }
   | { readonly kind: 'payoff_returned' }
-  | { readonly kind: 'payoff_failed' };
+  | { readonly kind: 'payoff_failed' }
+  // An ISA month (YYYY-MM) collected, or its payment sent back.
+  | { readonly kind: 'isa'; readonly period: string }
+  | { readonly kind: 'isa_returned'; readonly period: string };
 
 export class RecordRepaymentCommand extends Command<void> {
   constructor(
@@ -63,7 +66,11 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
       if (!takes(plan, repayment)) {
         // A plan that ended repaid or paid off is not reopened (ADR 020): billing duns the charge
         // returned as any other, and ops settle the rest with the student.
-        if (repayment.kind === 'installment_returned' || repayment.kind === 'payoff_returned') {
+        if (
+          repayment.kind === 'installment_returned' ||
+          repayment.kind === 'payoff_returned' ||
+          repayment.kind === 'isa_returned'
+        ) {
           this.logger.warn(
             { contractId: plan.contractId, planId: plan.id, reason: plan.completionReason },
             'Payment returned on a plan that has ended; the plan stays as it ended',
@@ -82,6 +89,12 @@ export class RecordRepaymentHandler implements ICommandHandler<RecordRepaymentCo
         case 'payoff':
           plan.settlePayoff(now);
           break;
+        case 'isa':
+          plan.recordIsaPaid(repayment.period, now);
+          break;
+        case 'isa_returned':
+          plan.recordIsaReturned(repayment.period);
+          break;
         default:
           plan.withdrawPayoff(now);
       }
@@ -98,6 +111,8 @@ function takes(plan: FinancingPlan, repayment: Repayment): boolean {
   switch (repayment.kind) {
     case 'installment':
     case 'installment_returned':
+    case 'isa':
+    case 'isa_returned':
       return plan.recordsRepayments;
     case 'payoff_returned':
       return false;
@@ -117,6 +132,8 @@ function alreadyRecorded(plan: FinancingPlan, repayment: Repayment): boolean {
         plan.terms.kind === 'installments' &&
         plan.terms.paidInstallments.includes(repayment.installmentNumber)
       );
+    case 'isa':
+      return plan.terms.kind === 'isa' && plan.terms.paidPeriods.includes(repayment.period);
     default:
       // Each return is a notice of its own, delivered once (consumers deduplicate on the event).
       return false;

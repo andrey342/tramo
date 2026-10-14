@@ -75,7 +75,7 @@ export class CenterAccessController {
   }
 
   @Get('api-keys')
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 404)
   @ApiOkResponse({ type: [ApiKeyResponse] })
   @Roles('center_admin', 'admin')
   @ApiOperation({ summary: "List the center's API keys (without secrets)" })

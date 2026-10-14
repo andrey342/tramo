@@ -391,7 +391,8 @@ describe('Charge', () => {
       expect(charge.reachesArrears(day('2026-12-13'))).toBe(false);
     });
 
-    it('should catch up with every step a late run passed, retrying once', () => {
+    // Both notices were passed: the student gets the second one only, not two at once.
+    it('should catch up with every step a late run passed, retrying and noticing once', () => {
       const charge = fresh();
 
       const run = dun(charge, '2026-12-22');
@@ -399,11 +400,7 @@ describe('Charge', () => {
 
       expect(run).toEqual({
         retry: true,
-        events: [
-          BillingEvents.ChargeOverdue,
-          BillingEvents.ChargeOverdue,
-          BillingEvents.ContractInArrears,
-        ],
+        events: [BillingEvents.ChargeOverdue, BillingEvents.ContractInArrears],
         status: 'overdue',
       });
       expect(again).toEqual({ retry: false, events: [], status: 'overdue' });

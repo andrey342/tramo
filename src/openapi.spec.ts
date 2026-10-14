@@ -114,4 +114,23 @@ describe('OpenAPI document', () => {
       expect({ id, schemes }).toEqual({ id, schemes: [...new Set(schemes)] });
     }
   });
+
+  // A client generated from the document sends what the validation accepts.
+  it('should describe the loan terms of a program as integers', () => {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+    const schemas = document.components?.schemas ?? {};
+    const termsOf = (name: string): unknown =>
+      (schemas[name] as { properties?: Record<string, unknown> } | undefined)?.properties?.[
+        'allowedTerms'
+      ];
+
+    expect(termsOf('InstallmentsRequest')).toMatchObject({
+      type: 'array',
+      items: { type: 'number' },
+    });
+    expect(termsOf('InstallmentsResponse')).toMatchObject({
+      type: 'array',
+      items: { type: 'number' },
+    });
+  });
 });

@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
 import {
@@ -35,6 +41,7 @@ export class RedeliverWebhookHandler implements ICommandHandler<RedeliverWebhook
     @Inject(WEBHOOK_DELIVERY_REPOSITORY) private readonly deliveries: WebhookDeliveryRepository,
     @Inject(WEBHOOK_SUBSCRIPTION_REPOSITORY)
     private readonly subscriptions: WebhookSubscriptionRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -49,8 +56,13 @@ export class RedeliverWebhookHandler implements ICommandHandler<RedeliverWebhook
       if (!(await this.subscriptions.findByCenter(command.centerId))?.active) {
         throw new WebhookNotConfiguredError(command.centerId);
       }
+      const before = { status: delivery.status, round: delivery.round };
       delivery.redeliver(this.clock.now());
       await this.deliveries.save(delivery);
+      this.audit.describeChanges({
+        status: { before: before.status, after: delivery.status },
+        round: { before: before.round, after: delivery.round },
+      });
       return toDeliveryDto(delivery);
     });
   }

@@ -117,6 +117,10 @@ export function toScheduleDto(plan: FinancingPlan): ScheduleDto {
     chargedSoFarCents: terms.chargedSoFar.cents,
     paymentsMade: terms.paymentsMade,
     declarationOverdue: terms.declarationOverdue,
+    assessmentsEnded: terms.assessmentsEnded,
+    uncollectedPeriods: terms.chargedPeriods.filter(
+      (period) => !terms.paidPeriods.includes(period),
+    ),
   };
 }
 
@@ -142,7 +146,7 @@ export function toBillablePlanDto(
             }))
         : [],
     nextIsaPeriod:
-      terms.kind === 'isa'
+      terms.kind === 'isa' && !terms.assessmentsEnded
         ? (terms.lastAssessedPeriod?.addMonths(1) ?? terms.firstPeriod).period
         : null,
   };

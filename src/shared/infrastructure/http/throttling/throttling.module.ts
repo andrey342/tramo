@@ -23,8 +23,9 @@ function isAuthRateLimited(context: ExecutionContext): boolean {
   );
 }
 
-// The guard names the header of every throttler but `default` after it (`Retry-After-auth`);
-// clients and proxies only know `Retry-After`, so every 429 carries it too.
+// The guard names the headers of every throttler but `default` after it (`Retry-After-auth`,
+// `X-RateLimit-Limit-auth`); clients and proxies only know the plain names, so a 429 carries them
+// with the counters of the limit that refused it.
 @Injectable()
 export class RetryAfterThrottlerGuard extends ThrottlerGuard {
   protected override async throwThrottlingException(
@@ -33,6 +34,9 @@ export class RetryAfterThrottlerGuard extends ThrottlerGuard {
   ): Promise<void> {
     const { res } = this.getRequestResponse(context);
     this.setResponseHeader(res, 'Retry-After', detail.timeToBlockExpire);
+    this.setResponseHeader(res, 'X-RateLimit-Limit', detail.limit);
+    this.setResponseHeader(res, 'X-RateLimit-Remaining', 0);
+    this.setResponseHeader(res, 'X-RateLimit-Reset', detail.timeToBlockExpire);
     await super.throwThrottlingException(context, detail);
   }
 }

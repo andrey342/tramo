@@ -2,7 +2,13 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -41,6 +47,7 @@ export class CreateProgramHandler implements ICommandHandler<CreateProgramComman
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(PROGRAM_REPOSITORY) private readonly programs: ProgramRepository,
     @Inject(TRAINING_CENTER_REPOSITORY) private readonly centers: TrainingCenterRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -63,7 +70,14 @@ export class CreateProgramHandler implements ICommandHandler<CreateProgramComman
         now: this.clock.now(),
       });
       await this.programs.save(program);
-      return toProgramDto(program);
+      const created = toProgramDto(program);
+      this.audit.describeChanges({
+        program: {
+          before: null,
+          after: { name: created.name, status: created.status, priceCents: created.priceCents },
+        },
+      });
+      return created;
     });
   }
 }

@@ -29,6 +29,8 @@ import { firstIsaPeriod, isaWindowEnd, programEnd } from './isa-rules';
 
 export type PlanStatus = 'active' | 'completed';
 export type CompletionReason = PlanCompletedPayload['reason'];
+// Why an ISA assesses no more months: its cap, its last payment or the end of its window.
+export type IsaEnd = Extract<CompletionReason, 'cap_reached' | 'max_payments' | 'window_expired'>;
 
 export interface PayoffRequest {
   readonly amount: Money;
@@ -65,6 +67,12 @@ export interface IsaPlanTerms {
   readonly consecutiveMissingDeclarations: number;
   readonly declarationOverdue: boolean;
   readonly lastAssessedPeriod: CalendarDate | null;
+  // The months charged (YYYY-MM) and those billing has collected. Once no more months are
+  // assessed, the plan ends when every month charged has been collected, as a loan ends with its
+  // last instalment paid: until then arrears and default still apply to what is owed.
+  readonly chargedPeriods: readonly string[];
+  readonly paidPeriods: readonly string[];
+  readonly assessmentsEnded: IsaEnd | null;
 }
 
 export interface FinancingPlanProps {
@@ -142,6 +150,9 @@ export class FinancingPlan extends AggregateRoot {
         consecutiveMissingDeclarations: 0,
         declarationOverdue: false,
         lastAssessedPeriod: null,
+        chargedPeriods: [],
+        paidPeriods: [],
+        assessmentsEnded: null,
       };
     }
     return new FinancingPlan(input.id, {
@@ -290,7 +301,7 @@ export class FinancingPlan extends AggregateRoot {
 
   // Whether billing's payments and returns still change the instalments: while the plan is
   // repaid, and once defaulted, since the debt is still being recovered. A plan that ended
-  // otherwise (repaid, paid off, an ISA) stays as it ended (ADR 020).
+  // otherwise (repaid, paid off, an ISA collected in full) stays as it ended (ADR 020).
   get recordsRepayments(): boolean {
     return this.props.status === 'active' || this.props.completionReason === 'defaulted';
   }
@@ -340,10 +351,13 @@ export class FinancingPlan extends AggregateRoot {
   // it (null if they did not). At or above the threshold they pay the share of it, never past the
   // cap; below it, or without a declaration, the month is paused and owes nothing. Two months in
   // a row without a declaration mark it overdue (the student is told, staff see it on the
-  // schedule). The plan ends at the cap, at the last payment, or once a month starts after the
-  // window.
+  // schedule). No month is assessed after the cap, the last payment, or once a month starts after
+  // the window; the plan then ends as soon as every month charged has been collected.
   assessPeriod(period: CalendarDate, declaredIncome: Money | null, now: Date): IsaAssessment {
     const terms = this.isaTerms();
+    if (terms.assessmentsEnded) {
+      return { outcome: 'ended' };
+    }
     const month = period.startOfMonth();
     const last = terms.lastAssessedPeriod;
     if (last && !month.isAfter(last)) {
@@ -359,8 +373,11 @@ export class FinancingPlan extends AggregateRoot {
       return { outcome: 'not_started' };
     }
     if (month.isAfter(terms.windowEndsOn)) {
-      this.props = { ...this.props, terms: { ...terms, lastAssessedPeriod: month } };
-      this.complete('window_expired', now);
+      this.props = {
+        ...this.props,
+        terms: { ...terms, lastAssessedPeriod: month, assessmentsEnded: 'window_expired' },
+      };
+      this.endWhenCollected(now);
       return { outcome: 'ended' };
     }
     if (!declaredIncome) {
@@ -407,13 +424,74 @@ export class FinancingPlan extends AggregateRoot {
     );
     const chargedSoFar = terms.chargedSoFar.add(amount);
     const paymentsMade = terms.paymentsMade + 1;
-    this.props = { ...this.props, terms: { ...declared, chargedSoFar, paymentsMade } };
-    if (chargedSoFar.gte(terms.cap)) {
-      this.complete('cap_reached', now);
-    } else if (paymentsMade >= terms.maxPayments) {
-      this.complete('max_payments', now);
-    }
+    const assessmentsEnded: IsaEnd | null = chargedSoFar.gte(terms.cap)
+      ? 'cap_reached'
+      : paymentsMade >= terms.maxPayments
+        ? 'max_payments'
+        : null;
+    const chargedPeriods = amount.isPositive()
+      ? [...terms.chargedPeriods, month.period]
+      : terms.chargedPeriods;
+    this.props = {
+      ...this.props,
+      terms: { ...declared, chargedSoFar, paymentsMade, chargedPeriods, assessmentsEnded },
+    };
+    this.endWhenCollected(now);
     return { outcome: 'charge', amount };
+  }
+
+  // Whether no more months of the ISA are assessed (also once the plan has ended).
+  get assessmentsEnded(): boolean {
+    const { terms } = this.props;
+    return this.props.status !== 'active' || (terms.kind === 'isa' && !!terms.assessmentsEnded);
+  }
+
+  // Billing collected the charge of an ISA month. Idempotent. The plan ends when no more months
+  // are assessed and every month charged is collected; a defaulted one stays defaulted.
+  recordIsaPaid(period: string, now: Date): void {
+    const { terms: current } = this.props;
+    if (current.kind === 'isa' && current.paidPeriods.includes(period)) {
+      return;
+    }
+    const terms = this.repaidIsaTerms();
+    this.props = {
+      ...this.props,
+      terms: { ...terms, paidPeriods: [...terms.paidPeriods, period].sort() },
+    };
+    this.endWhenCollected(now);
+  }
+
+  // The student's bank sent the payment of an ISA month back: it is owed again, and billing duns
+  // it. A return of a month not recorded as paid changes nothing.
+  recordIsaReturned(period: string): void {
+    const terms = this.repaidIsaTerms();
+    this.props = {
+      ...this.props,
+      terms: { ...terms, paidPeriods: terms.paidPeriods.filter((paid) => paid !== period) },
+    };
+  }
+
+  private endWhenCollected(now: Date): void {
+    const { terms } = this.props;
+    if (
+      this.props.status === 'active' &&
+      terms.kind === 'isa' &&
+      terms.assessmentsEnded &&
+      terms.chargedPeriods.every((charged) => terms.paidPeriods.includes(charged))
+    ) {
+      this.complete(terms.assessmentsEnded, now);
+    }
+  }
+
+  private repaidIsaTerms(): IsaPlanTerms {
+    const { terms } = this.props;
+    if (terms.kind !== 'isa') {
+      throw new InvalidValueError('plan', 'Only an income share agreement is paid by month.');
+    }
+    if (!this.recordsRepayments) {
+      throw new PlanEndedError(this.id);
+    }
+    return terms;
   }
 
   private installmentTerms(): InstallmentPlanTerms {

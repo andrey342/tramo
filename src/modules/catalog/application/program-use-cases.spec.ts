@@ -71,7 +71,13 @@ function setup() {
     centers,
     programs,
     audited,
-    create: new CreateProgramHandler(uow, programs, centers, clock),
+    create: new CreateProgramHandler(
+      uow,
+      programs,
+      centers,
+      { describeChanges: (changes) => audited.push(changes) },
+      clock,
+    ),
     update: new UpdateProgramHandler(
       uow,
       programs,
@@ -158,7 +164,14 @@ describe('program use cases', () => {
       );
 
       expect(published).toMatchObject({ status: 'published', priceCents: 690_000 });
+      // The draft created, then the update.
       expect(t.audited).toEqual([
+        {
+          program: {
+            before: null,
+            after: { name: DETAILS.name, status: 'draft', priceCents: 750_000 },
+          },
+        },
         {
           priceCents: { before: 750_000, after: 690_000 },
           status: { before: 'draft', after: 'published' },

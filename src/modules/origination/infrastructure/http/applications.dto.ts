@@ -18,7 +18,7 @@ import {
 } from 'class-validator';
 
 import { FINANCING_LIMITS } from '@modules/catalog/application/dto/program-lookup';
-import { CursorPageQueryDto } from '@shared/infrastructure/http';
+import { CursorPageQueryDto, ValidationProblemException } from '@shared/infrastructure/http';
 
 import { type RequestedProductDto } from '../../application/dto/application.dto';
 import {
@@ -53,7 +53,13 @@ export class ProductRequest {
   @Max(FINANCING_LIMITS.maxTermMonths)
   termMonths?: number;
 
+  // A term given for an ISA would be dropped: it is refused instead, so the caller knows.
   toProduct(): RequestedProductDto {
+    if (this.kind === 'isa' && this.termMonths !== undefined) {
+      throw new ValidationProblemException([
+        { field: 'product.termMonths', message: 'termMonths applies to instalment loans only' },
+      ]);
+    }
     return this.kind === 'isa'
       ? { kind: 'isa' }
       : { kind: 'installments', termMonths: this.termMonths ?? 0 };

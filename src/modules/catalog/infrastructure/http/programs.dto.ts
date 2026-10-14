@@ -36,6 +36,7 @@ const MAX_PRICE_CENTS = PROGRAM_LIMITS.maxPriceCents;
 
 export class InstallmentsRequest {
   @ApiProperty({
+    type: [Number],
     example: [12, 24, 36],
     description: `Loan terms in months, ${String(FINANCING_LIMITS.minTermMonths)} to ${String(FINANCING_LIMITS.maxTermMonths)}`,
   })
@@ -265,7 +266,7 @@ export class ListProgramsQueryDto extends CursorPageQueryDto {
 }
 
 class InstallmentsResponse {
-  @ApiProperty({ example: [12, 24] })
+  @ApiProperty({ type: [Number], example: [12, 24] })
   allowedTerms!: readonly number[];
 
   @ApiProperty({ example: 750 })

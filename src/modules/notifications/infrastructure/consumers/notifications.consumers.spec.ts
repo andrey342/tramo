@@ -156,6 +156,7 @@ describe('notifications consumers', () => {
         reason: 'MD06',
         dueDate: '2026-11-13',
         returnedAt: '2026-11-20T08:00:00.000Z',
+        period: '2026-11',
       }),
     );
 

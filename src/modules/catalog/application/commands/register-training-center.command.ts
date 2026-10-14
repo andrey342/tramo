@@ -2,7 +2,13 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, Iban, Percentage, unwrap, VatNumber } from '@shared/domain';
 
 import {
@@ -35,6 +41,7 @@ export class RegisterTrainingCenterHandler implements ICommandHandler<RegisterTr
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(TRAINING_CENTER_REPOSITORY) private readonly centers: TrainingCenterRepository,
     @Inject(VAT_VALIDATOR) private readonly vat: VatValidator,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -62,6 +69,19 @@ export class RegisterTrainingCenterHandler implements ICommandHandler<RegisterTr
         now: this.clock.now(),
       });
       await this.centers.save(center);
+      // The payout account by its masked form only.
+      this.audit.describeChanges({
+        center: {
+          before: null,
+          after: {
+            name: center.name,
+            taxId: center.vatNumber.toString(),
+            status: center.status,
+            platformFeeBasisPoints: center.platformFee.basisPoints,
+            payoutIbanMasked: center.payoutIban.masked(),
+          },
+        },
+      });
       return { centerId: center.id };
     });
   }

@@ -2,7 +2,13 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { type CalendarDate, CLOCK, type Clock, Money } from '@shared/domain';
 
 import {
@@ -11,6 +17,7 @@ import {
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
   IncomeDeclaration,
+  IncomeShareAssessedError,
   INCOME_DECLARATION_REPOSITORY,
   type IncomeDeclarationRepository,
   NotAnIncomeShareError,
@@ -44,6 +51,7 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
     private readonly declarations: IncomeDeclarationRepository,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
     @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -60,6 +68,9 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
       if (contract.status !== 'active' && contract.status !== 'in_arrears') {
         throw new ContractNotRepayingError(contract.status);
       }
+      if (contract.nextIsaPeriod === null) {
+        throw new IncomeShareAssessedError();
+      }
       if (await this.declarations.findByPeriod(contract.id, command.period)) {
         throw new IncomeAlreadyDeclaredError(command.period);
       }
@@ -75,6 +86,8 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
         now: this.clock.now(),
       });
       await this.declarations.save(declaration);
+      // The month only: the income stays in billing.
+      this.audit.describeChanges({ declaredPeriod: { before: null, after: declaration.period } });
       return toDeclarationDto(declaration);
     });
   }

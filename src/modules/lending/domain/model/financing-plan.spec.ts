@@ -301,16 +301,33 @@ describe('FinancingPlan', () => {
       expect(isa(plan)).toMatchObject({ chargedSoFar: eur('0.00'), paymentsMade: 0 });
     });
 
-    it('should charge only what is left of the cap in the month it is reached, and end', () => {
+    // The cap stops the assessments; the plan ends once the months charged are collected, in any
+    // order, so arrears and default still apply to what is owed until then.
+    it('should charge only what is left of the cap, and end once every month charged is collected', () => {
       // Cap at the 7,500 principal; 10 % of 30,000 is 3,000 a month.
       const plan = anIsaPlan({ capMultiplierHundredths: 100 });
 
       plan.assessPeriod(month('2026-07'), eur('30000.00'), LATER);
       plan.assessPeriod(month('2026-08'), eur('30000.00'), LATER);
+      plan.recordIsaPaid('2026-07', LATER);
       plan.pullEvents();
       const third = plan.assessPeriod(month('2026-09'), eur('30000.00'), LATER);
 
       expect(third).toEqual({ outcome: 'charge', amount: eur('1500.00') });
+      expect(plan).toMatchObject({ status: 'active', assessmentsEnded: true });
+      expect(isa(plan).assessmentsEnded).toBe('cap_reached');
+      expect(plan.assessPeriod(month('2026-10'), eur('30000.00'), LATER)).toEqual({
+        outcome: 'ended',
+      });
+      plan.recordIsaPaid('2026-09', LATER);
+      plan.recordIsaReturned('2026-07');
+      plan.recordIsaPaid('2026-07', LATER);
+      expect(plan.status).toBe('active');
+      expect(plan.pullEvents()).toEqual([]);
+
+      plan.recordIsaPaid('2026-08', LATER);
+      plan.recordIsaPaid('2026-08', LATER);
+
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'cap_reached' });
       expect(plan.pullEvents()).toEqual([
         expect.objectContaining({
@@ -318,9 +335,9 @@ describe('FinancingPlan', () => {
           payload: expect.objectContaining({ reason: 'cap_reached' }),
         }),
       ]);
-      expect(() => plan.assessPeriod(month('2026-10'), eur('30000.00'), LATER)).toThrow(
-        PlanEndedError,
-      );
+      expect(() => {
+        plan.recordIsaPaid('2026-10', LATER);
+      }).toThrow(PlanEndedError);
     });
 
     it('should end with the last payment allowed', () => {
@@ -329,6 +346,8 @@ describe('FinancingPlan', () => {
       plan.assessPeriod(month('2026-07'), eur('2000.00'), LATER);
       plan.assessPeriod(month('2026-08'), eur('1000.00'), LATER);
       plan.assessPeriod(month('2026-09'), eur('2000.00'), LATER);
+      plan.recordIsaPaid('2026-07', LATER);
+      plan.recordIsaPaid('2026-09', LATER);
 
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'max_payments' });
       expect(isa(plan)).toMatchObject({ paymentsMade: 2, chargedSoFar: eur('400.00') });
@@ -351,8 +370,39 @@ describe('FinancingPlan', () => {
       expect(plan.assessPeriod(month('2034-04'), eur('2000.00'), LATER)).toEqual({
         outcome: 'ended',
       });
+      expect(plan.status).toBe('active');
+      plan.recordIsaPaid('2034-03', LATER);
       expect(plan).toMatchObject({ status: 'completed', completionReason: 'window_expired' });
       expect(isa(plan).chargedSoFar).toEqual(eur('200.00'));
+    });
+
+    // Nothing charged and nothing owed: the window ends the plan at once.
+    it('should end at once when the window closes with nothing owed', () => {
+      const plan = anIsaPlan();
+      let period = month('2026-07');
+      while (!period.isAfter(month('2034-03'))) {
+        plan.assessPeriod(period, null, LATER);
+        period = period.addMonths(1);
+      }
+
+      plan.assessPeriod(month('2034-04'), null, LATER);
+
+      expect(plan).toMatchObject({ status: 'completed', completionReason: 'window_expired' });
+    });
+
+    // The contract defaulted with a month still owed: the plan ends defaulted, never collected
+    // in full.
+    it('should stay defaulted when a month is collected after the default', () => {
+      const plan = anIsaPlan({ maxPayments: 1 });
+      plan.assessPeriod(month('2026-07'), eur('2000.00'), LATER);
+
+      plan.closeOnDefault(LATER);
+      plan.recordIsaPaid('2026-07', LATER);
+
+      expect(plan).toMatchObject({ status: 'completed', completionReason: 'defaulted' });
+      expect(() => {
+        aPlan().recordIsaPaid('2026-07', LATER);
+      }).toThrow(InvalidValueError);
     });
 
     it('should mark declarations overdue after two months without one, and clear it with the next', () => {

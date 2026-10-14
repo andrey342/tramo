@@ -193,6 +193,58 @@ describe('billing saga (integration)', () => {
     });
   }, 60_000);
 
+  // The last payment the ISA allows is charged: no month is assessed any more, but the contract
+  // is still being repaid (a mandate can be signed, arrears and default apply) until billing has
+  // collected it. Then the plan and the contract end.
+  it('should end an ISA only once its last month charged is collected', async () => {
+    const contract = anActiveContract({ terms: { product: anIsa({ maxPayments: 1 }) } });
+    await app.get<UnitOfWork>(UNIT_OF_WORK).run(async () => {
+      await contracts.save(contract);
+      await plans.save(
+        aPlan({
+          contractId: contract.id,
+          product: anIsa({ maxPayments: 1 }),
+          activatedOn: '2026-01-05',
+        }),
+      );
+      await app
+        .get<IncomeDeclarationRepository>(INCOME_DECLARATION_REPOSITORY)
+        .save(aDeclaration({ contractId: contract.id, period: '2026-07', incomeCents: 2_000_00 }));
+    });
+    const student: Principal = {
+      kind: 'user',
+      userId: contract.studentId,
+      roles: ['student'],
+      centerId: null,
+    };
+
+    await commands.execute(
+      new RunBillingNowCommand(OPS, CalendarDate.parse('2026-08-05'), contract.id),
+    );
+    const assessed = await plans.findByContractId(contract.id);
+    await commands.execute(new SignMandateCommand(student, contract.id, STUDENT_IBAN));
+    const charge = await until(
+      () => charges.findByReference(contract.id, 'isa:2026-07'),
+      (found) => {
+        expect(found?.status).toBe('pending');
+      },
+    );
+
+    expect(assessed).toMatchObject({ status: 'active', assessmentsEnded: true });
+    expect((await contracts.findById(contract.id))?.status).toBe('active');
+    await collect(charge, 'succeeded');
+    await until(
+      () => contracts.findById(contract.id),
+      (found) => {
+        expect(found?.status).toBe('completed');
+      },
+    );
+    expect(await plans.findByContractId(contract.id)).toMatchObject({
+      status: 'completed',
+      completionReason: 'max_payments',
+    });
+  }, 60_000);
+
   // ADR 017: lending assesses the ISA month in billing's transaction. When the charge cannot be
   // written, the assessment is rolled back with it and the next run assesses the month again.
   it('should roll back the ISA assessment when its charge is not written', async () => {

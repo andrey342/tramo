@@ -110,7 +110,7 @@ function setup() {
     remove: new RemoveWebhookHandler(uow, subscriptions, audit, clock),
     get: new GetWebhookHandler(subscriptions),
     deliver: new DeliverWebhookHandler(uow, deliveries, subscriptions, webhookSender, clock),
-    redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, clock),
+    redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, audit, clock),
     list: new ListWebhookDeliveriesHandler(new InMemoryNotificationsQueries(deliveries), centers),
     request: new RequestEmailHandler(uow, emails, recipients, clock),
     send: new SendEmailHandler(uow, emails, new FakeEmailRenderer(), emailSender, clock),
@@ -202,12 +202,13 @@ describe('notifications use cases', () => {
         status: { before: 'active', after: 'removed' },
         url: { before: 'https://center.example/hooks', after: null },
       });
+      // Never configured: nothing to stop, and nothing to say about it.
       const other = { ...t.admin, centerId: uuidv7() } as Principal;
       await expect(
         t.remove.execute(
           new RemoveWebhookCommand(other, other.kind === 'user' ? (other.centerId ?? '') : ''),
         ),
-      ).rejects.toThrow(WebhookNotConfiguredError);
+      ).resolves.toBeUndefined();
     });
 
     // Production posts only to https: a center learns it when configuring, not from failures.
