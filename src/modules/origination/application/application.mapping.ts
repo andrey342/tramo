@@ -87,6 +87,7 @@ export function toDecisionDto(application: FinancingApplication): DecisionDto | 
   }
   return {
     outcome: decision.outcome,
+    finalOutcome: manualDecision?.outcome ?? decision.outcome,
     score: decision.score,
     factors: decision.factors.map((factor) => ({
       name: factor.name,

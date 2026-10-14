@@ -344,8 +344,17 @@ class ManualDecisionResponse {
 }
 
 export class DecisionResponse {
-  @ApiProperty({ enum: ['approved', 'needs_review', 'rejected'] })
+  @ApiProperty({
+    enum: ['approved', 'needs_review', 'rejected'],
+    description: 'What the scoring engine decided',
+  })
   outcome!: DecisionOutcome;
+
+  @ApiProperty({
+    enum: ['approved', 'needs_review', 'rejected'],
+    description: "The decision that stands: the analyst's once a review was settled",
+  })
+  finalOutcome!: DecisionOutcome;
 
   @ApiProperty({ example: 87.25 })
   score!: number;

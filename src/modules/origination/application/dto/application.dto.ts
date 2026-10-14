@@ -79,7 +79,9 @@ export interface ApplicationFilter {
 
 // The explanation of a decision, for the student and for ops.
 export interface DecisionDto {
+  // What the engine decided; `finalOutcome` is what stands, after a review if there was one.
   readonly outcome: DecisionOutcome;
+  readonly finalOutcome: DecisionOutcome;
   readonly score: number;
   readonly factors: readonly {
     readonly name: ScoreFactorName;
