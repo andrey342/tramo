@@ -84,7 +84,8 @@ Stop with `docker compose down`; add `-v` to also drop the database and Redis vo
 The compose project is named `tramo` whatever the folder, so every clone on a machine shares its
 containers and volumes: a database left by an earlier run is reused as it is. To run another copy
 next to it, give it a name and other ports in its `.env`, e.g.
-`docker compose -p tramo-2 up -d --build --wait`, and pass the same `-p` to every later command.
+`docker compose -p tramo-2 up -d --build --wait`, and pass the same `-p` to every later command
+(host scripts that call compose, such as `pnpm migration:verify`, read `COMPOSE_PROJECT_NAME=tramo-2`).
 
 ## Try it in 2 minutes
 

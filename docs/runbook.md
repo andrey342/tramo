@@ -263,7 +263,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     was collected and then returned by the student's bank: owed again from the day of the
     return (a `return` line on the statement), dunned from that day, its instalment unpaid on
     the plan. If that payment had ended the plan (its last instalment, or a payoff), the plan and
-    the contract stay as they ended and the api logs `Payment returned on a plan that has ended`:
+    the contract stay as they ended and the worker logs `Payment returned on a plan that has ended`:
     the instalment is dunned as usual; a payoff is not dunned, so retry it or settle it with the
     student (ADR 020).
   - Provider callbacks (`POST /webhooks/psp`) carry no amount: a real provider's adapter must
