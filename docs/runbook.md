@@ -99,7 +99,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   - `{queue="dead-letter", state="waiting"}`: dead letters waiting for someone. Nothing consumes
     that queue; any value above 0 needs a look.
   - `waiting` rising while `active` stays at 0: the worker is not consuming.
-- `tramo_http_request_duration_seconds{method, route, status}`: latency and 5xx by route template.
+- `tramo_http_request_duration_seconds{method, route, status_code}`: latency and 5xx by route template.
 - A series missing from a scrape means its source could not be read within five seconds; the api
   logs `Queue metrics unavailable`, `Queue metrics timed out` or the same for the outbox. Redis
   being down shows this way: the queue series disappear while the HTTP and outbox ones remain.
