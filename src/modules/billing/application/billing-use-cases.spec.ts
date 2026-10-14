@@ -736,6 +736,30 @@ describe('billing use cases', () => {
       expect((await t.charges.findById(charge.id))?.status).toBe('written_off');
       expect(after.chargesReviewed).toBe(0);
     });
+
+    // The student and the center hear of the arrears once: not again when the next instalment
+    // reaches 30 days, nor once the contract has defaulted.
+    it('should announce a contract in arrears once, and never after its default', async () => {
+      const t = setup();
+      const inArrears = t.contract();
+      await t.charge({ contractId: inArrears });
+      await t.charge({
+        contractId: inArrears,
+        reference: 'installment:2',
+        installmentNumber: 2,
+        dueDate: '2026-12-12',
+      });
+      const defaulted = t.contract('installments', 'defaulted');
+      await t.charge({ contractId: defaulted });
+
+      await t.dunning.execute(new RunDunningCommand(day('2026-12-12')));
+      await t.dunning.execute(new RunDunningCommand(day('2027-01-11')));
+
+      const announced = t.events.ofType(BillingEvents.ContractInArrears);
+      expect(announced.map((event) => event.payload['contractId'])).toEqual([inArrears]);
+      const second = await t.charges.findByReference(inArrears, 'installment:2');
+      expect(second?.inArrears).toBe(true);
+    });
   });
 
   describe('end of a plan', () => {

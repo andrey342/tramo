@@ -462,7 +462,14 @@ export class Charge extends AggregateRoot {
   // says whether collection is to be tried again. A paid, written off or cancelled charge has
   // nothing to dun; one being collected waits for the provider's answer. A payoff is never
   // dunned: it is collected once, or cancelled.
-  applyDunning(asOf: CalendarDate, now: Date): { readonly retry: boolean } {
+  //
+  // `contractInArrears`: another charge already holds the contract in arrears, or it has
+  // defaulted. The arrears step is then applied without announcing the contract in arrears again.
+  applyDunning(
+    asOf: CalendarDate,
+    now: Date,
+    contractInArrears = false,
+  ): { readonly retry: boolean } {
     if (this.isSettled || this.props.status === 'pending' || this.props.kind === 'payoff') {
       return { retry: false };
     }
@@ -485,6 +492,9 @@ export class Charge extends AggregateRoot {
           retry = true;
           break;
         case 'arrears':
+          if (contractInArrears) {
+            break;
+          }
           this.record({
             eventType: BillingEvents.ContractInArrears,
             aggregateType: 'Charge',
@@ -507,6 +517,14 @@ export class Charge extends AggregateRoot {
     }
     this.props = { ...this.props, dunningStep: this.props.dunningStep + steps.length };
     return { retry: retry && this.collectible };
+  }
+
+  // Whether dunning as of `asOf` reaches the arrears step of this charge, not applied yet: the
+  // caller then finds out whether the contract is in arrears already.
+  reachesArrears(asOf: CalendarDate): boolean {
+    return dunningStepsDue(this.props.dueDate, asOf, this.props.dunningStep).some(
+      (step) => step.action === 'arrears',
+    );
   }
 
   // No longer owed: the plan ended before it fell due (paid off, defaulted), or a payoff covered
