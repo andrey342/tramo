@@ -271,6 +271,9 @@ function planTermsFromJson(json: PlanTermsJson): FinancingPlan['terms'] {
     declarationOverdue: json.declarationOverdue,
     lastAssessedPeriod:
       json.lastAssessedPeriod === null ? null : CalendarDate.parse(json.lastAssessedPeriod),
+    chargedPeriods: json.chargedPeriods ?? [],
+    paidPeriods: json.paidPeriods ?? [],
+    assessmentsEnded: json.assessmentsEnded ?? null,
   };
 }
 
@@ -311,5 +314,8 @@ function planTermsToJson(plan: FinancingPlan): PlanTermsJson {
     consecutiveMissingDeclarations: terms.consecutiveMissingDeclarations,
     declarationOverdue: terms.declarationOverdue,
     lastAssessedPeriod: terms.lastAssessedPeriod?.toString() ?? null,
+    chargedPeriods: [...terms.chargedPeriods],
+    paidPeriods: [...terms.paidPeriods],
+    assessmentsEnded: terms.assessmentsEnded,
   };
 }

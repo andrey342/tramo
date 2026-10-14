@@ -37,13 +37,20 @@ export class RecordRepaymentOnChargePaid implements EventHandler<ChargePaidPaylo
       );
     } else if (kind === 'payoff') {
       await this.commands.execute(new RecordRepaymentCommand(contractId, { kind: 'payoff' }));
+    } else if (kind === 'isa') {
+      // Absent in notices recorded before ISA months were tracked; their plans ended on assessment.
+      const period = (event.payload as Partial<ChargePaidPayload>).period;
+      if (period) {
+        await this.commands.execute(
+          new RecordRepaymentCommand(contractId, { kind: 'isa', period }),
+        );
+      }
     }
   }
 }
 
-// The student's bank sent a collected payment back: the instalment is unpaid again. An ISA charge
-// changes nothing in the plan (its month was counted when assessed); a payoff finds the plan paid
-// off, which is not reopened (ADR 020).
+// The student's bank sent a collected payment back: the instalment, or the ISA month, is unpaid
+// again; a payoff finds the plan paid off, which is not reopened (ADR 020).
 @Injectable()
 @EventSubscriber({ event: BillingEvents.ChargeReturned, consumer: 'lending.record-return' })
 export class RecordReturnOnChargeReturned implements EventHandler<ChargeReturnedPayload> {
@@ -63,6 +70,13 @@ export class RecordReturnOnChargeReturned implements EventHandler<ChargeReturned
       await this.commands.execute(
         new RecordRepaymentCommand(contractId, { kind: 'payoff_returned' }),
       );
+    } else if (kind === 'isa') {
+      const period = (event.payload as Partial<ChargeReturnedPayload>).period;
+      if (period) {
+        await this.commands.execute(
+          new RecordRepaymentCommand(contractId, { kind: 'isa_returned', period }),
+        );
+      }
     }
   }
 }

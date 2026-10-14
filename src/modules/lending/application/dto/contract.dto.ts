@@ -107,6 +107,10 @@ export type ScheduleDto = {
       readonly chargedSoFarCents: number;
       readonly paymentsMade: number;
       readonly declarationOverdue: boolean;
+      // Why no more months are assessed, if so; the plan ends once the months charged are
+      // collected (those still owed are listed).
+      readonly assessmentsEnded: 'cap_reached' | 'max_payments' | 'window_expired' | null;
+      readonly uncollectedPeriods: readonly string[];
     }
 );
 

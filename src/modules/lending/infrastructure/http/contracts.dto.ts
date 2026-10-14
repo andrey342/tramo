@@ -342,6 +342,21 @@ export class ScheduleResponse {
 
   @ApiPropertyOptional({ description: 'ISA: two months in a row without a declaration' })
   declarationOverdue?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['cap_reached', 'max_payments', 'window_expired'],
+    nullable: true,
+    description:
+      'ISA: why no more months are assessed; the plan ends once the months charged are collected',
+  })
+  assessmentsEnded?: 'cap_reached' | 'max_payments' | 'window_expired' | null;
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['2027-06'],
+    description: 'ISA: months charged and not collected yet (YYYY-MM)',
+  })
+  uncollectedPeriods?: readonly string[];
 }
 
 export class PayoffQuoteResponse {
