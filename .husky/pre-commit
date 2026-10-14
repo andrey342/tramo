@@ -1,16 +1,21 @@
 pnpm exec lint-staged
 
-# Reject staged content carrying attribution trailers or tool names. Tooling config that
-# legitimately names the assistant is exempt. Elsewhere, the tooling folder name (`.claude`) and
-# `CLAUDE.md` are references to files, not mentions, so they are removed before the check.
+# Reject staged content carrying attribution trailers, and the names listed one per line in
+# .local/forbidden-words (kept out of the repo). Tooling configuration is exempt. Elsewhere, the
+# tooling folder name and its conventions file are references to files, not mentions, so they are
+# removed before the check.
 git diff --cached --name-only --diff-filter=ACMR | {
-  forbidden='co-authored-by|anthropic|generated with|ai-generated'
+  forbidden='co-authored-by|generated with|ai-generated'
+  if [ -f .local/forbidden-words ]; then
+    words=$(grep -v '^[[:space:]]*$' .local/forbidden-words | paste -sd '|' -)
+    [ -n "$words" ] && forbidden="$forbidden|$words"
+  fi
   status=0
   while IFS= read -r f; do
     case "$f" in
       CLAUDE.md | .claude/* | .mcp.json | .husky/* | commitlint.config.mjs) continue ;;
     esac
-    if git show ":$f" | sed -E 's#\.claude|CLAUDE\.md##g' | grep -qiIE "$forbidden|claude"; then
+    if git show ":$f" | sed -E 's#\.claude|CLAUDE\.md##g' | grep -qiIE "$forbidden"; then
       echo "pre-commit: forbidden attribution text in $f" >&2
       status=1
     fi
