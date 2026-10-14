@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+
 import { InvalidConfigError, parseConfig } from './app-config';
 
 const validEnv = {
@@ -33,6 +36,17 @@ describe('parseConfig', () => {
     expect(config.http.port).toBe(8080);
     expect(config.docs.enabled).toBe(false);
     expect(config.http.corsOrigins).toEqual(['http://a.test', 'http://b.test']);
+  });
+
+  // `cp .env.example .env` is the first step of local development: the copy must start.
+  it('should accept the example env file as it is, empty flags taking their defaults', () => {
+    const example = parseEnv(readFileSync('.env.example', 'utf8'));
+
+    const config = parseConfig(example);
+
+    expect(example['BILLING_FUTURE_RUNS_ENABLED']).toBe('');
+    expect(config.billing.futureRunsEnabled).toBe(true);
+    expect(parseConfig({ ...validEnv, LOG_PRETTY: '', NODE_ENV: 'production' })).toBeDefined();
   });
 
   it('should fail fast when a required variable is missing', () => {
