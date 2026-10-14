@@ -471,14 +471,46 @@ async function seed(): Promise<string[]> {
       for (const item of student.applications) {
         const programId = programIds.get(item.program);
         if (!programId) continue;
-        // One application per program; one left halfway by a run that stopped early is finished.
-        const found = own.find((application) => application.programId === programId);
-        if (found && !UNFINISHED.includes(found.status)) continue;
-        const outcome = await applyAndVerify(actor, programId, found ?? null, item);
+        // One application per program. Past a draft, one left halfway by a run that stopped early
+        // is finished and any other is left alone. A draft is the seed's only if it carries the
+        // seed's profile: one the student started through the api is theirs to finish.
+        const forProgram = own.filter((application) => application.programId === programId);
+        const started = forProgram.find((application) => application.status !== 'draft');
+        let found: { readonly id: string; readonly status: string } | null = null;
+        if (started) {
+          if (!UNFINISHED.includes(started.status)) continue;
+          found = started;
+        } else if (forProgram.length > 0) {
+          found = await seededDraft(actor, forProgram, item.profile);
+          if (!found) {
+            log(`application of ${student.email} for ${item.program}: the student's draft is left`);
+            continue;
+          }
+        }
+        const outcome = await applyAndVerify(actor, programId, found, item);
         log(`application of ${student.email} for ${outcome}`);
       }
     }
     return inactive;
+
+    async function seededDraft(
+      actor: Principal,
+      drafts: readonly { readonly id: string; readonly status: string }[],
+      profile: ProfileInput,
+    ): Promise<{ readonly id: string; readonly status: string } | null> {
+      for (const draft of drafts) {
+        const { profile: saved } = await app
+          .get(QueryBus)
+          .execute(new GetApplicationQuery(actor, draft.id));
+        if (
+          saved?.dateOfBirth === (profile.dateOfBirth ?? null) &&
+          saved.nationalIdMasked?.slice(-4) === profile.nationalId?.slice(-4)
+        ) {
+          return draft;
+        }
+      }
+      return null;
+    }
 
     // The verification saga runs here so the seed does not depend on the worker; its steps do
     // nothing when already done, so an application left halfway is picked up where it stopped.
