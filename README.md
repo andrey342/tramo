@@ -379,9 +379,9 @@ progressively after five failed attempts. An admin disables an account with
 
 ## Developer tooling
 
-The repo carries its Claude Code configuration, so routine work follows the repo's conventions
-whether it is done by hand or with the agent (ADR 011). [`CLAUDE.md`](CLAUDE.md) is the short map:
-commands, architecture principles and workflow. Under `.claude/`:
+The repo versions its developer tooling, so routine work follows the same conventions however it
+is done (ADR 011). [`CLAUDE.md`](CLAUDE.md) is the short map: commands, architecture principles and
+workflow. Under `.claude/`:
 
 - `rules/`: conventions loaded only for the paths they cover (domain, migrations, HTTP, tests).
 - `skills/`: procedures backed by scripts that also run on their own, e.g. `/new-module payouts`
