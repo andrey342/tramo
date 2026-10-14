@@ -11,12 +11,14 @@ describe('BacklogMetrics', () => {
     jest.useRealTimers();
   });
 
-  const metricsWith = (getJobCounts: () => Promise<Record<string, number>>) => {
+  const metricsWith = (
+    getJobCounts: () => Promise<Record<string, number>>,
+    readOutbox: () => Promise<{ pending: number; lagSeconds: number }> = () =>
+      Promise.resolve({ pending: 3, lagSeconds: 1.5 }),
+  ) => {
     const registry = new Registry();
     const modules = { get: () => ({ getJobCounts }) } as unknown as ModuleRef;
-    const outbox = {
-      read: () => Promise.resolve({ pending: 3, lagSeconds: 1.5 }),
-    } as unknown as OutboxBacklogReader;
+    const outbox = { read: readOutbox } as unknown as OutboxBacklogReader;
     new BacklogMetrics(registry, modules, outbox);
     return registry;
   };
@@ -52,6 +54,20 @@ describe('BacklogMetrics', () => {
     }
 
     expect(reads).toBe(ALL_QUEUES.length);
+  });
+
+  // A 0 would read as all clear to an alert on the lag: the series is left out instead.
+  it('should answer without the outbox series when Postgres cannot be read', async () => {
+    const registry = metricsWith(
+      () => Promise.resolve({ waiting: 0 }),
+      () => Promise.reject(new Error('connect ECONNREFUSED')),
+    );
+
+    const text = await registry.metrics();
+
+    expect(text).not.toMatch(/^tramo_outbox_pending_events /m);
+    expect(text).not.toMatch(/^tramo_outbox_lag_seconds /m);
+    expect(text).toMatch(/tramo_queue_jobs\{queue="events.billing",state="waiting"\} 0/);
   });
 
   it('should report every queue by state when Redis answers', async () => {

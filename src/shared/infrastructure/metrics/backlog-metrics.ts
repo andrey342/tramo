@@ -2,7 +2,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { type Queue } from 'bullmq';
-import { Gauge, type Registry } from 'prom-client';
+import { Gauge, type MetricObjectWithValues, type MetricValue, type Registry } from 'prom-client';
 
 import { type OutboxBacklog, OutboxBacklogReader } from '../messaging/outbox-backlog';
 import { ALL_QUEUES } from '../queues';
@@ -17,6 +17,17 @@ const SOURCE_TIMEOUT_MS = 5_000;
 const CACHE_MS = 5_000;
 
 type JobCounts = readonly [queue: string, counts: Readonly<Record<string, number>>][];
+
+// prom-client keeps a gauge without labels at 0 after reset(); this one exports no sample while
+// its source could not be read, so an alert on it does not read a 0 as all clear.
+class OptionalGauge extends Gauge {
+  absent = false;
+
+  override async get(): Promise<MetricObjectWithValues<MetricValue<string>>> {
+    const metric = await super.get();
+    return this.absent ? { ...metric, values: [] } : metric;
+  }
+}
 
 interface Backlog {
   readonly jobs: JobCounts | null;
@@ -54,23 +65,23 @@ export class BacklogMetrics {
         }
       },
     });
-    const pending: Gauge = new Gauge({
+    const pending: OptionalGauge = new OptionalGauge({
       name: 'tramo_outbox_pending_events',
       help: 'Events recorded in the outbox and not yet published to the queues (up to 10000).',
       registers: [registry],
       collect: async () => {
         const outbox = (await this.backlog()).outbox;
-        pending.reset();
+        pending.absent = !outbox;
         if (outbox) pending.set(outbox.pending);
       },
     });
-    const lag: Gauge = new Gauge({
+    const lag: OptionalGauge = new OptionalGauge({
       name: 'tramo_outbox_lag_seconds',
       help: 'Age of the oldest unpublished outbox event; 0 when none waits.',
       registers: [registry],
       collect: async () => {
         const outbox = (await this.backlog()).outbox;
-        lag.reset();
+        lag.absent = !outbox;
         if (outbox) lag.set(outbox.lagSeconds);
       },
     });
