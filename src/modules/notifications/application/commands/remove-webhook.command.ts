@@ -10,11 +10,7 @@ import {
 } from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
-import {
-  WEBHOOK_SUBSCRIPTION_REPOSITORY,
-  WebhookNotConfiguredError,
-  type WebhookSubscriptionRepository,
-} from '../../domain';
+import { WEBHOOK_SUBSCRIPTION_REPOSITORY, type WebhookSubscriptionRepository } from '../../domain';
 import { assertCanConfigure } from '../notifications-access';
 
 // The center stops receiving events; deliveries still pending are given up when their job runs.
@@ -41,9 +37,10 @@ export class RemoveWebhookHandler implements ICommandHandler<RemoveWebhookComman
   async execute(command: RemoveWebhookCommand): Promise<void> {
     assertCanConfigure(command.actor, command.centerId);
     await this.uow.run(async () => {
+      // Idempotent: a center with no webhook, never configured or removed, has nothing to stop.
       const subscription = await this.subscriptions.findByCenter(command.centerId);
       if (!subscription) {
-        throw new WebhookNotConfiguredError(command.centerId);
+        return;
       }
       const before = subscription.status;
       subscription.remove(this.clock.now());

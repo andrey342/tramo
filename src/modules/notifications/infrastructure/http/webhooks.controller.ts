@@ -85,7 +85,7 @@ export class WebhooksController {
 
   @Delete('webhook')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiProblems(400, 401, 403, 404, 409)
+  @ApiProblems(400, 401, 403, 409)
   @ApiNoContentResponse()
   @Roles('center_admin')
   @Audited({ action: 'webhook.remove', resource: 'center', resourceIdParam: 'centerId' })

@@ -202,12 +202,13 @@ describe('notifications use cases', () => {
         status: { before: 'active', after: 'removed' },
         url: { before: 'https://center.example/hooks', after: null },
       });
+      // Never configured: nothing to stop, and nothing to say about it.
       const other = { ...t.admin, centerId: uuidv7() } as Principal;
       await expect(
         t.remove.execute(
           new RemoveWebhookCommand(other, other.kind === 'user' ? (other.centerId ?? '') : ''),
         ),
-      ).rejects.toThrow(WebhookNotConfiguredError);
+      ).resolves.toBeUndefined();
     });
 
     // Production posts only to https: a center learns it when configuring, not from failures.
