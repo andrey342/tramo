@@ -89,4 +89,19 @@ describe('portfolio figures', () => {
       },
     ]);
   });
+
+  // ADR 020: a payoff the bank returned is owed again; one being collected covers open charges.
+  it('should count a returned payoff as outstanding, not one being collected', () => {
+    const figures = centerFigures({
+      applications: [],
+      contracts: [],
+      disbursements: [],
+      charges: [
+        { product: 'installments', kind: 'payoff', status: 'scheduled', cents: 6_000_00 },
+        { product: 'installments', kind: 'payoff', status: 'failed', cents: 3_000_14 },
+      ],
+    });
+
+    expect(figures.outstandingCents).toBe(3_000_14);
+  });
 });
