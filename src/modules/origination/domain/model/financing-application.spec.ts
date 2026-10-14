@@ -432,6 +432,7 @@ describe('FinancingApplication', () => {
         applicationId: application.id,
         applicantId: application.applicantId,
         centerId: application.centerId,
+        programId: application.program.programId,
         reasonCodes: ['underage'],
         decidedBy: 'engine',
       });
