@@ -50,6 +50,7 @@ export class AuditInterceptor implements NestInterceptor {
       return next.handle();
     }
     const request = context.switchToHttp().getRequest<RequestWithPrincipal>();
+    this.trail.open();
     return next.handle().pipe(
       concatMap(async (body: unknown) => {
         await this.write(options, request, { outcome: 'succeeded', body });

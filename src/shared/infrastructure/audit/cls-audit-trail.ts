@@ -5,21 +5,38 @@ import { type AuditChanges, type AuditTrail } from '@shared/application';
 
 const CHANGES_KEY = 'audit.changes';
 
+type Collected = Record<string, AuditChanges[string]>;
+
 // Changes are collected in the request context and written by the audit interceptor when the
-// request ends, so handlers do not depend on HTTP or on the audit table.
+// request ends, so handlers do not depend on HTTP or on the audit table. A unit of work runs in a
+// copy of the context, so values set inside it are gone once it ends: the interceptor opens one
+// object before the handler runs, and changes are added to it in place.
 @Injectable()
 export class ClsAuditTrail implements AuditTrail {
   constructor(private readonly cls: ClsService) {}
+
+  open(): void {
+    if (this.cls.isActive()) {
+      this.cls.set<Collected>(CHANGES_KEY, {});
+    }
+  }
 
   describeChanges(changes: AuditChanges): void {
     if (!this.cls.isActive()) {
       return;
     }
-    const current = this.cls.get<AuditChanges | undefined>(CHANGES_KEY) ?? {};
-    this.cls.set(CHANGES_KEY, { ...current, ...changes });
+    const current = this.cls.get<Collected | undefined>(CHANGES_KEY);
+    if (current) {
+      Object.assign(current, changes);
+    } else {
+      this.cls.set<Collected>(CHANGES_KEY, { ...changes });
+    }
   }
 
   collected(): AuditChanges | undefined {
-    return this.cls.isActive() ? this.cls.get<AuditChanges | undefined>(CHANGES_KEY) : undefined;
+    const current = this.cls.isActive()
+      ? this.cls.get<Collected | undefined>(CHANGES_KEY)
+      : undefined;
+    return current && Object.keys(current).length > 0 ? current : undefined;
   }
 }

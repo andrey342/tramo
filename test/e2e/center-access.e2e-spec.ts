@@ -136,6 +136,15 @@ describe('Center users and API keys (e2e)', () => {
     expect([before.status, suspended.status]).toEqual([200, 200]);
     expect(after.status).toBe(401);
     expect(after.body.code).toBe('invalid_api_key');
+    // The handler describes the change inside its transaction; the entry keeps it.
+    const { DataSource } = await import('typeorm');
+    const [entry]: { changes: unknown }[] = await app
+      .get(DataSource)
+      .query(
+        `SELECT changes FROM shared.audit_log WHERE action = 'center.update' AND resource_id = $1`,
+        [suspendedCenter],
+      );
+    expect(entry?.changes).toMatchObject({ status: { before: 'active', after: 'suspended' } });
   });
 
   it('should issue a key with an end date and refuse an end date that has passed', async () => {
