@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+
 import { type DynamicModule, type INestApplication, type Type } from '@nestjs/common';
 import { DECORATORS, DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
@@ -149,5 +151,55 @@ describe('OpenAPI document', () => {
       (schemas['CreateProgramRequest'] as { properties?: Record<string, { type?: string }> })
         .properties?.['priceCents'],
     ).toMatchObject({ type: 'integer' });
+  });
+
+  // The document keys schemas by class name: a second DTO of the same name replaces the first, and
+  // a route would be documented with another route's shape.
+  it('should give every DTO class a name of its own', () => {
+    const names = readdirSync('src/modules', { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.dto.ts'))
+      .flatMap((file) =>
+        [...readFileSync(`src/modules/${file}`, 'utf8').matchAll(/^(?:export )?class (\w+)/gm)].map(
+          (match) => match[1],
+        ),
+      );
+
+    expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
+  });
+
+  // A property without a type of its own is documented as an empty object.
+  it('should give every property a type, not an empty object', () => {
+    const document = buildOpenApiDocument(app);
+    const untyped = Object.entries(document.components?.schemas ?? {}).flatMap(
+      ([schemaName, schema]) =>
+        Object.entries(
+          (schema as { properties?: Record<string, Record<string, unknown>> }).properties ?? {},
+        )
+          .filter(
+            ([, property]) =>
+              property['type'] === 'object' &&
+              !['properties', 'additionalProperties', 'allOf', '$ref'].some(
+                (key) => key in property,
+              ),
+          )
+          .map(([property]) => `${schemaName}.${property}`),
+    );
+
+    expect(untyped).toEqual([]);
+  });
+
+  it('should describe whole-number query parameters as integers', () => {
+    const document = buildOpenApiDocument(app);
+    const parameters = Object.values(document.paths).flatMap((item) =>
+      (['get', 'post', 'put', 'patch', 'delete'] as const).flatMap(
+        (method) =>
+          (item[method]?.parameters ?? []) as { name: string; schema?: { type?: string } }[],
+      ),
+    );
+
+    expect(parameters.filter((parameter) => parameter.schema?.type === 'number')).toEqual([]);
+    expect(parameters.find((parameter) => parameter.name === 'limit')?.schema).toMatchObject({
+      type: 'integer',
+    });
   });
 });

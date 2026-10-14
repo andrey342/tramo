@@ -49,6 +49,9 @@ x-app: &app
     # Read only by the demo script when it runs inside the api container.
     MAILPIT_URL: http://mailpit:8025
     WEBHOOK_SINK_URL: http://webhook-sink:9099
+    # The host ports, for the links the demo prints.
+    MAILPIT_UI_PORT: ${MAILPIT_UI_PORT:-8025}
+    WEBHOOK_SINK_PORT: ${WEBHOOK_SINK_PORT:-9099}
 
 services:
   postgres:

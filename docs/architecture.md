@@ -101,7 +101,8 @@ foreign key. Lists are paginated on `(created_at, id)` (the ops review queue on
 | `shared`        | `outbox_messages`, `processed_events`, `audit_log`                                              | Kept forever; the outbox is also the event history                                        |
 
 Money columns are integer cents with `CHECK (... >= 0)`, rates are basis points, enums are text
-with CHECKs, timestamps are `timestamptz(3)`, and aggregates carry a `version`.
+with CHECKs, timestamps are `timestamptz(3)` (the outbox, the processed events and the audit log
+keep microseconds), and aggregates carry a `version`.
 
 ## Decision records
 
@@ -668,6 +669,8 @@ an event of another module; it decides nothing.
   | `ChargeOverdue`            | `payment_overdue`          | the student                |
   | `ChargeReturned`           | `payment_returned`         | the student                |
   | `ContractInArrears`        | `contract_in_arrears`      | the student                |
+  | `ContractDefaulted`        | `contract_defaulted`       | the student                |
+  | `PayoffWithdrawn`          | `payoff_withdrawn`         | the student                |
   | `IncomeDeclarationDue`     | `isa_declaration_reminder` | the student                |
   | `IsaDeclarationOverdue`    | `isa_declaration_overdue`  | the student                |
 

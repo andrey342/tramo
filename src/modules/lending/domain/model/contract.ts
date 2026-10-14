@@ -219,7 +219,8 @@ export class Contract extends AggregateRoot {
       signedAt > now.getTime() + CLOCK_SKEW_MS
     ) {
       throw new InvalidValueError(
-        'signedAt',
+        // Named as the provider's callback names it.
+        'occurredAt',
         'The signing time is outside the life of the envelope.',
       );
     }

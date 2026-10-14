@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
+import { ProblemException } from '@shared/infrastructure/http';
 import { maskEmail } from '@shared/infrastructure/logging';
 import { REDIS_CLIENT } from '@shared/infrastructure/redis';
 
@@ -11,6 +12,8 @@ import { type LoginAttemptTracker } from '../../application/ports/iam-ports';
 
 // Failures are forgotten a day after the last one.
 const FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
+// How long a sign-in waits for its lockout check.
+export const LOCKOUT_CHECK_TIMEOUT_MS = 2_000;
 
 // Check and count in one step, so parallel attempts cannot all pass the check before any of them
 // is counted. The attempt that reaches the threshold sets the lock before its password is
@@ -34,6 +37,15 @@ end
 return 0
 `;
 
+const unavailable = (): ProblemException =>
+  new ProblemException(
+    HttpStatus.SERVICE_UNAVAILABLE,
+    'sign_in_unavailable',
+    'Signing in is unavailable for a moment. Try again shortly.',
+    undefined,
+    5,
+  );
+
 // After `maxFailures` consecutive failed attempts the account is locked for `baseLockSeconds`,
 // doubling with each further failure up to `maxLockSeconds`. Keys hold a hash of the email, not
 // the email. Locks and refusals are logged with the email masked, so operations see an account
@@ -47,18 +59,26 @@ export class RedisLoginAttemptTracker implements LoginAttemptTracker {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
+  // Fails closed, and fast: without the count a password could be guessed without limit, so a
+  // sign-in that cannot be checked is refused (503, retry shortly) instead of waiting for Redis.
   async begin(account: string): Promise<number> {
     const { maxFailures, baseLockSeconds, maxLockSeconds } = this.config.auth.lockout;
-    const answer = (await this.redis.eval(
-      BEGIN_ATTEMPT_SCRIPT,
-      2,
-      this.key('lock', account),
-      this.key('failures', account),
-      maxFailures,
-      baseLockSeconds * 1000,
-      maxLockSeconds * 1000,
-      FAILURE_WINDOW_MS,
-    )) as number;
+    // The client would queue the command until Redis came back.
+    if (this.redis.status !== 'ready') {
+      throw unavailable();
+    }
+    const answer = await this.checked(
+      this.redis.eval(
+        BEGIN_ATTEMPT_SCRIPT,
+        2,
+        this.key('lock', account),
+        this.key('failures', account),
+        maxFailures,
+        baseLockSeconds * 1000,
+        maxLockSeconds * 1000,
+        FAILURE_WINDOW_MS,
+      ) as Promise<number>,
+    );
     if (answer > 0) {
       const retryAfterSeconds = Math.ceil(answer / 1000);
       this.logger.warn(
@@ -78,6 +98,28 @@ export class RedisLoginAttemptTracker implements LoginAttemptTracker {
 
   async succeeded(account: string): Promise<void> {
     await this.redis.del(this.key('failures', account), this.key('lock', account));
+  }
+
+  private async checked(call: Promise<number>): Promise<number> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        call,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error('timeout'));
+          }, LOCKOUT_CHECK_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (error) {
+      this.logger.warn(
+        { err: error instanceof Error ? error.message : error },
+        'Sign-in refused: the lockout check is unavailable',
+      );
+      throw unavailable();
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private key(kind: 'failures' | 'lock', account: string): string {

@@ -62,13 +62,16 @@ export class CancelUndisbursedContractHandler implements ICommandHandler<CancelU
         if (disbursement?.status !== 'failed') {
           throw new DisbursementNotFailedError(disbursement?.status ?? null);
         }
-        const before = contract.status;
+        const before = { contract: contract.status, disbursement: disbursement.status };
         const now = this.clock.now();
         disbursement.cancel(now);
         contract.cancel('disbursement_failed', now);
         await this.disbursements.save(disbursement);
         await this.contracts.save(contract);
-        this.audit.describeChanges({ status: { before, after: contract.status } });
+        this.audit.describeChanges({
+          status: { before: before.contract, after: contract.status },
+          disbursementStatus: { before: before.disbursement, after: disbursement.status },
+        });
       }
       return toContractDto(contract, { visible: true, disbursement });
     });

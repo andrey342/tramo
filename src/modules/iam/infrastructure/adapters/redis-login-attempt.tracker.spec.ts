@@ -13,7 +13,7 @@ describe('RedisLoginAttemptTracker logging', () => {
   } as unknown as AppConfig;
   const trackerAnswering = (scriptAnswer: number): RedisLoginAttemptTracker =>
     new RedisLoginAttemptTracker(
-      { eval: () => Promise.resolve(scriptAnswer) } as unknown as Redis,
+      { status: 'ready', eval: () => Promise.resolve(scriptAnswer) } as unknown as Redis,
       config,
     );
   let warnings: unknown[][];
@@ -51,5 +51,35 @@ describe('RedisLoginAttemptTracker logging', () => {
   it('should log nothing when the attempt may proceed below the threshold', async () => {
     expect(await trackerAnswering(0).begin('ana.garcia@example.com')).toBe(0);
     expect(warnings).toEqual([]);
+  });
+
+  // Without the count a password could be guessed without limit: a sign-in that cannot be
+  // checked is refused, quickly, rather than let through or held until Redis returns.
+  it('should refuse a sign-in at once while Redis is not connected', async () => {
+    const evaluate = jest.fn();
+    const tracker = new RedisLoginAttemptTracker(
+      { status: 'reconnecting', eval: evaluate } as unknown as Redis,
+      config,
+    );
+
+    await expect(tracker.begin('ana.garcia@example.com')).rejects.toMatchObject({
+      code: 'sign_in_unavailable',
+      retryAfterSeconds: 5,
+    });
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a sign-in whose check Redis does not answer in time', async () => {
+    jest.useFakeTimers();
+    const tracker = new RedisLoginAttemptTracker(
+      { status: 'ready', eval: () => new Promise(() => undefined) } as unknown as Redis,
+      config,
+    );
+
+    const attempt = tracker.begin('ana.garcia@example.com');
+    const settled = expect(attempt).rejects.toMatchObject({ code: 'sign_in_unavailable' });
+    await jest.advanceTimersByTimeAsync(2_000);
+    await settled;
+    jest.useRealTimers();
   });
 });

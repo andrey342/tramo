@@ -21,15 +21,22 @@ export class ClsAuditTrail implements AuditTrail {
     }
   }
 
+  // Only what changed: a field whose value stayed the same (a repeated, idempotent call) is left
+  // out, so a call that changed nothing is recorded without changes.
   describeChanges(changes: AuditChanges): void {
     if (!this.cls.isActive()) {
       return;
     }
+    const changed = Object.fromEntries(
+      Object.entries(changes).filter(
+        ([, change]) => JSON.stringify(change.before) !== JSON.stringify(change.after),
+      ),
+    );
     const current = this.cls.get<Collected | undefined>(CHANGES_KEY);
     if (current) {
-      Object.assign(current, changes);
+      Object.assign(current, changed);
     } else {
-      this.cls.set<Collected>(CHANGES_KEY, { ...changes });
+      this.cls.set<Collected>(CHANGES_KEY, changed);
     }
   }
 

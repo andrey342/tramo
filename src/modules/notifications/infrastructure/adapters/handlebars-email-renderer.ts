@@ -66,7 +66,7 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
     subject: 'Your payment of {{money amountCents}} is overdue',
     body: [
       'Your payment of {{money amountCents}} is now {{days daysOverdue}} overdue.',
-      '{{#if secondNotice}}This is our second notice: please contact us to settle it, as the direct debit will not be retried on its own.{{else}}We will try the direct debit again; please make sure your account has funds, or contact us.{{/if}}',
+      '{{#if secondNotice}}This is our second notice: please contact us to settle it, as the direct debit will not be retried on its own.{{else}}If you have signed a direct debit mandate we will try it again in a few days, so please make sure your account has funds; if you have not, sign one in the app or contact us.{{/if}}',
     ],
   },
   contract_in_arrears: {
@@ -87,7 +87,21 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
     subject: 'Your bank returned a payment of {{money amountCents}}',
     body: [
       'Your bank returned the direct debit of {{money amountCents}} for your {{kind kind}} that we had collected (reason {{reason}}), so it is owed again.',
-      'We will try the direct debit again in a few days; please make sure your account accepts it, or contact us.',
+      '{{#if payoff}}An early repayment is not taken again on its own: contact us to settle it.{{else}}We will try the direct debit again in a few days; please make sure your account accepts it, or contact us.{{/if}}',
+    ],
+  },
+  contract_defaulted: {
+    subject: 'Your contract has defaulted',
+    body: [
+      'A payment of your contract stayed unpaid for 90 days, so the contract has defaulted: what is left to repay is now due and has been passed to our collections team.',
+      'Please contact us to agree how to settle it.',
+    ],
+  },
+  payoff_withdrawn: {
+    subject: 'Your early repayment could not be collected',
+    body: [
+      'We could not collect the early repayment you asked for, so your contract goes on as before and your next instalments are collected as usual.',
+      'You may ask for a payoff again once your account can cover it.',
     ],
   },
   isa_declaration_overdue: {

@@ -641,7 +641,12 @@ describe('lending use cases', () => {
         }),
       ]);
       expect(t.events.ofType(LendingEvents.DisbursementCancelled)).toHaveLength(1);
-      expect(t.audited).toEqual([{ status: { before: 'signed', after: 'cancelled' } }]);
+      expect(t.audited).toEqual([
+        {
+          status: { before: 'signed', after: 'cancelled' },
+          disbursementStatus: { before: 'failed', after: 'cancelled' },
+        },
+      ]);
       expect(t.plans.all()).toHaveLength(0);
       await expect(t.retry.execute(new RetryDisbursementCommand(OPS, id))).rejects.toThrow(
         InvalidStateTransitionError,
