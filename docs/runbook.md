@@ -473,7 +473,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
 With `NODE_ENV=production` a process refuses to start, naming each problem, when:
 
 - a secret still has the value published in `.env.example` or `docker-compose.yml`:
-  `JWT_ACCESS_SECRET`, `ESIGN_WEBHOOK_SECRET` or `PSP_WEBHOOK_SECRET` containing `change-me`,
+  `JWT_ACCESS_SECRET`, `ESIGN_WEBHOOK_SECRET`, `PSP_WEBHOOK_SECRET` or their `*_PREVIOUS_SECRET`
+  containing `change-me`,
   `BULL_BOARD_PASSWORD=tramo-queues`, `METRICS_TOKEN=tramo-local-metrics-token-change-me`, or the development
   `FIELD_ENCRYPTION_KEY`;
 - `WEBHOOK_PRIVATE_TARGETS_ENABLED=true`;

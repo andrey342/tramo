@@ -29,11 +29,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts
 
+# The code belongs to root and only runs as node: a compromised process cannot rewrite it.
 FROM base AS app
 ENV NODE_ENV=production
-COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/dist/src ./dist/src
-COPY --chown=node:node package.json ./
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=build /app/dist/src ./dist/src
+COPY package.json ./
 USER node
 EXPOSE 3000
 CMD ["node", "--enable-source-maps", "dist/src/main.api.js"]
@@ -41,6 +42,6 @@ CMD ["node", "--enable-source-maps", "dist/src/main.api.js"]
 # The local stack: the application plus `dist/scripts`, so
 # `docker compose exec api node dist/scripts/demo.js` works.
 FROM app AS demo
-COPY --from=build --chown=node:node /app/dist/scripts ./dist/scripts
+COPY --from=build /app/dist/scripts ./dist/scripts
 
 FROM app AS runtime

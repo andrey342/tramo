@@ -151,7 +151,7 @@ const UNREACHABLE_CODES = new Set([
   '08006',
 ]);
 const UNREACHABLE_MESSAGE =
-  /Connection terminated|timeout exceeded when trying to connect|Connection refused/i;
+  /Connection terminated|timeout exceeded when trying to connect|Connection refused|Query read timeout/i;
 
 function isDatabaseUnavailable(exception: unknown): boolean {
   let current: unknown = exception;
