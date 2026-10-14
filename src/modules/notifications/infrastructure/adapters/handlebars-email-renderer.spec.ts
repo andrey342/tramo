@@ -75,9 +75,27 @@ describe('HandlebarsEmailRenderer', () => {
     );
 
     expect(first.text).toContain('now 1 day overdue.');
-    expect(first.text).toContain('We will try the direct debit again');
+    expect(first.text).toContain('we will try it again in a few days');
     expect(second.text).toContain('now 15 days overdue.');
-    expect(second.text).not.toContain('try the direct debit again');
+    expect(second.text).not.toContain('try it again');
+  });
+
+  // Payoffs are never dunned (ADR 020): the email says so instead of promising a retry.
+  it('should promise a retry of a returned payment only when one will come', () => {
+    const instalment = renderer.render(
+      'payment_returned',
+      { amountCents: 100_00, kind: 'installment', reason: 'MD06', payoff: false },
+      'c-1',
+    );
+    const payoff = renderer.render(
+      'payment_returned',
+      { amountCents: 5_000_14, kind: 'payoff', reason: 'MD06', payoff: true },
+      'c-1',
+    );
+
+    expect(instalment.text).toContain('We will try the direct debit again');
+    expect(payoff.text).not.toContain('try the direct debit again');
+    expect(payoff.text).toContain('contact us to settle it');
   });
 
   it('should escape values in the HTML version only', () => {

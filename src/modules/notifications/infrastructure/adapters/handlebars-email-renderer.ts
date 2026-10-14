@@ -66,7 +66,7 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
     subject: 'Your payment of {{money amountCents}} is overdue',
     body: [
       'Your payment of {{money amountCents}} is now {{days daysOverdue}} overdue.',
-      '{{#if secondNotice}}This is our second notice: please contact us to settle it, as the direct debit will not be retried on its own.{{else}}We will try the direct debit again; please make sure your account has funds, or contact us.{{/if}}',
+      '{{#if secondNotice}}This is our second notice: please contact us to settle it, as the direct debit will not be retried on its own.{{else}}If you have signed a direct debit mandate we will try it again in a few days, so please make sure your account has funds; if you have not, sign one in the app or contact us.{{/if}}',
     ],
   },
   contract_in_arrears: {
@@ -87,7 +87,7 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
     subject: 'Your bank returned a payment of {{money amountCents}}',
     body: [
       'Your bank returned the direct debit of {{money amountCents}} for your {{kind kind}} that we had collected (reason {{reason}}), so it is owed again.',
-      'We will try the direct debit again in a few days; please make sure your account accepts it, or contact us.',
+      '{{#if payoff}}An early repayment is not taken again on its own: contact us to settle it.{{else}}We will try the direct debit again in a few days; please make sure your account accepts it, or contact us.{{/if}}',
     ],
   },
   isa_declaration_overdue: {

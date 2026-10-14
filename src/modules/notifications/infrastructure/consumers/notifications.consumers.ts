@@ -277,7 +277,13 @@ export class EmailOnChargeReturned
       template: 'payment_returned',
       to: { userId: payload.studentId },
       reference: payload.contractId,
-      data: { amountCents: payload.amountCents, kind: payload.kind, reason: payload.reason },
+      data: {
+        amountCents: payload.amountCents,
+        kind: payload.kind,
+        reason: payload.reason,
+        // A payoff is never dunned again (ADR 020): ops settle it with the student.
+        payoff: payload.kind === 'payoff',
+      },
     };
   }
 }

@@ -165,7 +165,7 @@ describe('notifications consumers', () => {
       template: 'payment_returned',
       to: { userId: 's-1' },
       reference: 'c-1',
-      data: { amountCents: 338_86, kind: 'installment', reason: 'MD06' },
+      data: { amountCents: 338_86, kind: 'installment', reason: 'MD06', payoff: false },
     });
   });
 
