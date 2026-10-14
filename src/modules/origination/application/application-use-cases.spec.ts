@@ -275,6 +275,14 @@ describe('application use cases', () => {
           }),
         ),
       ).rejects.toThrow(ProgramNotAvailableError);
+      // The student cannot take it to another center either: that center did not start it.
+      await expect(
+        t.update.execute(
+          new UpdateApplicationDraftCommand(ANA, draft.id, {
+            programId: OTHER_CENTER_PROGRAM.programId,
+          }),
+        ),
+      ).rejects.toThrow(ProgramNotAvailableError);
       expect((await t.submit.execute(new SubmitApplicationCommand(ANA, draft.id))).status).toBe(
         'submitted',
       );

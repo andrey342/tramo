@@ -61,8 +61,10 @@ export class UpdateApplicationDraftHandler implements ICommandHandler<UpdateAppl
       let program: ProgramSnapshot | undefined;
       if (changes.programId !== undefined && changes.programId !== application.program.programId) {
         const found = await this.programs.findOpenProgram(changes.programId);
-        // A center moves its students between its own programs only.
-        if (!found || (actor.kind === 'api_key' && found.centerId !== actor.centerId)) {
+        // A draft a center started stays with that center (it picked the program and answers for
+        // the application): moved between its own programs only, by the center or the student.
+        const keptByCenter = actor.kind === 'api_key' || application.origin === 'center';
+        if (!found || (keptByCenter && found.centerId !== application.centerId)) {
           throw new ProgramNotAvailableError(changes.programId);
         }
         program = found;

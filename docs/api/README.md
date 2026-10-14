@@ -20,8 +20,9 @@ error.
    run never writes a token into the repository.
 4. Run the **Auth** folder once, first (right click, **Run**). It signs in as admin, ops and the
    Codeworks center admin, stores the center id, and registers and signs in a new student, whose
-   token ends up in `studentToken`. Its last two requests rotate that student's refresh token and
-   log the session out: the access token keeps working, the refresh token does not. Access tokens
+   token ends up in `studentToken`. Its last three requests rotate that student's refresh token,
+   log the session out and sign out everywhere: the access token keeps working, the refresh token
+   does not. Access tokens
    last 15 minutes; when requests start answering 401, run the sign-in requests again (**Login
    admin**, **Login ops**, **Login center admin**, **Login new student**), not the whole folder:
    **Register student** would create another student, who does not own the applications and

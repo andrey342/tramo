@@ -32,10 +32,15 @@ export class ListContractsHandler implements IQueryHandler<ListContractsQuery> {
   }
 }
 
+// A center sees its own contracts only: asking for another center's finds none.
 function scopeOf({ actor, filter }: ListContractsQuery): ContractFilter | null {
   const status = filter.status;
   if (isStaff(actor)) {
     return { status, centerId: filter.centerId };
+  }
+  const ownCenter = actor.kind === 'user' || actor.kind === 'api_key' ? actor.centerId : null;
+  if (filter.centerId !== undefined && filter.centerId !== ownCenter) {
+    return null;
   }
   if (actor.kind === 'api_key' && actor.scopes.includes('portfolio:read')) {
     return { status, centerId: actor.centerId };

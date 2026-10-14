@@ -71,6 +71,8 @@ function addPipelineStatuses(document: OpenAPIObject): void {
     },
   });
   for (const [path, item] of Object.entries(document.paths)) {
+    // Health checks answer their own body and are not rate limited.
+    if (path.includes('/health/')) continue;
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = (item as Record<string, Operation | undefined>)[method];
       if (!operation) continue;

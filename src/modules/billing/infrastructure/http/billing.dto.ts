@@ -123,7 +123,7 @@ export class MandateResponse {
   @ApiProperty({ example: 'TRAMO-0199A3C4D5E6F708' })
   reference!: string;
 
-  @ApiProperty({ example: 'ES76 **** **** **** **** 5766' })
+  @ApiProperty({ example: 'ES76 **** 5766' })
   ibanMasked!: string;
 
   @ApiProperty({ enum: ['active', 'revoked'] })

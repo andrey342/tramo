@@ -158,7 +158,11 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
   `shared.audit_log` per call: actor, action, resource, outcome, error code (the Problem Details
   `code` the client got, `validation_error` for a refused body), request id and the changes the
   handler described through the `AuditTrail` port. The row is written after the
-  handler's transaction, so failed and rolled-back attempts are recorded too.
+  handler's transaction, so failed and rolled-back attempts are recorded too. A call refused by a
+  guard (no or bad credentials, a role it lacks, a bad provider signature) never reaches the
+  interceptor: it is in the request log (`requestId`, status), not in the audit log. Writing the
+  row never fails the request: if it cannot be written (Postgres down) the api logs `Failed to
+write audit entry` with the action and the entry is lost.
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
   not shift when new rows arrive. A cursor that does not decode is a 422 (`cursor` in `errors`).

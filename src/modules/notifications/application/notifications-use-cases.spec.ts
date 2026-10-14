@@ -108,7 +108,7 @@ function setup() {
     audited,
     sweep: new AbandonStaleEmailsHandler(uow, emails, clock),
     remove: new RemoveWebhookHandler(uow, subscriptions, audit, clock),
-    get: new GetWebhookHandler(subscriptions),
+    get: new GetWebhookHandler(subscriptions, centers),
     deliver: new DeliverWebhookHandler(uow, deliveries, subscriptions, webhookSender, clock),
     redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, audit, clock),
     list: new ListWebhookDeliveriesHandler(new InMemoryNotificationsQueries(deliveries), centers),
