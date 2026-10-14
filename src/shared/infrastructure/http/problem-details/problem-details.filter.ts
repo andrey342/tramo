@@ -41,7 +41,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       requestId: resolveRequestId(request, response),
     };
 
-    if (!(exception instanceof HttpException || exception instanceof DomainError)) {
+    if (problem.code === DATABASE_UNAVAILABLE) {
+      this.logger.warn(
+        { requestId: problem.requestId, err: errorMessage(exception) },
+        'Database unreachable; request refused',
+      );
+    } else if (!(exception instanceof HttpException || exception instanceof DomainError)) {
       this.logger.error({ err: exception, requestId: problem.requestId }, 'Unhandled exception');
     } else if (problem.status >= 500) {
       this.logger.warn({ requestId: problem.requestId, detail: problem.detail }, problem.title);
@@ -52,7 +57,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         ? exception.details?.retryAfterSeconds
         : exception instanceof ProblemException
           ? exception.retryAfterSeconds
-          : undefined;
+          : problem.code === DATABASE_UNAVAILABLE
+            ? DATABASE_RETRY_AFTER_SECONDS
+            : undefined;
     if (typeof retryAfter === 'number') {
       response.setHeader('Retry-After', String(retryAfter));
     }
@@ -104,6 +111,15 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         code: statusCode(status),
       };
     }
+    if (isDatabaseUnavailable(exception)) {
+      return {
+        type: problemType('database-unavailable'),
+        title: 'Database unavailable',
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        detail: 'The database cannot be reached right now. Try again shortly.',
+        code: DATABASE_UNAVAILABLE,
+      };
+    }
     return {
       type: 'about:blank',
       title: statusTitle(HttpStatus.INTERNAL_SERVER_ERROR),
@@ -112,6 +128,48 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       code: statusCode(HttpStatus.INTERNAL_SERVER_ERROR),
     };
   }
+}
+
+const DATABASE_UNAVAILABLE = 'database_unavailable';
+const DATABASE_RETRY_AFTER_SECONDS = 5;
+// Postgres unreachable (refused, unknown host, timed out, dropped) or shutting down / starting up
+// (SQLSTATE class 08 and 57P0x): the request did not fail on its own, so the client may retry.
+const UNREACHABLE_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  '57P01',
+  '57P02',
+  '57P03',
+  '08000',
+  '08001',
+  '08003',
+  '08006',
+]);
+const UNREACHABLE_MESSAGE =
+  /Connection terminated|timeout exceeded when trying to connect|Connection refused/i;
+
+function isDatabaseUnavailable(exception: unknown): boolean {
+  let current: unknown = exception;
+  for (let depth = 0; depth < 3 && typeof current === 'object' && current !== null; depth += 1) {
+    const { code, message, driverError, cause } = current as {
+      code?: unknown;
+      message?: unknown;
+      driverError?: unknown;
+      cause?: unknown;
+    };
+    if (typeof code === 'string' && UNREACHABLE_CODES.has(code)) return true;
+    if (typeof message === 'string' && UNREACHABLE_MESSAGE.test(message)) return true;
+    current = driverError ?? cause;
+  }
+  return false;
+}
+
+function errorMessage(exception: unknown): string {
+  return exception instanceof Error ? exception.message : String(exception);
 }
 
 // Nest's router answers unknown routes with "Cannot GET /path?query"; keep the method and path.

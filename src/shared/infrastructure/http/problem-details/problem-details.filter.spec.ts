@@ -78,6 +78,11 @@ class ProbeController {
     );
   }
 
+  @Get('database-down')
+  databaseDown(): never {
+    throw Object.assign(new Error('getaddrinfo ENOTFOUND postgres'), { code: 'ENOTFOUND' });
+  }
+
   @Get('boom')
   boom(): never {
     throw new Error('database password is hunter2');
@@ -132,6 +137,16 @@ describe('ProblemDetailsFilter', () => {
       code: 'idempotency_unavailable',
       title: 'Idempotency unavailable',
     });
+  });
+
+  // Postgres unreachable: the request did not fail on its own, so the client is told to retry.
+  it('should answer 503 with a delay when the database cannot be reached', async () => {
+    const response = await request(app.getHttpServer()).get('/probe/database-down');
+
+    expect(response.status).toBe(503);
+    expect(response.headers['retry-after']).toBe('5');
+    expect(response.body).toMatchObject({ code: 'database_unavailable' });
+    expect(JSON.stringify(response.body)).not.toContain('postgres');
   });
 
   it('should omit the query string from instance', async () => {

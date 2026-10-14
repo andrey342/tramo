@@ -516,6 +516,14 @@ future billing runs and private webhook targets by default. The compose stack ru
   it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
   counted, however many the dashboard sends at once, and clear the failures below the limit.
 
+## Database unreachable
+
+- **Symptom**: requests answer 503 `database_unavailable` with `Retry-After: 5`; the api logs
+  `Database unreachable; request refused` and `GET /health/ready` reports `database` down.
+- **Action**: bring Postgres back (`docker compose ps postgres`, `docker compose logs postgres`).
+  The api reconnects by itself; nothing is lost, since a request either committed or did not run.
+  Retries with the same `Idempotency-Key` are safe.
+
 ## Idempotent requests refused
 
 - **Symptom**: POSTs that create or move money (`POST /applications`, payoffs, ops runs, the
