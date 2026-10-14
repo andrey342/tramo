@@ -29,11 +29,11 @@ body:json {
       "affordability": 2000,
       "bureau": 1500
     },
-    "approveThreshold": 70,
+    "approveThreshold": 72,
     "reviewThreshold": 50
   }
 }
 
 docs {
-  Admin only. Publishes the next policy version; past decisions keep theirs. Every field is optional. The body shown matches the default policy, so it only bumps the version; changing it changes how later applications are scored. Check "Current risk policy (ops)" first.
+  Admin only. Publishes the next policy version; past decisions keep theirs. Every field is optional. The body shown is the default policy with the approval threshold raised from 70 to 72; later applications are scored with it. A revision that changes no rule answers 422 `invalid_risk_policy`. Check "Current risk policy (ops)" first.
 }
