@@ -25,7 +25,7 @@
     "prepare": "husky",
     "test:e2e": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-e2e.config.js --runInBand",
     "test:e2e:cov": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-e2e.config.js --runInBand --coverage --coverageDirectory=coverage/e2e --coverageReporters=json",
-    "worker:dev": "nest start --watch --entryFile main.worker",
+    "worker:dev": "nest start --watch --entryFile main.worker --path tsconfig.worker-dev.json",
     "arch:check": "depcruise src test --config .dependency-cruiser.cjs --output-type err",
     "test:int": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-int.config.js --runInBand",
     "test:int:cov": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/jest/bin/jest.js --config test/jest-int.config.js --runInBand --coverage --coverageDirectory=coverage/int --coverageReporters=json",

@@ -37,6 +37,10 @@ export class RetryAfterThrottlerGuard extends ThrottlerGuard {
     this.setResponseHeader(res, 'X-RateLimit-Limit', detail.limit);
     this.setResponseHeader(res, 'X-RateLimit-Remaining', 0);
     this.setResponseHeader(res, 'X-RateLimit-Reset', detail.timeToBlockExpire);
+    // The named copy says the same as Retry-After under a name no client reads.
+    (res as { removeHeader?: (name: string) => void }).removeHeader?.(
+      `Retry-After-${AUTH_THROTTLER}`,
+    );
     await super.throwThrottlingException(context, detail);
   }
 }

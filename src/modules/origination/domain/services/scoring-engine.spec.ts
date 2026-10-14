@@ -149,6 +149,14 @@ describe('ScoringEngine', () => {
         'The declared income (100000.00 EUR) is above what the employment record shows; 1800.00 EUR was used.',
       );
       expect(unemployed.factors[2]?.value).toBe(0);
+      // An ISA's affordability does not use the income: nothing is said about it.
+      const isa = decide(
+        scenario({
+          product: { kind: 'isa' },
+          profile: { declaredMonthlyIncome: Money.fromCents(100_000_00) },
+        }),
+      );
+      expect(isa.reasons.some((reason) => reason.includes('declared income'))).toBe(false);
     });
 
     it('should keep the bureau factor between 0 and 1', () => {

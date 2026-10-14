@@ -59,7 +59,8 @@ export interface MoneyFigures {
   readonly disbursedCents: number;
   readonly collectedCents: number;
   // Charged and not collected yet: scheduled, failed or overdue. A payoff being collected is left
-  // out: it covers the charges still open, which are counted already.
+  // out: it covers the charges still open, which are counted already. One the bank returned
+  // (failed) is owed again and counts (ADR 020).
   readonly outstandingCents: number;
   readonly writtenOffCents: number;
 }
@@ -195,7 +196,7 @@ export function centerFigures(rows: CenterRows): CenterFigures {
   }
   for (const row of rows.charges) {
     const key = CHARGE_MONEY[row.status];
-    if (!key || (key === 'outstandingCents' && row.kind === 'payoff')) continue;
+    if (!key || (row.kind === 'payoff' && row.status === 'scheduled')) continue;
     const amount = Money.fromCents(row.cents);
     for (const target of targets(row.product)) target.money[key] = target.money[key].add(amount);
   }

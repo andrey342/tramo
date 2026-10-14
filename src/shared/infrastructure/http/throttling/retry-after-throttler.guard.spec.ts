@@ -24,7 +24,10 @@ describe('RetryAfterThrottlerGuard', () => {
     );
     await guard.onModuleInit();
     const headers = new Map<string, unknown>();
-    const response = { header: (name: string, value: unknown) => headers.set(name, value) };
+    const response = {
+      header: (name: string, value: unknown) => headers.set(name, value),
+      removeHeader: (name: string) => headers.delete(name),
+    };
     const context = {
       getHandler: () => ProbeController.prototype.signIn,
       getClass: () => ProbeController,
@@ -38,5 +41,6 @@ describe('RetryAfterThrottlerGuard', () => {
     expect(headers.get('Retry-After')).toBe(42);
     expect(headers.get('X-RateLimit-Limit')).toBe(3);
     expect(headers.get('X-RateLimit-Remaining')).toBe(0);
+    expect(headers.has('Retry-After-auth')).toBe(false);
   });
 });

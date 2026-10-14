@@ -147,6 +147,24 @@ export function billingRepositoriesContract(
       );
     });
 
+    // Instalment 1 falls due on 12 November: it is written off 90 days later, on 10 February.
+    it('should tell whether a contract defaults by a day, as billing sees it', async () => {
+      const { charges, run } = await create();
+      const [owing, writtenOff, current] = [uuidv7(), uuidv7(), uuidv7()];
+      const lost = aCharge({ contractId: writtenOff });
+      lost.applyDunning(day('2027-02-10'), NOW);
+      await run(async () => {
+        await charges.save(aCharge({ contractId: owing }));
+        await charges.save(lost);
+        await charges.save(aCharge({ contractId: current, dueDate: '2027-01-12' }));
+      });
+
+      expect(await run(() => charges.defaultsBy(owing, day('2027-02-09')))).toBe(false);
+      expect(await run(() => charges.defaultsBy(owing, day('2027-02-10')))).toBe(true);
+      expect(await run(() => charges.defaultsBy(writtenOff, day('2026-11-01')))).toBe(true);
+      expect(await run(() => charges.defaultsBy(current, day('2027-02-10')))).toBe(false);
+    });
+
     it('should tell whether a payoff of the contract is scheduled, being collected or paid', async () => {
       const { charges, run } = await create();
       const [payingOff, refusedPayoff, paidOff] = [uuidv7(), uuidv7(), uuidv7()];

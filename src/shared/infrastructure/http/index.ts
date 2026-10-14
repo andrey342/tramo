@@ -12,7 +12,7 @@ export { AuthRateLimited } from './throttling/throttling.module';
 export { CurrentPrincipal, principalOf, type RequestWithPrincipal } from './principal';
 export * from './problem-details';
 export { ProblemExpressAdapter } from './problem-express-adapter';
-export { API_KEY_HEADER, setupSwagger } from './swagger';
+export { API_KEY_HEADER, buildOpenApiDocument, setupSwagger } from './swagger';
 export { createValidationPipe, ParseIdPipe } from './validation';
 export {
   signatureFailure,

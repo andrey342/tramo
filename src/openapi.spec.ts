@@ -2,7 +2,11 @@ import { type DynamicModule, type INestApplication, type Type } from '@nestjs/co
 import { DECORATORS, DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 
-import { IDEMPOTENCY_STATUSES, IDEMPOTENT } from '@shared/infrastructure/http';
+import {
+  buildOpenApiDocument,
+  IDEMPOTENCY_STATUSES,
+  IDEMPOTENT,
+} from '@shared/infrastructure/http';
 
 import { AppModule } from './app.module';
 
@@ -115,9 +119,10 @@ describe('OpenAPI document', () => {
     }
   });
 
-  // A client generated from the document sends what the validation accepts.
-  it('should describe the loan terms of a program as integers', () => {
-    const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+  // A client generated from the document sends what the validation accepts: whole numbers for
+  // money, rates and terms; only scores are fractional.
+  it('should describe money, rates and terms as integers', () => {
+    const document = buildOpenApiDocument(app);
     const schemas = document.components?.schemas ?? {};
     const termsOf = (name: string): unknown =>
       (schemas[name] as { properties?: Record<string, unknown> } | undefined)?.properties?.[
@@ -126,11 +131,23 @@ describe('OpenAPI document', () => {
 
     expect(termsOf('InstallmentsRequest')).toMatchObject({
       type: 'array',
-      items: { type: 'number' },
+      items: { type: 'integer' },
     });
     expect(termsOf('InstallmentsResponse')).toMatchObject({
       type: 'array',
-      items: { type: 'number' },
+      items: { type: 'integer' },
     });
+    const numbers = Object.entries(schemas).flatMap(([schemaName, schema]) =>
+      Object.entries(
+        (schema as { properties?: Record<string, { type?: string }> }).properties ?? {},
+      )
+        .filter(([, property]) => property.type === 'number')
+        .map(([property]) => `${schemaName}.${property}`),
+    );
+    expect(numbers.every((name) => /\.(score|averageScore|value|points)$/.test(name))).toBe(true);
+    expect(
+      (schemas['CreateProgramRequest'] as { properties?: Record<string, { type?: string }> })
+        .properties?.['priceCents'],
+    ).toMatchObject({ type: 'integer' });
   });
 });

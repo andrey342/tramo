@@ -457,6 +457,11 @@ describe('application use cases', () => {
 
       expect(queue.data.map((row) => row.id)).toEqual([first, second]);
       expect(decided.status).toBe('approved');
+      // The engine's verdict is kept; the analyst's is the one that stands.
+      expect(await t.decision.execute(new GetApplicationDecisionQuery(OPS, first))).toMatchObject({
+        outcome: 'needs_review',
+        finalOutcome: 'approved',
+      });
       // The two submissions first, then the decision.
       expect(t.audited).toEqual([
         { status: { before: 'draft', after: 'submitted' } },
