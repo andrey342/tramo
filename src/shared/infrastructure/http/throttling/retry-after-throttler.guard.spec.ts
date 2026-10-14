@@ -36,5 +36,7 @@ describe('RetryAfterThrottlerGuard', () => {
 
     await expect(guard.canActivate(context)).rejects.toThrow(ThrottlerException);
     expect(headers.get('Retry-After')).toBe(42);
+    expect(headers.get('X-RateLimit-Limit')).toBe(3);
+    expect(headers.get('X-RateLimit-Remaining')).toBe(0);
   });
 });
