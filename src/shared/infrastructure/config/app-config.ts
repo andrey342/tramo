@@ -126,6 +126,12 @@ const PUBLISHED_SECRETS = {
   FIELD_ENCRYPTION_KEY: (value: string) => value === 'K0ZDSqr9YOcVMSLG1k4+T3Ie9/nmSDRZDMoifZ6VyIU=',
   ESIGN_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
   PSP_WEBHOOK_SECRET: (value: string) => /change-me/i.test(value),
+  // A previous secret is still accepted on callbacks while senders rotate: a published one there
+  // would let anyone sign them just the same.
+  ESIGN_WEBHOOK_PREVIOUS_SECRET: (value: string | undefined) =>
+    value !== undefined && /change-me/i.test(value),
+  PSP_WEBHOOK_PREVIOUS_SECRET: (value: string | undefined) =>
+    value !== undefined && /change-me/i.test(value),
 } as const;
 
 function assertProductionSettings(env: Env): void {
@@ -145,6 +151,12 @@ function assertProductionSettings(env: Env): void {
       ? 'ESIGN_WEBHOOK_SECRET'
       : undefined,
     PUBLISHED_SECRETS.PSP_WEBHOOK_SECRET(env.PSP_WEBHOOK_SECRET) ? 'PSP_WEBHOOK_SECRET' : undefined,
+    PUBLISHED_SECRETS.ESIGN_WEBHOOK_PREVIOUS_SECRET(env.ESIGN_WEBHOOK_PREVIOUS_SECRET)
+      ? 'ESIGN_WEBHOOK_PREVIOUS_SECRET'
+      : undefined,
+    PUBLISHED_SECRETS.PSP_WEBHOOK_PREVIOUS_SECRET(env.PSP_WEBHOOK_PREVIOUS_SECRET)
+      ? 'PSP_WEBHOOK_PREVIOUS_SECRET'
+      : undefined,
   ].filter((name) => name !== undefined);
   const problems = published.map(
     (name) => `✖ ${name} still has the development value; set a secret of your own.`,

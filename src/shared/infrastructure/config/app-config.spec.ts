@@ -98,6 +98,14 @@ describe('parseConfig', () => {
         PSP_WEBHOOK_SECRET: 'local-psp-webhook-secret-change-me-0123456789',
       }),
     ).toThrow(/PSP_WEBHOOK_SECRET/);
+    // Still accepted on callbacks during a rotation: a published one would sign them as well.
+    expect(() =>
+      parseConfig({
+        ...production,
+        ESIGN_WEBHOOK_PREVIOUS_SECRET: 'local-esign-webhook-secret-change-me-0123456789',
+        PSP_WEBHOOK_PREVIOUS_SECRET: 'local-psp-webhook-secret-change-me-0123456789',
+      }),
+    ).toThrow(/ESIGN_WEBHOOK_PREVIOUS_SECRET[\s\S]*PSP_WEBHOOK_PREVIOUS_SECRET/);
     expect(
       parseConfig({
         ...validEnv,
