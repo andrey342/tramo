@@ -376,17 +376,36 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   it: read `docker compose logs api`.
 - A revert on the compose database is undone at the api's next start, which applies pending
   migrations again.
-- Two downs need care:
-  - `202610130515-allow-isa-declaration-overdue-emails` (notifications) deletes every
-    `notifications.notification_log` row of the `isa_declaration_overdue` template, sent or not,
-    since the CHECK it restores no longer allows them: that email history is lost. Export the rows
-    first if it matters.
+- Downs that lose or rewrite data, or fail on current data. Export what matters first; never
+  revert them on a database with real history unless that loss is accepted.
+  - `202610140900-allow-accelerated-charges` (billing) fails once any loan has defaulted with
+    principal left to bill: the CHECK it restores has no `accelerated` kind. Those charges are
+    written-off debt and are not dropped for it.
+  - `202610130918-allow-billing-ledger-returns` (billing) deletes the `return` lines of the
+    ledger: statements then understate what is owed (the charge events stay in the outbox).
+  - `202610130923-allow-cancelling-undisbursed-contracts` (lending) puts contracts cancelled
+    after a failed transfer back to `signed` and their disbursements to `failed`, while their
+    applications stay `withdrawn`.
+  - `202610130505-allow-defaulted-plan-completion` (lending) reopens the plans that ended with a
+    default (`active`, no completion).
+  - `202610121950-track-lending-paid-installments` (lending) turns the list of paid instalments
+    back into a count, and refuses while a plan has instalments paid out of order.
+  - `202610121949-allow-lending-contracts-in-arrears` (lending) moves contracts in arrears back
+    to `active`.
+  - `202610130458-add-financing-applications-ended-statuses` (origination) turns `withdrawn` and
+    `closed` applications into `cancelled`.
+  - `202610130515-allow-isa-declaration-overdue-emails` and
+    `202610131017-allow-payment-returned-emails` (notifications) delete every
+    `notifications.notification_log` row of their template, sent or not: that email history is
+    lost.
   - `202610102245-allow-invalid-vat-on-active-centers` (catalog) brings back the CHECK that an
     active center has a valid VAT number, so it fails while an active center has
     `vat_status = 'invalid'`. List them first
     (`SELECT id, name FROM catalog.training_centers WHERE status = 'active' AND vat_status = 'invalid'`)
     and suspend each (`PATCH /centers/:id` with `status: suspended` and a `suspensionReason`),
     then revert.
+  - The reporting downs (`allow-cancelled-disbursement-facts`, `allow-accelerated-charge-facts`)
+    change or delete facts only; `POST /ops/reporting/rebuild` restores them.
 - Never edit a migration that has been applied (or reached `main`); write a new one. New ones are
   verified with `pnpm migration:verify check`, which runs, reverts and runs them again comparing
   schema dumps. `synchronize` and `schema:sync` are never used.
