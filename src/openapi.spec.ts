@@ -99,4 +99,19 @@ describe('OpenAPI document', () => {
       });
     }
   });
+
+  // Users sign in with a bearer token; API keys reach only the routes that take scopes.
+  it('should list each security scheme of a route once, and API keys only where they are taken', () => {
+    const securityOf = (id: string): string[] =>
+      (operations.find((entry) => entry.id === id)?.operation.security ?? []).flatMap((entry) =>
+        Object.keys(entry),
+      );
+
+    expect(securityOf('MeController_me').sort()).toEqual(['api-key', 'bearer']);
+    expect(securityOf('MeController_revokeSessions')).toEqual(['bearer']);
+    for (const { id, operation } of operations) {
+      const schemes = (operation.security ?? []).flatMap((entry) => Object.keys(entry));
+      expect({ id, schemes }).toEqual({ id, schemes: [...new Set(schemes)] });
+    }
+  });
 });
