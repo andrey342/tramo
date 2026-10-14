@@ -73,6 +73,8 @@ export type ChargePaidPayload = {
   readonly amountCents: number;
   // The attempt that collected it: a return of an earlier attempt is not about this payment.
   readonly attempt: number;
+  // The month it belongs to (YYYY-MM): an ISA's month of income.
+  readonly period: string;
   readonly paidAt: string;
 };
 
@@ -104,6 +106,8 @@ export type ChargeReturnedPayload = {
   readonly reason: string;
   readonly dueDate: string;
   readonly returnedAt: string;
+  // The month it belongs to (YYYY-MM): an ISA's month of income.
+  readonly period: string;
 };
 
 // Dunning notices: the first a day after the due date, the second at fifteen days.

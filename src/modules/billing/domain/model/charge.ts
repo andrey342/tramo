@@ -366,6 +366,7 @@ export class Charge extends AggregateRoot {
         installmentNumber: this.props.installmentNumber,
         amountCents: this.props.amount.cents,
         attempt: attempt.number,
+        period: this.props.period,
         paidAt: now.toISOString(),
       },
     });
@@ -454,6 +455,7 @@ export class Charge extends AggregateRoot {
         reason: returnReason,
         dueDate: dueDate.toString(),
         returnedAt: now.toISOString(),
+        period: this.props.period,
       },
     });
   }
