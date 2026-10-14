@@ -257,7 +257,7 @@ flowchart LR
 | Module          | Responsibility                                                                                                        | Main endpoints                                                                                                                        |
 | --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `iam`           | Accounts, sessions, roles, center API keys                                                                            | `/auth/*`, `/me`, `/centers/:id/users`, `/centers/:id/api-keys`                                                                       |
-| `catalog`       | Training centers, VAT verification, programs and their financing options                                              | `/centers`, `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                                                  |
+| `catalog`       | Training centers, VAT verification, programs and their financing options                                              | `/centers` (list for staff, register), `/centers/:id/verify-vat`, `/centers/:id/programs`, `/programs` (public)                       |
 | `origination`   | Financing applications, verification saga, risk policies and scoring                                                  | `/applications`, `/applications/:id/{submit,decision,accept-offer,cancel}`, `/ops/applications/*`, `/risk-policies`                   |
 | `lending`       | Contracts, e-signature, disbursement to the center and the repayment plan                                             | `/contracts`, `/contracts/:id/{document,schedule,payoff-quote,payoff}`, `/ops/disbursements/:id/{retry,reconcile}`, `/webhooks/esign` |
 | `billing`       | SEPA mandates, billing cycle, collection through the PSP, dunning, ISA income declarations and the ledger             | `/contracts/:id/{mandate,income-declarations,charges,statement}`, `/charges/:id/retry`, `/ops/{billing,dunning}/run`, `/webhooks/psp` |
@@ -339,7 +339,7 @@ provider, which answers a couple of seconds later on `POST /webhooks/psp`: the c
 instalment marked in the plan and the statement balanced. An amount ending in 13 cents is refused,
 and dunning takes over: notices, retries at 3 and 7 days, arrears at 30, default at 90. One
 ending in 14 cents is collected and then returned by the student's bank: owed again, unpaid on
-the plan, and dunned from the day of the return. In
+the plan, and dunned from the day of the return, whose retry is then collected. In
 production the cycle runs on the 1st and the 5th, collection and dunning every morning. ISA
 students declare a month's income with `POST /contracts/:id/income-declarations` until the 4th of
 the next month; on the 5th the month is charged. An ISA signed today starts paying months later

@@ -2,10 +2,10 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
 import { type Principal } from '@shared/application';
-import { EntityNotFoundError } from '@shared/domain';
 
 import {
   ApplicationAccessDeniedError,
+  DecisionPendingError,
   FINANCING_APPLICATION_REPOSITORY,
   type FinancingApplicationRepository,
 } from '../../domain';
@@ -42,7 +42,7 @@ export class GetApplicationDecisionHandler implements IQueryHandler<GetApplicati
     }
     const decision = toDecisionDto(application);
     if (!decision) {
-      throw new EntityNotFoundError('DecisionRecord', query.applicationId);
+      throw new DecisionPendingError(query.applicationId);
     }
     return decision;
   }

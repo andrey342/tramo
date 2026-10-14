@@ -20,7 +20,12 @@ import {
   InMemoryFinancingPlanRepository,
 } from '../../../../test/fakes/lending';
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
-import { type Contract, ContractAccessDeniedError, renderContractDocument } from '../domain';
+import {
+  type Contract,
+  ContractAccessDeniedError,
+  PlanNotOpenError,
+  renderContractDocument,
+} from '../domain';
 
 import { AssessIsaPeriodHandler } from './commands/assess-isa-period.command';
 import { FindContractQuery } from './dto/contract-lookup';
@@ -201,7 +206,7 @@ describe('lending queries', () => {
 
       await expect(
         t.schedule.execute(new GetContractScheduleQuery(studentOf(contract), contract.id)),
-      ).rejects.toThrow(EntityNotFoundError);
+      ).rejects.toThrow(PlanNotOpenError);
     });
 
     it('should quote a payoff for today or a day in the coming month', async () => {

@@ -14,10 +14,16 @@ export class ValidationProblemException extends BadRequestException {
   }
 }
 
+// A field that is missing gets one message saying so, not every rule its absent value breaks
+// (length, format, type).
 function flatten(errors: ValidationError[], parent: string): FieldError[] {
   return errors.flatMap((error) => {
     const field = parent ? `${parent}.${error.property}` : error.property;
-    const own = Object.values(error.constraints ?? {}).map((message) => ({ field, message }));
+    const constraints = Object.values(error.constraints ?? {});
+    const own =
+      error.value === undefined && constraints.length > 0
+        ? [{ field, message: `${field} is required` }]
+        : constraints.map((message) => ({ field, message }));
     return [...own, ...flatten(error.children ?? [], field)];
   });
 }

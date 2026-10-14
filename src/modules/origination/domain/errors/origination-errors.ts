@@ -75,3 +75,13 @@ export class InvalidRiskPolicyError extends DomainError {
     super(`Invalid risk policy: ${reason}.`, { reason });
   }
 }
+
+// Asked for the decision of an application that has not been scored or reviewed yet.
+export class DecisionPendingError extends DomainError {
+  readonly code = 'decision_pending';
+  readonly category = 'conflict';
+
+  constructor(applicationId: string) {
+    super('The application has not been decided yet.', { applicationId });
+  }
+}

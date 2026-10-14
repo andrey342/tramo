@@ -67,7 +67,9 @@ export class UpdateTrainingCenterHandler implements ICommandHandler<UpdateTraini
     assertIsAdmin(command.actor, command.centerId);
     const { changes } = command;
     const iban =
-      changes.payoutIban === undefined ? undefined : unwrap(Iban.create(changes.payoutIban));
+      changes.payoutIban === undefined
+        ? undefined
+        : unwrap(Iban.create(changes.payoutIban, 'payoutIban'));
     const vatNumber =
       changes.country === undefined || changes.taxId === undefined
         ? undefined

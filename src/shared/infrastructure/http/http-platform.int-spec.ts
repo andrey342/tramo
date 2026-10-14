@@ -9,7 +9,13 @@ import { type Redis } from 'ioredis';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 
-import { AUDIT_TRAIL, type AuditTrail, type Principal } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { InvalidStateTransitionError } from '@shared/domain';
 
 import { Audited } from '../audit';
@@ -33,7 +39,10 @@ let refundsIssued = 0;
 
 @Controller('probe')
 class ProbeController {
-  constructor(@Inject(AUDIT_TRAIL) private readonly audit: AuditTrail) {}
+  constructor(
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
+    @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
+  ) {}
 
   @Post('payments')
   @Idempotent()
@@ -58,10 +67,15 @@ class ProbeController {
     return { ok: true };
   }
 
+  // Handlers describe changes inside their unit of work, which runs in a copy of the context.
   @Post('centers/:id/suspend')
   @Audited({ action: 'center.suspend', resource: 'center' })
-  suspend(@Param('id') id: string): { id: string; status: string } {
-    this.audit.describeChanges({ status: { before: 'active', after: 'suspended' } });
+  async suspend(@Param('id') id: string): Promise<{ id: string; status: string }> {
+    await this.uow.run(() => {
+      this.audit.describeChanges({ status: { before: 'active', after: 'suspended' } });
+      return Promise.resolve();
+    });
+    this.audit.describeChanges({ reason: { before: null, after: 'unpaid fees' } });
     return { id, status: 'suspended' };
   }
 
@@ -264,7 +278,10 @@ describe('HTTP platform (integration)', () => {
           outcome: 'succeeded',
           error_code: null,
           request_id: '0199a000-0000-7000-8000-0000000a0d17',
-          changes: { status: { before: 'active', after: 'suspended' } },
+          changes: {
+            status: { before: 'active', after: 'suspended' },
+            reason: { before: null, after: 'unpaid fees' },
+          },
           metadata: { method: 'POST', path: '/api/v1/probe/centers/center-1/suspend' },
         },
       ]);

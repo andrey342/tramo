@@ -12,7 +12,7 @@ paymentGatewayContract(
 );
 
 describe('SimulatedPaymentGateway', () => {
-  it('should answer later, refusing amounts that end in 13 cents and returning those in 14', async () => {
+  it('should answer later, refusing amounts that end in 13 cents and returning those in 14 once', async () => {
     const callbacks: SimulatedPspCallback[] = [];
     const gateway = new SimulatedPaymentGateway({
       schedule: (callback) => {
@@ -32,6 +32,7 @@ describe('SimulatedPaymentGateway', () => {
     const paid = await collect('charge-1.1', 337_50);
     await collect('charge-2.1', 337_13);
     const returned = await collect('charge-3.1', 337_14);
+    const retried = await collect('charge-3.2', 337_14);
 
     expect(callbacks).toEqual([
       {
@@ -57,6 +58,12 @@ describe('SimulatedPaymentGateway', () => {
         paymentId: returned.paymentId,
         outcome: 'returned',
         failureReason: 'MD06',
+      },
+      {
+        reference: 'charge-3.2',
+        paymentId: retried.paymentId,
+        outcome: 'succeeded',
+        failureReason: null,
       },
     ]);
   });

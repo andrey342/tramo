@@ -14,10 +14,23 @@ const STATUS_BY_CATEGORY: Record<DomainErrorCategory, HttpStatus> = {
   rate_limited: HttpStatus.TOO_MANY_REQUESTS,
 };
 
-// invalid_state_transition -> "Invalid state transition"
+const ACRONYMS: Readonly<Record<string, string>> = {
+  api: 'API',
+  iban: 'IBAN',
+  id: 'ID',
+  isa: 'ISA',
+  json: 'JSON',
+  kyc: 'KYC',
+  psp: 'PSP',
+  url: 'URL',
+  vat: 'VAT',
+};
+
+// invalid_state_transition -> "Invalid state transition", invalid_api_key -> "Invalid API key"
 export function titleFromCode(code: string): string {
-  const words = code.replace(/_/g, ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  const words = code.split('_').map((word) => ACRONYMS[word] ?? word);
+  const title = words.join(' ');
+  return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
 export function domainErrorToProblem(error: DomainError): ProblemDetails {

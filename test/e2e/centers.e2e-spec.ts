@@ -55,6 +55,36 @@ describe('Training centers (e2e)', () => {
     expect(JSON.stringify(center.body)).not.toContain(VALID_IBAN);
   });
 
+  // Staff find the centers waiting for their VAT check without knowing their ids.
+  it('should list centers to staff, by status and a page at a time', async () => {
+    const created = await register();
+    const id = created.body.id as string;
+
+    const pending = await api()
+      .get('/api/v1/centers?status=pending_verification&limit=100')
+      .set(...bearer(opsToken));
+    const firstPage = await api()
+      .get('/api/v1/centers?limit=1')
+      .set(...bearer(adminToken));
+    const studentEmail = `student-${uuidv7().slice(-12)}@example.com`;
+    await api()
+      .post('/api/v1/auth/register')
+      .send({ email: studentEmail, password: TEST_PASSWORD });
+    const student = await accessTokenFor(app, { email: studentEmail, password: TEST_PASSWORD });
+    const refused = await api()
+      .get('/api/v1/centers')
+      .set(...bearer(student));
+
+    expect(pending.status).toBe(200);
+    expect((pending.body.data as { id: string }[]).map((center) => center.id)).toContain(id);
+    expect(pending.body.data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id, payoutIbanMasked: 'ES91 **** 1332' })]),
+    );
+    expect(firstPage.body.data).toHaveLength(1);
+    expect(firstPage.body.nextCursor).toEqual(expect.any(String));
+    expect(refused.status).toBe(403);
+  });
+
   it('should activate a center when ops verify its VAT number', async () => {
     const created = await register();
 
@@ -93,7 +123,7 @@ describe('Training centers (e2e)', () => {
     expect(duplicate.body.code).toBe('center_already_registered');
     expect(badIban.status).toBe(422);
     expect(badIban.body.errors).toEqual([
-      { field: 'iban', message: 'IBAN check digits do not match.' },
+      { field: 'payoutIban', message: 'IBAN check digits do not match.' },
     ]);
     expect(unknownField.status).toBe(400);
     expect(byOps.status).toBe(403);

@@ -2,19 +2,14 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
 import { type Principal } from '@shared/application';
-import {
-  CalendarDate,
-  CLOCK,
-  type Clock,
-  EntityNotFoundError,
-  InvalidValueError,
-} from '@shared/domain';
+import { CalendarDate, CLOCK, type Clock, InvalidValueError } from '@shared/domain';
 
 import {
   CONTRACT_REPOSITORY,
   type ContractRepository,
   FINANCING_PLAN_REPOSITORY,
   type FinancingPlanRepository,
+  PlanNotOpenError,
 } from '../../domain';
 import { canSeeRepayment, findVisibleContract } from '../contract-access';
 import { toPayoffQuoteDto } from '../contract.mapping';
@@ -49,7 +44,7 @@ export class GetPayoffQuoteHandler implements IQueryHandler<GetPayoffQuoteQuery>
       canSeeRepayment,
     );
     const today = CalendarDate.fromInstant(this.clock.now());
-    const asOf = query.asOf ? CalendarDate.parse(query.asOf) : today;
+    const asOf = query.asOf ? CalendarDate.parse(query.asOf, 'asOf') : today;
     const ahead = today.daysUntil(asOf);
     if (ahead < 0 || ahead > MAX_DAYS_AHEAD) {
       throw new InvalidValueError(
@@ -59,7 +54,7 @@ export class GetPayoffQuoteHandler implements IQueryHandler<GetPayoffQuoteQuery>
     }
     const plan = await this.plans.findByContractId(contract.id);
     if (!plan) {
-      throw new EntityNotFoundError('FinancingPlan', contract.id);
+      throw new PlanNotOpenError(contract.id);
     }
     return toPayoffQuoteDto(contract.id, plan.payoffQuote(asOf));
   }

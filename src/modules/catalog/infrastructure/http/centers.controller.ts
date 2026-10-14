@@ -1,10 +1,25 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { type Principal } from '@shared/application';
+import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent, ParseIdPipe } from '@shared/infrastructure/http';
+import {
+  ApiCursorPaginated,
+  ApiProblems,
+  Idempotent,
+  ParseIdPipe,
+} from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -12,10 +27,13 @@ import { RegisterTrainingCenterCommand } from '../../application/commands/regist
 import { UpdateTrainingCenterCommand } from '../../application/commands/update-training-center.command';
 import { VerifyCenterVatCommand } from '../../application/commands/verify-center-vat.command';
 import { GetTrainingCenterQuery } from '../../application/queries/get-training-center.query';
+import { ListTrainingCentersQuery } from '../../application/queries/list-training-centers.query';
 
 import {
   CenterRegisteredResponse,
+  ListTrainingCentersQueryDto,
   RegisterTrainingCenterRequest,
+  TrainingCenterPageResponse,
   TrainingCenterResponse,
   UpdateTrainingCenterRequest,
 } from './centers.dto';
@@ -54,6 +72,24 @@ export class CentersController {
       ),
     );
     return { id: centerId };
+  }
+
+  @Get()
+  @ApiProblems(400, 401, 403)
+  @ApiCursorPaginated()
+  @ApiOkResponse({ type: TrainingCenterPageResponse })
+  @Roles('admin', 'ops')
+  @ApiOperation({
+    summary: 'Training centers, newest first (admin, ops)',
+    description: 'Filter by status, e.g. pending_verification for those waiting for a VAT check.',
+  })
+  list(
+    @CurrentPrincipal() actor: Principal,
+    @Query() query: ListTrainingCentersQueryDto,
+  ): Promise<CursorPage<TrainingCenterResponse>> {
+    return this.queries.execute(
+      new ListTrainingCentersQuery(actor, query.status ?? null, query.toPageRequest()),
+    );
   }
 
   @Get(':centerId')

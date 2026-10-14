@@ -281,6 +281,7 @@ describe('Billing (e2e)', () => {
       .set('Idempotency-Key', uuidv7());
 
     expect(today.body.code).toBe('invalid_period');
+    expect(past.body.errors).toEqual([expect.objectContaining({ field: 'asOf' })]);
     expect(past.body.code).toBe('invalid_value');
     expect(declared.status).toBe(201);
     expect(declared.body).toMatchObject({ period: month, grossMonthlyIncomeCents: 2_150_00 });

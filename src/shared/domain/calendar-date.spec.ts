@@ -1,4 +1,5 @@
 import { CalendarDate } from './calendar-date';
+import { InvalidValueError } from './domain-error';
 
 const day = (iso: string): CalendarDate => CalendarDate.parse(iso);
 
@@ -14,6 +15,22 @@ describe('CalendarDate', () => {
       expect(() => day(value)).toThrow('date');
     },
   );
+
+  // A day given in a request is reported under the request's own field name.
+  it('should name the field a malformed day came from', () => {
+    const fieldOf = (parse: () => unknown): string | undefined => {
+      try {
+        parse();
+        return undefined;
+      } catch (error) {
+        return error instanceof InvalidValueError ? error.field : undefined;
+      }
+    };
+
+    expect(fieldOf(() => CalendarDate.parse('2026-13-40', 'asOf'))).toBe('asOf');
+    expect(fieldOf(() => CalendarDate.parse('soon', 'asOf'))).toBe('asOf');
+    expect(fieldOf(() => CalendarDate.parse('soon'))).toBe('date');
+  });
 
   it('should take the day of an instant in UTC', () => {
     expect(CalendarDate.fromInstant(new Date('2026-10-12T23:30:00Z')).toString()).toBe(

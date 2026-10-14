@@ -1,8 +1,9 @@
 import { type CursorPage, type PageRequest } from '@shared/application';
 import { type VatNumber } from '@shared/domain';
 
-import { type VatCheckResult } from '../../domain';
+import { type CenterStatus, type VatCheckResult } from '../../domain';
 import { type CatalogProgramDto, type ProgramFilter } from '../dto/program.dto';
+import { type TrainingCenterDto } from '../dto/training-center.dto';
 
 export const VAT_VALIDATOR = Symbol('VAT_VALIDATOR');
 
@@ -23,4 +24,14 @@ export const PROGRAM_CATALOG = Symbol('PROGRAM_CATALOG');
 export interface ProgramCatalog {
   list(filter: ProgramFilter, page: PageRequest): Promise<CursorPage<CatalogProgramDto>>;
   findPublished(id: string): Promise<CatalogProgramDto | null>;
+}
+
+export const TRAINING_CENTER_QUERIES = Symbol('TRAINING_CENTER_QUERIES');
+
+// Every center for staff, newest first, paginated by cursor; by status when given.
+export interface TrainingCenterQueries {
+  list(
+    filter: { readonly status?: CenterStatus },
+    page: PageRequest,
+  ): Promise<CursorPage<TrainingCenterDto>>;
 }

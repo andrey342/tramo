@@ -1,13 +1,6 @@
 import { Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import {
-  ApiBearerAuth,
-  ApiNoContentResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiSecurity,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { ROLES } from '@shared/domain';
@@ -21,9 +14,8 @@ import { GetCurrentPrincipalQuery } from '../../application/queries/get-current-
 
 import { CurrentPrincipalResponse } from './auth.dto';
 
+// Security in the document comes from @Roles (bearer) and @RequireScopes (API key) per route.
 @ApiTags('auth')
-@ApiBearerAuth()
-@ApiSecurity('api-key')
 @Controller('me')
 export class MeController {
   constructor(

@@ -2,12 +2,16 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
-import { answerUnknownPaths, configureHttpApp } from '@shared/infrastructure/http';
+import {
+  answerUnknownPaths,
+  configureHttpApp,
+  ProblemExpressAdapter,
+} from '@shared/infrastructure/http';
 
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create(AppModule, new ProblemExpressAdapter(), {
     bufferLogs: true,
     // Signed webhooks are verified over the exact bytes received.
     rawBody: true,

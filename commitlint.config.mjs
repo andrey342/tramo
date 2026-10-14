@@ -1,5 +1,19 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 // Commit messages describe the change and nothing else: no tool attribution, trailers or emoji.
-const FORBIDDEN = /co-authored-by|anthropic|generated with|ai-generated|claude/i;
+// Names a contributor also refuses are kept out of the repo, one per line in
+// .local/forbidden-words.
+const LOCAL_WORDS = '.local/forbidden-words';
+const localWords = existsSync(LOCAL_WORDS)
+  ? readFileSync(LOCAL_WORDS, 'utf8')
+      .split(/\r?\n/)
+      .map((word) => word.trim())
+      .filter(Boolean)
+  : [];
+const FORBIDDEN = new RegExp(
+  ['co-authored-by', 'generated with', 'ai-generated', ...localWords].join('|'),
+  'i',
+);
 const EMOJI = /\p{Extended_Pictographic}/u;
 
 export default {

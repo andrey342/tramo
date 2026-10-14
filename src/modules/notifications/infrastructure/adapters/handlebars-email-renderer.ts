@@ -54,8 +54,8 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
   installment_reminder: {
     subject: 'Your payment of {{money amountCents}} is due on {{dueDate}}',
     body: [
-      'We will collect {{money amountCents}} by direct debit on {{dueDate}}.',
-      'Please make sure your account has funds that day.',
+      '{{money amountCents}} falls due on {{dueDate}} and is collected by direct debit under your mandate. Please make sure your account has funds that day.',
+      'If you have not signed a direct debit mandate for this contract yet, sign it in the app: nothing can be collected without one.',
     ],
   },
   installment_collected: {
