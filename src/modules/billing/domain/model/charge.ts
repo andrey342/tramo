@@ -477,6 +477,10 @@ export class Charge extends AggregateRoot {
     }
     const steps = dunningStepsDue(this.props.dueDate, asOf, this.props.dunningStep);
     const daysOverdue = this.props.dueDate.daysUntil(asOf);
+    // A run that catches up with both notices sends the student the later one only.
+    const lastNotice = steps
+      .filter((step) => step.action === 'first_notice' || step.action === 'second_notice')
+      .at(-1);
     let retry = false;
     for (const step of steps) {
       switch (step.action) {
@@ -488,7 +492,9 @@ export class Charge extends AggregateRoot {
         case 'first_notice':
         case 'second_notice':
           this.moveTo('overdue', now);
-          this.recordOverdue(step.action === 'first_notice' ? 1 : 2, daysOverdue, now);
+          if (step === lastNotice) {
+            this.recordOverdue(step.action === 'first_notice' ? 1 : 2, daysOverdue, now);
+          }
           break;
         case 'retry':
           retry = true;
