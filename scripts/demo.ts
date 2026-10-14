@@ -39,8 +39,8 @@ const sinkUrl = process.env['WEBHOOK_SINK_URL'] ?? local(process.env['WEBHOOK_SI
 // Inside the api container the services are reached by their compose names; the reader opens
 // them on the ports compose publishes on the host.
 const PUBLISHED: Readonly<Record<string, string>> = {
-  mailpit: 'http://localhost:8025',
-  'webhook-sink': 'http://localhost:9099',
+  mailpit: local(process.env['MAILPIT_UI_PORT'], '8025'),
+  'webhook-sink': local(process.env['WEBHOOK_SINK_PORT'], '9099'),
 };
 const shown = (url: string): string => PUBLISHED[new URL(url).hostname] ?? url;
 const base = `${apiUrl}/api/v1`;
