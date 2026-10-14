@@ -496,6 +496,11 @@ future billing runs and private webhook targets by default. The compose stack ru
 - **Credential routes** (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and
   `POST /applications`): `THROTTLE_AUTH_LIMIT` (10) per minute per client on top.
 - What the caller sees: 429 with `Retry-After` and Problem Details code `too_many_requests`.
+- **While Redis is down**: the limits are skipped (requests go through; the api logs
+  `Rate limit skipped until Redis answers again` once), and a check Redis takes over 300 ms to
+  answer is not waited for. Sign-in fails closed instead: `POST /auth/login` answers 503
+  `sign_in_unavailable` with `Retry-After: 5` at once, since without the count a password could be
+  guessed without limit. Each queue logs `Queue cannot reach Redis` at most once a minute.
 - **Lockout**, per account whatever the client: the fifth failed sign-in in a row locks it for
   `LOGIN_LOCK_BASE_SECONDS` (60 s); each further failure after a lock doubles it (120 s, 240 s...)
   up to `LOGIN_LOCK_MAX_SECONDS` (one hour). Failures are forgotten a day after the last one and
