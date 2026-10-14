@@ -76,7 +76,11 @@ describe('Charge', () => {
       expect.objectContaining({ eventType: BillingEvents.ChargeCreated }),
       expect.objectContaining({
         eventType: BillingEvents.ChargeWrittenOff,
-        payload: expect.objectContaining({ amountCents: 1_250_65, reason: 'contract_defaulted' }),
+        payload: expect.objectContaining({
+          amountCents: 1_250_65,
+          reason: 'contract_defaulted',
+          writtenOffOn: '2027-02-11',
+        }),
       }),
     ]);
     expect(charge.applyDunning(day('2027-06-01'), LATER)).toEqual({ retry: false });

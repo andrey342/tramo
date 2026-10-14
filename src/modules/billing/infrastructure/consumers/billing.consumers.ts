@@ -124,7 +124,14 @@ export class CloseChargesOnContractDefaulted implements EventHandler<ContractDef
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<ContractDefaultedPayload>): Promise<void> {
-    await this.commands.execute(new CloseDefaultedChargesCommand(event.payload.contractId));
+    // Events recorded before the day was carried have none.
+    const { defaultedOn } = event.payload as Partial<ContractDefaultedPayload>;
+    await this.commands.execute(
+      new CloseDefaultedChargesCommand(
+        event.payload.contractId,
+        defaultedOn ? CalendarDate.parse(defaultedOn) : null,
+      ),
+    );
   }
 }
 

@@ -328,7 +328,8 @@ export class Contract extends AggregateRoot {
   // Dunning ran out (90 days overdue): the debt goes to ops and collections. Idempotent. A
   // contract completed meanwhile (an ISA whose last month reached the cap) stays completed: the
   // charge written off is a loss of billing, not a default.
-  declareDefault(now: Date): void {
+  // `day`: that of the write-off behind it, which a catch-up run of dunning sets; today if unknown.
+  declareDefault(now: Date, day: CalendarDate | null = null): void {
     if (this.props.status === 'defaulted' || this.props.status === 'completed') {
       return;
     }
@@ -345,6 +346,7 @@ export class Contract extends AggregateRoot {
         contractId: this.id,
         studentId: this.props.studentId,
         centerId: this.props.centerId,
+        defaultedOn: (day ?? CalendarDate.fromInstant(now)).toString(),
       },
     });
   }

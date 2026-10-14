@@ -104,6 +104,7 @@ describe('ClosePlanOnContractDefaulted', () => {
         contractId,
         studentId: uuidv7(),
         centerId: uuidv7(),
+        defaultedOn: '2027-02-12',
       }),
     );
 

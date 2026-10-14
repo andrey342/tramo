@@ -157,7 +157,7 @@ export class Charge extends AggregateRoot {
       period: today.period,
       dueDate: today,
     });
-    charge.writeOff('contract_defaulted', input.now);
+    charge.writeOff('contract_defaulted', input.now, today);
     return charge;
   }
 
@@ -510,7 +510,7 @@ export class Charge extends AggregateRoot {
           });
           break;
         case 'write_off':
-          this.writeOff('dunning_exhausted', now);
+          this.writeOff('dunning_exhausted', now, asOf);
           retry = false;
           break;
       }
@@ -559,7 +559,7 @@ export class Charge extends AggregateRoot {
     return ['paid', 'written_off', 'cancelled'].includes(this.props.status);
   }
 
-  private writeOff(reason: ChargeWrittenOffPayload['reason'], now: Date): void {
+  private writeOff(reason: ChargeWrittenOffPayload['reason'], now: Date, day: CalendarDate): void {
     this.moveTo('written_off', now);
     this.record({
       eventType: BillingEvents.ChargeWrittenOff,
@@ -573,6 +573,7 @@ export class Charge extends AggregateRoot {
         centerId: this.props.centerId,
         amountCents: this.props.amount.cents,
         reason,
+        writtenOffOn: day.toString(),
       },
     });
   }

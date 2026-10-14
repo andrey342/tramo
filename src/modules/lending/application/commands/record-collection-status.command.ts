@@ -2,7 +2,7 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
 import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
+import { type CalendarDate, CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import { CONTRACT_REPOSITORY, type ContractRepository } from '../../domain';
 
@@ -17,6 +17,8 @@ export class RecordCollectionStatusCommand extends Command<void> {
     readonly status: CollectionStatus,
     // When billing noticed it: the order of the notices, whatever the order they arrive in.
     readonly noticedAt: Date,
+    // The day of a write-off, which may differ from today in a catch-up run.
+    readonly day: CalendarDate | null = null,
   ) {
     super();
   }
@@ -46,7 +48,7 @@ export class RecordCollectionStatusHandler implements ICommandHandler<RecordColl
           contract.clearArrears(command.noticedAt, now);
           break;
         case 'defaulted':
-          contract.declareDefault(now);
+          contract.declareDefault(now, command.day);
           break;
       }
       // Transitions are idempotent: a redelivery finds the status already set.

@@ -1010,7 +1010,9 @@ describe('billing use cases', () => {
       });
       t.events.published.length = 0;
 
-      const closed = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
+      const closed = await t.closeDefaulted.execute(
+        new CloseDefaultedChargesCommand(contractId, day('2027-02-12')),
+      );
       const again = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
 
       const accelerated = await t.charges.findByReference(contractId, 'accelerated');
@@ -1020,6 +1022,8 @@ describe('billing use cases', () => {
       expect((await t.charges.findById(collecting.id))?.status).toBe('pending');
       expect(accelerated).toMatchObject({ kind: 'accelerated', status: 'written_off' });
       expect(accelerated?.amount.cents).toBe(430_00);
+      // Dated by the default, not by the clock: a catch-up run writes off as of its own day.
+      expect(accelerated?.dueDate.toString()).toBe('2027-02-12');
       expect(t.events.published.map((event) => event.eventType)).toEqual([
         'ChargeCancelled',
         'ChargeCreated',
