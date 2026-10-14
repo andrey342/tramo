@@ -61,7 +61,7 @@ function setup() {
     },
     rebuild: new RebuildProjectionsHandler(uow, store, history, projector),
     request: new RequestRebuildHandler(jobs, { describeChanges: () => undefined }),
-    dashboard: new GetCenterDashboardHandler(store, clock),
+    dashboard: new GetCenterDashboardHandler(store, programs, clock),
     performance: new GetProgramPerformanceHandler(store, programs, scores, clock),
     overview: new GetOpsOverviewHandler(store, queues, clock),
   };
@@ -189,6 +189,12 @@ describe('reporting use cases', () => {
     ).toBeNull();
     expect((await t.dashboard.execute(new GetCenterDashboardQuery(OPS, centerId))).centerId).toBe(
       centerId,
+    );
+    // An id that names no center is not an empty portfolio.
+    const unknown = uuidv7();
+    t.programs.missingCenters.add(unknown);
+    await expect(t.dashboard.execute(new GetCenterDashboardQuery(OPS, unknown))).rejects.toThrow(
+      EntityNotFoundError,
     );
   });
 

@@ -68,7 +68,7 @@ function setup(knownCenters?: ReadonlySet<string>, suspendedCenters = new Set<st
     issue: new IssueApiKeyHandler(uow, apiKeys, credentials, centers, audit, clock),
     revoke: new RevokeApiKeyHandler(uow, apiKeys, audit, clock),
     revokeCenterKeys: new RevokeCenterApiKeysHandler(uow, apiKeys, clock),
-    list: new ListApiKeysHandler(apiKeys),
+    list: new ListApiKeysHandler(apiKeys, centers),
     authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, centers, clock),
     suspendedCenters,
   };
@@ -174,6 +174,14 @@ describe('center access use cases', () => {
           ),
         ),
       ).rejects.toThrow(CenterAccessDeniedError);
+    });
+
+    it('should not list the keys of a center that does not exist', async () => {
+      const t = setup(new Set([DEFAULT_CENTER_ID]));
+
+      await expect(
+        t.list.execute(new ListApiKeysQuery(asUser(admin), OTHER_CENTER_ID)),
+      ).rejects.toThrow(EntityNotFoundError);
     });
 
     it('should refuse new keys for a suspended center', async () => {

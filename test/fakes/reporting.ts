@@ -229,9 +229,15 @@ export class InMemoryReportingStore implements ReportingStore {
 
 export class FakePrograms implements Programs {
   readonly centers = new Map<string, string>();
+  // Every center exists but these.
+  readonly missingCenters = new Set<string>();
 
   centerOf(programId: string): Promise<string | null> {
     return Promise.resolve(this.centers.get(programId) ?? null);
+  }
+
+  centerExists(centerId: string): Promise<boolean> {
+    return Promise.resolve(!this.missingCenters.has(centerId));
   }
 }
 
