@@ -54,6 +54,11 @@ describe('Health (e2e)', () => {
     expect(outside.status).toBe(404);
     expect(outside.body).toMatchObject({ code: 'not_found', instance: '/nope' });
     expect(malformed.status).toBe(400);
+    expect(malformed.body).toMatchObject({
+      code: 'malformed_body',
+      title: 'Malformed body',
+      detail: 'The request body is not valid JSON.',
+    });
     expect(badId.status).toBe(400);
     expect(badId.body).toMatchObject({
       code: 'validation_error',
