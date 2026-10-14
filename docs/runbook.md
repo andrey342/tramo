@@ -255,7 +255,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   - No mandate: charges stay `scheduled` and dunning chases them. Signing one
     (`POST /contracts/:id/mandate`, the student) collects at once what fell due meanwhile.
   - The simulated provider refuses amounts ending in 13 cents (`insufficient_funds`), collects
-    and then returns those ending in 14 (`MD06`, twice the delay later), and answers
+    and then returns those ending in 14 on their first attempt (`MD06`, twice the delay later;
+    a retry is collected), and answers
     `SIMULATED_PSP_DELAY_MS` later through `billing.psp-simulator`, which posts to the api at
     `PSP_CALLBACK_URL`.
   - A charge `failed` with `lastFailureReason` a four-letter code (`MD06`, `AM04`, `AC04`...)

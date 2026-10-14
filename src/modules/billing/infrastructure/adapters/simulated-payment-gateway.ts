@@ -24,7 +24,8 @@ export interface PspCallbackScheduler {
 // request at once and answers a little later through the signed webhook, as a real one does. An
 // amount ending in 13 cents is refused for insufficient funds, which is how the demo shows
 // dunning; one ending in 14 cents is collected and then returned by the student's bank (MD06, a
-// refund the debtor asked for), which shows a return. Deterministic and stateless: the payment id
+// refund the debtor asked for) on its first attempt, which shows a return, and collected for good
+// when dunning tries again. Deterministic and stateless: the payment id
 // derives from the idempotency key, so a repeated request gets the same payment (and the same
 // answers, which the charge ignores).
 @Injectable()
@@ -41,7 +42,8 @@ export class SimulatedPaymentGateway implements PaymentGateway {
       outcome: refused ? 'failed' : 'succeeded',
       failureReason: refused ? 'insufficient_funds' : null,
     });
-    if (cents === 14) {
+    // The attempt number ends the key (`<chargeId>.<attempt>`).
+    if (cents === 14 && request.idempotencyKey.endsWith('.1')) {
       await this.callbacks.schedule({
         reference: request.idempotencyKey,
         paymentId,
