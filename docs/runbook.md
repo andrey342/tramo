@@ -20,7 +20,7 @@ Conventions used below:
 - **Start**: `cp .env.example .env` once, then `docker compose up -d --build --wait`. It returns
   when the containers with a healthcheck report healthy. `--build` is needed after a code change.
 - **What "ready" means**, in start order:
-  - `postgres` (`pg_isready`) and `redis` (`redis-cli ping`) healthy; `mailpit` has no check;
+  - `postgres` (`pg_isready`) and `redis` (`redis-cli ping`) healthy; `mailpit` uses the check its image ships;
     `webhook-sink` answers `GET /health`.
   - `api` applies pending migrations at startup (`DATABASE_RUN_MIGRATIONS=true`), then is healthy
     when `GET /health/ready` answers 200: Postgres and Redis each answered a ping within 1.5 s.
@@ -303,7 +303,8 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
   - `pnpm api:call GET '/centers/<centerId>/webhook-deliveries?status=failed' --as ops`: each
     attempt with its status code or failure category (`http_503`, `timeout`,
     `connection_failed`, `dns_failed`, `target_unreachable`, `webhook_removed`).
-  - `GET /centers/:id/webhook`: the URL and whether the subscription is `active` or `removed`.
+  - `GET /centers/:id/webhook`: the URL the center subscribed; 404 `webhook_not_configured` when it
+    has none or removed it (deliveries still pending then fail as `webhook_removed`).
   - In compose the sink stands in for the center: `curl -s http://localhost:9099/deliveries`.
 - **How it behaves**: five attempts per round, the delay doubling from `WEBHOOK_RETRY_DELAY_MS`
   (30 s: about 7.5 minutes per round), then the delivery is `failed` and its job dead-lettered.

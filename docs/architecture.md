@@ -161,6 +161,7 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
   not shift when new rows arrive. A cursor that does not decode is a 422 (`cursor` in `errors`).
+  A center's API keys are the one list returned whole: a few per center, issued by hand.
 - **OpenAPI.** Statuses the pipeline answers are documented by the decorators that cause them:
   `@Idempotent()` adds 400, 409, 422 and 503, `@ApiCursorPaginated()` (on every list) 400 and 422. `src/openapi.spec.ts` builds the document from every controller and fails when an
   idempotent or cursor-paginated route lacks them.

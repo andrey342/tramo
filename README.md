@@ -81,6 +81,11 @@ from the network. If a port is already taken on your machine, override it in `.e
 
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
 
+The compose project is named `tramo` whatever the folder, so every clone on a machine shares its
+containers and volumes: a database left by an earlier run is reused as it is. To run another copy
+next to it, give it a name and other ports in its `.env`, e.g.
+`docker compose -p tramo-2 up -d --build --wait`, and pass the same `-p` to every later command.
+
 ## Try it in 2 minutes
 
 Once the seed has exited with 0 (see above):
