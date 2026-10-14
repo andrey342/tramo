@@ -166,4 +166,40 @@ describe('OpenAPI document', () => {
 
     expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
   });
+
+  // A property without a type of its own is documented as an empty object.
+  it('should give every property a type, not an empty object', () => {
+    const document = buildOpenApiDocument(app);
+    const untyped = Object.entries(document.components?.schemas ?? {}).flatMap(
+      ([schemaName, schema]) =>
+        Object.entries(
+          (schema as { properties?: Record<string, Record<string, unknown>> }).properties ?? {},
+        )
+          .filter(
+            ([, property]) =>
+              property['type'] === 'object' &&
+              !['properties', 'additionalProperties', 'allOf', '$ref'].some(
+                (key) => key in property,
+              ),
+          )
+          .map(([property]) => `${schemaName}.${property}`),
+    );
+
+    expect(untyped).toEqual([]);
+  });
+
+  it('should describe whole-number query parameters as integers', () => {
+    const document = buildOpenApiDocument(app);
+    const parameters = Object.values(document.paths).flatMap((item) =>
+      (['get', 'post', 'put', 'patch', 'delete'] as const).flatMap(
+        (method) =>
+          (item[method]?.parameters ?? []) as { name: string; schema?: { type?: string } }[],
+      ),
+    );
+
+    expect(parameters.filter((parameter) => parameter.schema?.type === 'number')).toEqual([]);
+    expect(parameters.find((parameter) => parameter.name === 'limit')?.schema).toMatchObject({
+      type: 'integer',
+    });
+  });
 });

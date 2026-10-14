@@ -27,12 +27,24 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
       .addApiKey({ type: 'apiKey', in: 'header', name: API_KEY_HEADER }, 'api-key')
       .build(),
   );
+  const wholeUnlessFractional = (name: string, property: PropertySchema | undefined): void => {
+    if (!property || FRACTIONAL.has(name)) return;
+    const target = property.type === 'array' ? property.items : property;
+    if (target?.type === 'number') target.type = 'integer';
+  };
   for (const schema of Object.values(document.components?.schemas ?? {})) {
     const properties = (schema as { properties?: Record<string, PropertySchema> }).properties;
     for (const [name, property] of Object.entries(properties ?? {})) {
-      if (FRACTIONAL.has(name)) continue;
-      const target = property.type === 'array' ? property.items : property;
-      if (target?.type === 'number') target.type = 'integer';
+      wholeUnlessFractional(name, property);
+    }
+  }
+  // Query and path parameters too (`limit`, `minPriceCents`...).
+  for (const item of Object.values(document.paths)) {
+    for (const operation of Object.values(item as Record<string, unknown>)) {
+      const parameters = (operation as { parameters?: unknown[] } | undefined)?.parameters ?? [];
+      for (const parameter of parameters as { name?: string; schema?: PropertySchema }[]) {
+        wholeUnlessFractional(parameter.name ?? '', parameter.schema);
+      }
     }
   }
   return document;

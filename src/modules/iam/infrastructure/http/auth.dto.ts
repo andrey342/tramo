@@ -79,7 +79,7 @@ export class CurrentPrincipalResponse {
   })
   roles?: readonly Role[];
 
-  @ApiProperty({ required: false, nullable: true, format: 'uuid' })
+  @ApiProperty({ required: false, nullable: true, type: String, format: 'uuid' })
   centerId?: string | null;
 
   @ApiProperty({ required: false, isArray: true, type: String })
