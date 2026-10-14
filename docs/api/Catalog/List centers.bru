@@ -1,0 +1,29 @@
+meta {
+  name: List centers
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/centers?status=pending_verification
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: pending_verification
+}
+
+auth:bearer {
+  token: {{opsToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.data.length > 0) {
+    bru.setEnvVar("newCenterId", res.body.data[0].id);
+  }
+}
+
+docs {
+  Admin and ops: every center, newest first, a page at a time (`limit`, `cursor`). `status` filters by `pending_verification`, `active` or `suspended`; with `pending_verification` it finds the seeded Nova Cyber Institute, waiting for its VAT check. Stores the first id in `newCenterId` for "Get center", "Verify center VAT" and "Update center".
+}
