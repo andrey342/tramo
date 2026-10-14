@@ -103,8 +103,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       const title = statusTitle(status);
       const detail = httpExceptionDetail(exception);
       // RFC 9457: detail explains this occurrence; a copy of the title adds nothing.
+      // Every problem names its type after its code, framework errors included.
       return {
-        type: 'about:blank',
+        type: problemType(statusCode(status).replace(/_/g, '-')),
         title,
         status,
         detail: detail === title ? undefined : detail,
@@ -121,7 +122,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       };
     }
     return {
-      type: 'about:blank',
+      type: problemType('internal-server-error'),
       title: statusTitle(HttpStatus.INTERNAL_SERVER_ERROR),
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       detail: 'An unexpected error occurred.',

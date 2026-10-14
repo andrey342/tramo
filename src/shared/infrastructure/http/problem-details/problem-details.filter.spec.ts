@@ -116,7 +116,7 @@ describe('ProblemDetailsFilter', () => {
     expect(response.status).toBe(404);
     expect(response.headers['content-type']).toContain(PROBLEM_CONTENT_TYPE);
     expect(response.body).toEqual({
-      type: 'about:blank',
+      type: 'urn:tramo:problem:not-found',
       title: 'Not Found',
       status: 404,
       detail: 'Program 42 does not exist.',
