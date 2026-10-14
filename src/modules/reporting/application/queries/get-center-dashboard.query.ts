@@ -2,11 +2,16 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
 import { type Principal } from '@shared/application';
-import { CLOCK, type Clock } from '@shared/domain';
+import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import { centerFigures, shareOf } from '../../domain';
 import { type CenterDashboardDto } from '../dto/reporting.dto';
-import { REPORTING_STORE, type ReportingStore } from '../ports/reporting-ports';
+import {
+  PROGRAMS,
+  type Programs,
+  REPORTING_STORE,
+  type ReportingStore,
+} from '../ports/reporting-ports';
 import { assertCanSeeCenter } from '../reporting-access';
 
 // A center's portfolio: its applications by stage, its contracts by state and product, what was
@@ -24,11 +29,16 @@ export class GetCenterDashboardQuery extends Query<CenterDashboardDto> {
 export class GetCenterDashboardHandler implements IQueryHandler<GetCenterDashboardQuery> {
   constructor(
     @Inject(REPORTING_STORE) private readonly store: ReportingStore,
+    @Inject(PROGRAMS) private readonly catalog: Programs,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async execute(query: GetCenterDashboardQuery): Promise<CenterDashboardDto> {
     assertCanSeeCenter(query.actor, query.centerId);
+    // Staff may ask about any id: one that names no center is not an empty portfolio.
+    if (!(await this.catalog.centerExists(query.centerId))) {
+      throw new EntityNotFoundError('TrainingCenter', query.centerId);
+    }
     const figures = centerFigures(await this.store.centerRows(query.centerId));
     const { active, inArrears } = figures.contracts;
     return {

@@ -111,7 +111,7 @@ function setup() {
     get: new GetWebhookHandler(subscriptions),
     deliver: new DeliverWebhookHandler(uow, deliveries, subscriptions, webhookSender, clock),
     redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, clock),
-    list: new ListWebhookDeliveriesHandler(new InMemoryNotificationsQueries(deliveries)),
+    list: new ListWebhookDeliveriesHandler(new InMemoryNotificationsQueries(deliveries), centers),
     request: new RequestEmailHandler(uow, emails, recipients, clock),
     send: new SendEmailHandler(uow, emails, new FakeEmailRenderer(), emailSender, clock),
     subscribed: async () =>
@@ -398,6 +398,9 @@ describe('notifications use cases', () => {
       expect(page.data).toEqual([
         expect.objectContaining({ id: pending.id, event: 'contract.defaulted', attempts: 0 }),
       ]);
+      await expect(
+        t.list.execute(new ListWebhookDeliveriesQuery(OPS, uuidv7(), {}, PAGE)),
+      ).rejects.toThrow(EntityNotFoundError);
     });
   });
 

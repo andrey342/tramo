@@ -1,8 +1,14 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
-import { CalendarDate, CLOCK, type Clock, EntityNotFoundError, Money } from '@shared/domain';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
+import { CalendarDate, CLOCK, type Clock, Money } from '@shared/domain';
 
 import {
   ContractAccessDeniedError,
@@ -10,6 +16,7 @@ import {
   type ContractRepository,
   FINANCING_PLAN_REPOSITORY,
   type FinancingPlanRepository,
+  PlanNotOpenError,
 } from '../../domain';
 import { findVisibleContract, isStudentOf } from '../contract-access';
 import { toPayoffQuoteDto } from '../contract.mapping';
@@ -34,6 +41,7 @@ export class RequestPayoffHandler implements ICommandHandler<RequestPayoffComman
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(CONTRACT_REPOSITORY) private readonly contracts: ContractRepository,
     @Inject(FINANCING_PLAN_REPOSITORY) private readonly plans: FinancingPlanRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -45,12 +53,13 @@ export class RequestPayoffHandler implements ICommandHandler<RequestPayoffComman
       }
       const plan = await this.plans.findByContractId(contract.id);
       if (!plan) {
-        throw new EntityNotFoundError('FinancingPlan', contract.id);
+        throw new PlanNotOpenError(contract.id);
       }
       const now = this.clock.now();
       const today = CalendarDate.fromInstant(now);
       const quote = plan.requestPayoff(today, Money.fromCents(command.expectedAmountCents), now);
       await this.plans.save(plan);
+      this.audit.describeChanges({ payoffCents: { before: null, after: quote.total.cents } });
       return toPayoffQuoteDto(contract.id, quote);
     });
   }

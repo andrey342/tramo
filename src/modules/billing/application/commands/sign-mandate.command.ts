@@ -2,7 +2,13 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, Iban, unwrap } from '@shared/domain';
 
 import {
@@ -40,6 +46,7 @@ export class SignMandateHandler implements ICommandHandler<SignMandateCommand> {
     @Inject(PAYMENT_MANDATE_REPOSITORY) private readonly mandates: PaymentMandateRepository,
     @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -66,6 +73,11 @@ export class SignMandateHandler implements ICommandHandler<SignMandateCommand> {
         now,
       });
       await this.mandates.save(mandate);
+      // The account is described by its masked form only.
+      this.audit.describeChanges({
+        mandate: { before: current?.reference ?? null, after: mandate.reference },
+        iban: { before: current?.iban.masked() ?? null, after: mandate.iban.masked() },
+      });
       return toMandateDto(mandate);
     });
   }

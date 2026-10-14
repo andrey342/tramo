@@ -11,6 +11,7 @@ import {
   type ContractInArrearsPayload,
 } from '@modules/billing/domain/events/billing-events';
 import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shared/application';
+import { CalendarDate } from '@shared/domain';
 
 import { RecordCollectionStatusCommand } from '../../application/commands/record-collection-status.command';
 import { RecordRepaymentCommand } from '../../application/commands/record-repayment.command';
@@ -120,11 +121,14 @@ export class DefaultOnChargeWrittenOff implements EventHandler<ChargeWrittenOffP
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<ChargeWrittenOffPayload>): Promise<void> {
+    // Events recorded before the day was carried have none.
+    const { writtenOffOn } = event.payload as Partial<ChargeWrittenOffPayload>;
     await this.commands.execute(
       new RecordCollectionStatusCommand(
         event.payload.contractId,
         'defaulted',
         new Date(event.occurredAt),
+        writtenOffOn ? CalendarDate.parse(writtenOffOn) : null,
       ),
     );
   }

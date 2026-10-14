@@ -76,7 +76,11 @@ describe('Charge', () => {
       expect.objectContaining({ eventType: BillingEvents.ChargeCreated }),
       expect.objectContaining({
         eventType: BillingEvents.ChargeWrittenOff,
-        payload: expect.objectContaining({ amountCents: 1_250_65, reason: 'contract_defaulted' }),
+        payload: expect.objectContaining({
+          amountCents: 1_250_65,
+          reason: 'contract_defaulted',
+          writtenOffOn: '2027-02-11',
+        }),
       }),
     ]);
     expect(charge.applyDunning(day('2027-06-01'), LATER)).toEqual({ retry: false });
@@ -371,6 +375,20 @@ describe('Charge', () => {
         events: [],
         status: 'written_off',
       });
+    });
+
+    // Another charge holds the contract in arrears already (or it defaulted): the step is applied
+    // without announcing it again.
+    it('should pass the arrears step quietly when the contract is in arrears already', () => {
+      const charge = fresh();
+
+      expect(charge.reachesArrears(day('2026-12-11'))).toBe(false);
+      expect(charge.reachesArrears(day('2026-12-12'))).toBe(true);
+      charge.applyDunning(day('2026-12-12'), LATER, true);
+
+      expect(eventTypes(charge)).not.toContain(BillingEvents.ContractInArrears);
+      expect(charge.inArrears).toBe(true);
+      expect(charge.reachesArrears(day('2026-12-13'))).toBe(false);
     });
 
     it('should catch up with every step a late run passed, retrying once', () => {

@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import { API_KEY_REPOSITORY, type ApiKeyRepository } from '../../domain';
@@ -22,6 +28,7 @@ export class RevokeApiKeyHandler implements ICommandHandler<RevokeApiKeyCommand>
   constructor(
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(API_KEY_REPOSITORY) private readonly apiKeys: ApiKeyRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -34,8 +41,12 @@ export class RevokeApiKeyHandler implements ICommandHandler<RevokeApiKeyCommand>
       if (apiKey?.centerId !== command.centerId) {
         throw new EntityNotFoundError('ApiKey', command.apiKeyId);
       }
+      const revokedBefore = apiKey.revokedAt?.toISOString() ?? null;
       apiKey.revoke(this.clock.now());
       await this.apiKeys.save(apiKey);
+      this.audit.describeChanges({
+        revokedAt: { before: revokedBefore, after: apiKey.revokedAt?.toISOString() ?? null },
+      });
     });
   }
 }

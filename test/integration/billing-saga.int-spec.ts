@@ -266,6 +266,8 @@ describe('billing saga (integration)', () => {
       },
     );
     expect(accelerated?.amount.cents).toBe(leftToBill);
+    // Dated by the dunning run that wrote instalment 1 off, not by the clock.
+    expect(accelerated?.dueDate.toString()).toBe(firstDue.addDays(90).toString());
   }, 60_000);
 
   // The payoff charge being collected for a contract (one per request).

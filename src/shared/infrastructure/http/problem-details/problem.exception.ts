@@ -8,7 +8,7 @@ import { titleFromCode } from './domain-error.mapper';
 // (a 503 the client should retry).
 export class ProblemException extends HttpException {
   constructor(
-    status: HttpStatus,
+    status: HttpStatus | number,
     readonly code: string,
     detail: string,
     readonly title: string = titleFromCode(code),

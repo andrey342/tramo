@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -38,6 +44,7 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
     @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
     @Inject(PAYMENT_MANDATE_REPOSITORY) private readonly mandates: PaymentMandateRepository,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -67,8 +74,13 @@ export class RetryChargeHandler implements ICommandHandler<RetryChargeCommand> {
       if (!mandate) {
         throw new MandateMissingError(charge.contractId);
       }
+      const before = { status: charge.status, attempt: charge.currentAttempt?.number ?? null };
       charge.retryCollection(mandate.id, this.clock.now());
       await this.charges.save(charge);
+      this.audit.describeChanges({
+        status: { before: before.status, after: charge.status },
+        attempt: { before: before.attempt, after: charge.currentAttempt?.number ?? null },
+      });
       return toChargeDto(charge);
     });
   }

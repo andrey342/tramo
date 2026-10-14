@@ -1,6 +1,12 @@
 import { uuidv7 } from 'uuidv7';
 
-import { InvalidStateTransitionError, InvalidValueError, Money, Percentage } from '@shared/domain';
+import {
+  CalendarDate,
+  InvalidStateTransitionError,
+  InvalidValueError,
+  Money,
+  Percentage,
+} from '@shared/domain';
 
 import {
   aContract,
@@ -307,6 +313,18 @@ describe('Contract', () => {
 
       expect(contract.status).toBe('active');
       expect(contract.arrearsChangedAt).toEqual(LATER);
+    });
+
+    // A catch-up run of dunning wrote the charge off as of another day than today.
+    it('should date the default by the write-off behind it, today when not known', () => {
+      const late = anActiveContract();
+      const now = anActiveContract();
+
+      late.declareDefault(LATER, CalendarDate.parse('2027-02-12'));
+      now.declareDefault(LATER);
+
+      expect(late.pullEvents()[0]?.payload['defaultedOn']).toBe('2027-02-12');
+      expect(now.pullEvents()[0]?.payload['defaultedOn']).toBe('2026-10-12');
     });
 
     it('should default from active or in arrears, once, and announce it', () => {

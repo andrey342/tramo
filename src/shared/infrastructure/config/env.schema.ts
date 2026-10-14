@@ -10,22 +10,28 @@ const commaSeparated = z
       .filter((item) => item.length > 0),
   );
 
+// `KEY=` in an env file means "not set": a flag left empty takes its default.
+const unsetWhenEmpty = (value: unknown): unknown => (value === '' ? undefined : value);
+const optionalFlag = z.preprocess(unsetWhenEmpty, z.stringbool().optional());
+const flagOff = z.preprocess(unsetWhenEmpty, z.stringbool().default(false));
+const flagOn = z.preprocess(unsetWhenEmpty, z.stringbool().default(true));
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3100),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  LOG_PRETTY: z.stringbool().default(false),
+  LOG_PRETTY: flagOff,
   CORS_ORIGINS: commaSeparated,
   THROTTLE_TTL_MS: z.coerce.number().int().min(1_000).default(60_000),
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),
   // Defaults to on, except in production.
-  SWAGGER_ENABLED: z.stringbool().optional(),
+  SWAGGER_ENABLED: optionalFlag,
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
-  DATABASE_LOG_QUERIES: z.stringbool().default(false),
-  DATABASE_RUN_MIGRATIONS: z.stringbool().default(false),
+  DATABASE_LOG_QUERIES: flagOff,
+  DATABASE_RUN_MIGRATIONS: flagOff,
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
   // HS256 signing key for access tokens. 32+ characters; rotate by redeploying (tokens live 15 min).
   JWT_ACCESS_SECRET: z.string().min(32),
@@ -81,12 +87,12 @@ export const envSchema = z.object({
   // how long.
   PSP_CALLBACK_URL: z.url().default('http://localhost:3000'),
   SIMULATED_PSP_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(2_000),
-  BILLING_FUTURE_RUNS_ENABLED: z.stringbool().optional(),
+  BILLING_FUTURE_RUNS_ENABLED: optionalFlag,
   // The mail server emails go through (Mailpit locally) and the sender they show.
   SMTP_HOST: z.string().min(1).default('localhost'),
   SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(1025),
   // TLS from the first byte (port 465); otherwise STARTTLS when the server offers it.
-  SMTP_SECURE: z.stringbool().default(false),
+  SMTP_SECURE: flagOff,
   SMTP_USER: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
   SMTP_PASSWORD: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
   EMAIL_FROM: z.string().min(3).default('Tramo <no-reply@tramo.test>'),
@@ -97,8 +103,8 @@ export const envSchema = z.object({
   // At most 100 s: the round (5 attempts, the delay doubling) then lasts under 15 minutes, the
   // time after which a pending round is taken for lost and may be redelivered.
   WEBHOOK_RETRY_DELAY_MS: z.coerce.number().int().min(10).max(100_000).default(30_000),
-  WEBHOOK_PRIVATE_TARGETS_ENABLED: z.stringbool().optional(),
-  OUTBOX_PUBLISHER_ENABLED: z.stringbool().default(true),
+  WEBHOOK_PRIVATE_TARGETS_ENABLED: optionalFlag,
+  OUTBOX_PUBLISHER_ENABLED: flagOn,
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).max(60_000).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
   // A batch whose jobs Redis has not accepted by then is rolled back and retried with backoff.

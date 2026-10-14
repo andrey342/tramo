@@ -79,6 +79,8 @@ export type ContractDefaultedPayload = {
   readonly contractId: string;
   readonly studentId: string;
   readonly centerId: string;
+  // The day of the write-off that defaulted it, as YYYY-MM-DD.
+  readonly defaultedOn: string;
 };
 
 export type DisbursementRequestedPayload = {

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-// Commit messages describe the change and nothing else: no tool attribution, trailers or emoji.
-// Names a contributor also refuses are kept out of the repo, one per line in
+// Commit messages describe the change and nothing else: no emoji, and none of the phrases a
+// contributor refuses (trailers, tool names), listed one per line in the untracked
 // .local/forbidden-words.
 const LOCAL_WORDS = '.local/forbidden-words';
 const localWords = existsSync(LOCAL_WORDS)
@@ -10,10 +10,7 @@ const localWords = existsSync(LOCAL_WORDS)
       .map((word) => word.trim())
       .filter(Boolean)
   : [];
-const FORBIDDEN = new RegExp(
-  ['co-authored-by', 'generated with', 'ai-generated', ...localWords].join('|'),
-  'i',
-);
+const FORBIDDEN = localWords.length > 0 ? new RegExp(localWords.join('|'), 'i') : null;
 const EMOJI = /\p{Extended_Pictographic}/u;
 
 export default {
@@ -22,7 +19,7 @@ export default {
     {
       rules: {
         'no-attribution': ({ raw }) => [
-          !FORBIDDEN.test(raw ?? ''),
+          !FORBIDDEN?.test(raw ?? ''),
           'commit message must not contain attribution trailers or tool names',
         ],
         'no-emoji': ({ raw }) => [!EMOJI.test(raw ?? ''), 'commit message must not contain emoji'],

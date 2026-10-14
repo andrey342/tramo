@@ -50,6 +50,10 @@ describe('Health (e2e)', () => {
       .set('Content-Type', 'application/json')
       .send('{"email":');
     const badId = await request(server).get('/api/v1/programs/not-a-uuid');
+    const tooLarge = await request(server)
+      .post('/api/v1/auth/login')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ email: 'a'.repeat(2_000_000) }));
 
     expect(outside.status).toBe(404);
     expect(outside.body).toMatchObject({ code: 'not_found', instance: '/nope' });
@@ -64,7 +68,9 @@ describe('Health (e2e)', () => {
       code: 'validation_error',
       errors: [{ field: 'programId', message: 'programId must be a UUID' }],
     });
-    for (const response of [outside, malformed, badId]) {
+    expect(tooLarge.status).toBe(413);
+    expect(tooLarge.body.code).toBe('payload_too_large');
+    for (const response of [outside, malformed, badId, tooLarge]) {
       expect(response.headers['content-type']).toContain('application/problem+json');
       expect(response.body.requestId).toEqual(response.headers['x-request-id']);
     }

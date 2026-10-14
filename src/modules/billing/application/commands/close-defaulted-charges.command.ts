@@ -18,7 +18,11 @@ export class CloseDefaultedChargesCommand extends Command<{
   readonly cancelled: number;
   readonly acceleratedCents: number;
 }> {
-  constructor(readonly contractId: string) {
+  constructor(
+    readonly contractId: string,
+    // The day of the default (that of the write-off behind it); today when not known.
+    readonly day: CalendarDate | null = null,
+  ) {
     super();
   }
 }
@@ -75,7 +79,7 @@ export class CloseDefaultedChargesHandler implements ICommandHandler<CloseDefaul
           studentId: contract.studentId,
           centerId: contract.centerId,
           amount: Money.fromCents(acceleratedCents),
-          today: CalendarDate.fromInstant(now),
+          today: command.day ?? CalendarDate.fromInstant(now),
           now,
         }),
       );

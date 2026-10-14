@@ -2,10 +2,13 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
 import { type CursorPage, type PageRequest, type Principal } from '@shared/application';
+import { EntityNotFoundError } from '@shared/domain';
 
 import { type WebhookDeliveryDto } from '../dto/notifications.dto';
 import { assertCanView } from '../notifications-access';
 import {
+  CENTERS,
+  type Centers,
   type DeliveryFilter,
   NOTIFICATIONS_QUERIES,
   type NotificationsQueries,
@@ -25,10 +28,16 @@ export class ListWebhookDeliveriesQuery extends Query<CursorPage<WebhookDelivery
 
 @QueryHandler(ListWebhookDeliveriesQuery)
 export class ListWebhookDeliveriesHandler implements IQueryHandler<ListWebhookDeliveriesQuery> {
-  constructor(@Inject(NOTIFICATIONS_QUERIES) private readonly queries: NotificationsQueries) {}
+  constructor(
+    @Inject(NOTIFICATIONS_QUERIES) private readonly queries: NotificationsQueries,
+    @Inject(CENTERS) private readonly centers: Centers,
+  ) {}
 
-  execute(query: ListWebhookDeliveriesQuery): Promise<CursorPage<WebhookDeliveryDto>> {
+  async execute(query: ListWebhookDeliveriesQuery): Promise<CursorPage<WebhookDeliveryDto>> {
     assertCanView(query.actor, query.centerId);
+    if (!(await this.centers.exists(query.centerId))) {
+      throw new EntityNotFoundError('TrainingCenter', query.centerId);
+    }
     return this.queries.listDeliveries(query.centerId, query.filter, query.page);
   }
 }

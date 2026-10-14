@@ -212,12 +212,15 @@ describe('Center users and API keys (e2e)', () => {
 
   it('should audit what the admins did', async () => {
     const { DataSource } = await import('typeorm');
-    const rows: { action: string }[] = await app
+    const rows: { action: string; changes: Record<string, unknown> | null }[] = await app
       .get(DataSource)
-      .query('SELECT action FROM shared.audit_log WHERE resource_id = $1', [centerId]);
+      .query('SELECT action, changes FROM shared.audit_log WHERE resource_id = $1', [centerId]);
 
     expect(rows.map((row) => row.action)).toEqual(
       expect.arrayContaining(['center_user.create', 'api_key.issue']),
     );
+    const issued = rows.find((row) => row.action === 'api_key.issue');
+    expect(issued?.changes).toMatchObject({ scopes: { before: null, after: expect.any(Array) } });
+    expect(JSON.stringify(issued?.changes)).not.toMatch(/tramo_[0-9a-f]{8}_/);
   });
 });

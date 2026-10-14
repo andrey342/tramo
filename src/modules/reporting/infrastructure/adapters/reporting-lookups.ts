@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import { type Queue } from 'bullmq';
 
+import { FindCenterQuery } from '@modules/catalog/application/dto/center-lookup';
 import { FindProgramQuery } from '@modules/catalog/application/dto/program-lookup';
 import { GetProgramScoresQuery } from '@modules/origination/application/dto/program-scores';
 import { QueueNames, withinQueueTimeout } from '@shared/infrastructure/queues';
@@ -20,6 +21,10 @@ export class CatalogPrograms implements Programs {
 
   async centerOf(programId: string): Promise<string | null> {
     return (await this.queries.execute(new FindProgramQuery(programId)))?.centerId ?? null;
+  }
+
+  async centerExists(centerId: string): Promise<boolean> {
+    return (await this.queries.execute(new FindCenterQuery(centerId))) !== null;
   }
 }
 

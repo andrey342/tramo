@@ -137,7 +137,7 @@ function setup() {
     contract,
     charge,
     mandate,
-    sign: new SignMandateHandler(uow, mandates, charges, plans, clock),
+    sign: new SignMandateHandler(uow, mandates, charges, plans, audit, clock),
     declare: new DeclareIncomeHandler(uow, declarations, plans, charges, clock),
     cycle: new RunBillingCycleHandler(uow, plans, charges, declarations, clock),
     collect: new CollectDueChargesHandler(uow, charges, mandates, clock),
@@ -145,7 +145,7 @@ function setup() {
     execute: new ExecuteChargeCollectionHandler(uow, charges, mandates, gateway),
     result: new RecordPaymentResultHandler(uow, charges, audit, clock),
     dunning: new RunDunningHandler(uow, charges, mandates, plans, clock),
-    retry: new RetryChargeHandler(uow, charges, mandates, plans, clock),
+    retry: new RetryChargeHandler(uow, charges, mandates, plans, audit, clock),
     payoff: new CreatePayoffChargeHandler(uow, charges, mandates, plans, clock),
     cancel: new CancelOpenChargesHandler(uow, charges, clock),
     closeDefaulted: new CloseDefaultedChargesHandler(uow, charges, plans, clock),
@@ -736,6 +736,30 @@ describe('billing use cases', () => {
       expect((await t.charges.findById(charge.id))?.status).toBe('written_off');
       expect(after.chargesReviewed).toBe(0);
     });
+
+    // The student and the center hear of the arrears once: not again when the next instalment
+    // reaches 30 days, nor once the contract has defaulted.
+    it('should announce a contract in arrears once, and never after its default', async () => {
+      const t = setup();
+      const inArrears = t.contract();
+      await t.charge({ contractId: inArrears });
+      await t.charge({
+        contractId: inArrears,
+        reference: 'installment:2',
+        installmentNumber: 2,
+        dueDate: '2026-12-12',
+      });
+      const defaulted = t.contract('installments', 'defaulted');
+      await t.charge({ contractId: defaulted });
+
+      await t.dunning.execute(new RunDunningCommand(day('2026-12-12')));
+      await t.dunning.execute(new RunDunningCommand(day('2027-01-11')));
+
+      const announced = t.events.ofType(BillingEvents.ContractInArrears);
+      expect(announced.map((event) => event.payload['contractId'])).toEqual([inArrears]);
+      const second = await t.charges.findByReference(inArrears, 'installment:2');
+      expect(second?.inArrears).toBe(true);
+    });
   });
 
   describe('end of a plan', () => {
@@ -986,7 +1010,9 @@ describe('billing use cases', () => {
       });
       t.events.published.length = 0;
 
-      const closed = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
+      const closed = await t.closeDefaulted.execute(
+        new CloseDefaultedChargesCommand(contractId, day('2027-02-12')),
+      );
       const again = await t.closeDefaulted.execute(new CloseDefaultedChargesCommand(contractId));
 
       const accelerated = await t.charges.findByReference(contractId, 'accelerated');
@@ -996,6 +1022,8 @@ describe('billing use cases', () => {
       expect((await t.charges.findById(collecting.id))?.status).toBe('pending');
       expect(accelerated).toMatchObject({ kind: 'accelerated', status: 'written_off' });
       expect(accelerated?.amount.cents).toBe(430_00);
+      // Dated by the default, not by the clock: a catch-up run writes off as of its own day.
+      expect(accelerated?.dueDate.toString()).toBe('2027-02-12');
       expect(t.events.published.map((event) => event.eventType)).toEqual([
         'ChargeCancelled',
         'ChargeCreated',

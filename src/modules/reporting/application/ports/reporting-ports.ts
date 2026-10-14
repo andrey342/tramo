@@ -98,9 +98,11 @@ export interface ReportingStore {
   opsFigures(today: string): Promise<OpsFiguresDto>;
 }
 
-// Which center offers a program (catalog), to keep a center to its own programs.
+// Which center offers a program (catalog), to keep a center to its own programs, and whether a
+// center exists at all.
 export interface Programs {
   centerOf(programId: string): Promise<string | null>;
+  centerExists(centerId: string): Promise<boolean>;
 }
 
 // How a program's applicants scored, as an aggregate (origination keeps the scores).

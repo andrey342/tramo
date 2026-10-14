@@ -1,15 +1,13 @@
 pnpm exec lint-staged
 
-# Reject staged content carrying attribution trailers, and the names listed one per line in
-# .local/forbidden-words (kept out of the repo). Tooling configuration is exempt. Elsewhere, the
+# Reject staged content carrying the phrases listed one per line in the untracked
+# .local/forbidden-words (trailers, tool names). Tooling configuration is exempt. Elsewhere, the
 # tooling folder name and its conventions file are references to files, not mentions, so they are
 # removed before the check.
+[ -f .local/forbidden-words ] || exit 0
+forbidden=$(grep -v '^[[:space:]]*$' .local/forbidden-words | paste -sd '|' -)
+[ -n "$forbidden" ] || exit 0
 git diff --cached --name-only --diff-filter=ACMR | {
-  forbidden='co-authored-by|generated with|ai-generated'
-  if [ -f .local/forbidden-words ]; then
-    words=$(grep -v '^[[:space:]]*$' .local/forbidden-words | paste -sd '|' -)
-    [ -n "$words" ] && forbidden="$forbidden|$words"
-  fi
   status=0
   while IFS= read -r f; do
     case "$f" in

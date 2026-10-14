@@ -140,6 +140,9 @@ export type ChargeWrittenOffPayload = {
   readonly centerId: string;
   readonly amountCents: number;
   readonly reason: 'dunning_exhausted' | 'contract_defaulted';
+  // The day it was written off, as YYYY-MM-DD: the day dunning ran as of, which a catch-up run
+  // sets in the past or, where enabled, the future.
+  readonly writtenOffOn: string;
 };
 
 export type ChargeCancelledPayload = {
