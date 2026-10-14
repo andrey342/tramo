@@ -26,6 +26,7 @@ export function configureHttpApp(app: INestApplication, config: AppConfig): void
   }
   app.use(helmet());
   app.enableCors({ origin: [...config.http.corsOrigins], credentials: false });
+  app.use(`/${API_PREFIX}`, refuseBodiesThatAreNotJson);
   app.setGlobalPrefix(API_PREFIX, {
     exclude: [
       { path: 'health/live', method: RequestMethod.GET },
@@ -48,16 +49,56 @@ export function configureHttpApp(app: INestApplication, config: AppConfig): void
 export function answerUnknownPaths(app: INestApplication): void {
   (app.getHttpAdapter().getInstance() as Express).use((request: Request, response: Response) => {
     const path = request.originalUrl.split('?', 1)[0] ?? '/';
-    const status = HttpStatus.NOT_FOUND;
-    const problem: ProblemDetails = {
-      type: 'about:blank',
-      title: statusTitle(status),
-      status,
-      detail: `No route matches ${request.method} ${path}.`,
-      code: statusCode(status),
-      instance: path,
-      requestId: resolveRequestId(request, response),
-    };
-    response.status(status).type(PROBLEM_CONTENT_TYPE).json(problem);
+    sendProblem(
+      request,
+      response,
+      HttpStatus.NOT_FOUND,
+      `No route matches ${request.method} ${path}.`,
+    );
   });
+}
+
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+// The api reads JSON only. A body of another type (a form, plain text) is refused before anything
+// parses it, instead of being read as a form or silently taken as empty.
+function refuseBodiesThatAreNotJson(request: Request, response: Response, next: () => void): void {
+  const hasBody =
+    Number(request.headers['content-length'] ?? 0) > 0 ||
+    request.headers['transfer-encoding'] !== undefined;
+  if (
+    !BODY_METHODS.has(request.method) ||
+    !hasBody ||
+    request.is(['application/json', 'application/*+json'])
+  ) {
+    next();
+    return;
+  }
+  sendProblem(
+    request,
+    response,
+    HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+    'The request body must be JSON (Content-Type: application/json).',
+    'unsupported_media_type',
+  );
+}
+
+function sendProblem(
+  request: Request,
+  response: Response,
+  status: HttpStatus,
+  detail: string,
+  code: string = statusCode(status),
+): void {
+  const path = request.originalUrl.split('?', 1)[0] ?? '/';
+  const problem: ProblemDetails = {
+    type: 'about:blank',
+    title: statusTitle(status),
+    status,
+    detail,
+    code,
+    instance: path,
+    requestId: resolveRequestId(request, response),
+  };
+  response.status(status).type(PROBLEM_CONTENT_TYPE).json(problem);
 }
