@@ -250,7 +250,7 @@ export class LedgerOnChargeCancelled implements EventHandler<ChargeCancelledPayl
       amountCents: -amountCents,
       description:
         reason === 'payoff_failed'
-          ? 'Cancelled: the payoff was refused'
+          ? 'Cancelled: the payoff could not be collected'
           : 'Cancelled: the plan ended',
       occurredAt: new Date(event.occurredAt),
     });

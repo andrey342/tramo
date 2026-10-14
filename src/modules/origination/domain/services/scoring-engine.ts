@@ -201,10 +201,12 @@ function reasons(
         : `Low ${FACTOR_LABELS[factor.name]} (${String(Math.round(factor.value * 100))} %).`,
     );
   const income = assessedIncome(input);
-  const unsupported = input.profile.declaredMonthlyIncome.gt(income)
-    ? [
-        `The declared income (${input.profile.declaredMonthlyIncome.toString()}) is above what the employment record shows; ${income.toString()} was used.`,
-      ]
-    : [];
+  // An ISA's affordability does not depend on the income, so nothing about it is said there.
+  const unsupported =
+    input.product.kind !== 'isa' && input.profile.declaredMonthlyIncome.gt(income)
+      ? [
+          `The declared income (${input.profile.declaredMonthlyIncome.toString()}) is above what the employment record shows; ${income.toString()} was used.`,
+        ]
+      : [];
   return [verdict, ...weak, ...unsupported];
 }
