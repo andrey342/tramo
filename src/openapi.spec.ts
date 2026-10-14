@@ -202,4 +202,21 @@ describe('OpenAPI document', () => {
       type: 'integer',
     });
   });
+
+  // Statuses the pipeline answers whatever the handler: a client generated from the document
+  // knows to retry a 503 or a 429 and that only JSON bodies are taken.
+  it('should document the statuses the pipeline answers on every route', () => {
+    const document = buildOpenApiDocument(app);
+    const at = (suffix: string) =>
+      Object.entries(document.paths).find(([path]) => path.endsWith(suffix))?.[1].post;
+    const login = at('/auth/login');
+    const quote = at('/contracts/{contractId}/payoff-quote');
+    const pspCallback = at('/webhooks/psp');
+
+    expect(Object.keys(login?.responses ?? {})).toEqual(
+      expect.arrayContaining(['413', '415', '429', '503']),
+    );
+    expect((quote?.requestBody as { required?: boolean } | undefined)?.required).toBe(false);
+    expect(Object.keys(pspCallback?.responses ?? {})).not.toContain('429');
+  });
 });
