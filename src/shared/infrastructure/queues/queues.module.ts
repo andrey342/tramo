@@ -4,6 +4,7 @@ import { Global, Module } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../config';
 
 import { DeadLetterQueue } from './dead-letter.queue';
+import { QueueErrorLogger } from './queue-error-logger';
 import { ALL_QUEUES } from './queue-names';
 import { bullConnection } from './redis-connection';
 
@@ -30,7 +31,7 @@ const DAY_SECONDS = 24 * 60 * 60;
     }),
     BullModule.registerQueue(...ALL_QUEUES.map((name) => ({ name }))),
   ],
-  providers: [DeadLetterQueue],
+  providers: [DeadLetterQueue, QueueErrorLogger],
   exports: [BullModule, DeadLetterQueue],
 })
 export class QueuesModule {}
