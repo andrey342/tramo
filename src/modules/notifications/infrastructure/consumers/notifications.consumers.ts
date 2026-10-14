@@ -13,6 +13,7 @@ import {
 import { IamEvents, type StudentRegisteredPayload } from '@modules/iam/domain/events/iam-events';
 import {
   type ContractDefaultedPayload,
+  type PayoffWithdrawnPayload,
   type ContractSentForSignaturePayload,
   type ContractSignedPayload,
   type DisbursementSettledPayload,
@@ -528,6 +529,46 @@ export class WebhookOnContractDefaulted
   }
 }
 
+// The default ends the contract: the student is told the debt now goes to collections.
+@Injectable()
+@EventSubscriber({
+  event: LendingEvents.ContractDefaulted,
+  consumer: 'notifications.email-contract-defaulted',
+})
+export class EmailOnContractDefaulted
+  extends EmailConsumer<ContractDefaultedPayload>
+  implements EventHandler<ContractDefaultedPayload>
+{
+  protected request(payload: ContractDefaultedPayload): Omit<EmailRequest, 'eventId'> {
+    return {
+      template: 'contract_defaulted',
+      to: { userId: payload.studentId },
+      reference: payload.contractId,
+      data: {},
+    };
+  }
+}
+
+// The payoff the student asked for was refused or could not be collected: the plan goes on.
+@Injectable()
+@EventSubscriber({
+  event: LendingEvents.PayoffWithdrawn,
+  consumer: 'notifications.email-payoff-withdrawn',
+})
+export class EmailOnPayoffWithdrawn
+  extends EmailConsumer<PayoffWithdrawnPayload>
+  implements EventHandler<PayoffWithdrawnPayload>
+{
+  protected request(payload: PayoffWithdrawnPayload): Omit<EmailRequest, 'eventId'> {
+    return {
+      template: 'payoff_withdrawn',
+      to: { userId: payload.studentId },
+      reference: payload.contractId,
+      data: {},
+    };
+  }
+}
+
 export const NOTIFICATION_CONSUMERS = [
   SendOnEmailRequested,
   DeliverOnWebhookDeliveryRequested,
@@ -542,6 +583,8 @@ export const NOTIFICATION_CONSUMERS = [
   EmailOnChargeOverdue,
   EmailOnChargeReturned,
   EmailOnContractInArrears,
+  EmailOnContractDefaulted,
+  EmailOnPayoffWithdrawn,
   EmailOnIncomeDeclarationDue,
   EmailOnIsaDeclarationOverdue,
   WebhookOnApplicationSubmitted,

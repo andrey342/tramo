@@ -15,6 +15,8 @@ export const EMAIL_TEMPLATES = [
   'isa_declaration_reminder',
   'isa_declaration_overdue',
   'payment_returned',
+  'contract_defaulted',
+  'payoff_withdrawn',
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 

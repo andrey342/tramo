@@ -10,6 +10,8 @@ import {
   EmailOnApplicationRejected,
   EmailOnChargeOverdue,
   EmailOnChargeReturned,
+  EmailOnContractDefaulted,
+  EmailOnPayoffWithdrawn,
   EmailOnDisbursementSettled,
   EmailOnIsaDeclarationOverdue,
   WebhookOnApplicationRejected,
@@ -167,6 +169,35 @@ describe('notifications consumers', () => {
       reference: 'c-1',
       data: { amountCents: 338_86, kind: 'installment', reason: 'MD06', payoff: false },
     });
+  });
+
+  it('should tell the student when the contract defaults and when a payoff is withdrawn', async () => {
+    const { commands, executed } = recorded();
+
+    await new EmailOnContractDefaulted(commands).handle(
+      event('ContractDefaulted', {
+        contractId: 'c-1',
+        studentId: 's-1',
+        centerId: 'center-1',
+        defaultedOn: '2027-02-12',
+      }),
+    );
+    await new EmailOnPayoffWithdrawn(commands).handle(
+      event('PayoffWithdrawn', { planId: 'p-1', contractId: 'c-2', studentId: 's-2' }),
+    );
+
+    expect(executed.map((command) => (command as RequestEmailCommand).request)).toEqual([
+      expect.objectContaining({
+        template: 'contract_defaulted',
+        to: { userId: 's-1' },
+        reference: 'c-1',
+      }),
+      expect.objectContaining({
+        template: 'payoff_withdrawn',
+        to: { userId: 's-2' },
+        reference: 'c-2',
+      }),
+    ]);
   });
 
   it('should tell the center of a decision and of arrears, without personal data', async () => {

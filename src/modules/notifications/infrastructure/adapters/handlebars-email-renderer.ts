@@ -90,6 +90,20 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
       '{{#if payoff}}An early repayment is not taken again on its own: contact us to settle it.{{else}}We will try the direct debit again in a few days; please make sure your account accepts it, or contact us.{{/if}}',
     ],
   },
+  contract_defaulted: {
+    subject: 'Your contract has defaulted',
+    body: [
+      'A payment of your contract stayed unpaid for 90 days, so the contract has defaulted: what is left to repay is now due and has been passed to our collections team.',
+      'Please contact us to agree how to settle it.',
+    ],
+  },
+  payoff_withdrawn: {
+    subject: 'Your early repayment could not be collected',
+    body: [
+      'We could not collect the early repayment you asked for, so your contract goes on as before and your next instalments are collected as usual.',
+      'You may ask for a payoff again once your account can cover it.',
+    ],
+  },
   isa_declaration_overdue: {
     subject: 'Your income declarations are missing since {{missingSince}}',
     body: [
