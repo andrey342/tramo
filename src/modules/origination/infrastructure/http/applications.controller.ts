@@ -181,7 +181,7 @@ export class ApplicationsController {
   }
 
   @Get(':applicationId/decision')
-  @ApiProblems(400, 401, 403, 404)
+  @ApiProblems(400, 401, 403, 404, 409)
   @ApiOkResponse({ type: DecisionResponse })
   @Roles('student', 'ops', 'admin')
   @ApiOperation({

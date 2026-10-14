@@ -17,6 +17,7 @@ import {
 import { InlineUnitOfWork, RecordingEventBus } from '../../../../test/fakes/shared';
 import {
   ApplicationAccessDeniedError,
+  DecisionPendingError,
   ApplicationIncompleteError,
   OriginationEvents,
   ProfileFromStudentOnlyError,
@@ -415,7 +416,7 @@ describe('application use cases', () => {
       ).rejects.toThrow(ApplicationAccessDeniedError);
       await expect(
         t.decision.execute(new GetApplicationDecisionQuery(ANA, pending)),
-      ).rejects.toThrow(EntityNotFoundError);
+      ).rejects.toThrow(DecisionPendingError);
     });
 
     it('should list what each caller may see', async () => {

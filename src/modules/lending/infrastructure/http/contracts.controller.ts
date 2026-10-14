@@ -94,7 +94,7 @@ export class ContractsController {
   }
 
   @Get(':contractId/schedule')
-  @ApiProblems(400, 401, 403, 404)
+  @ApiProblems(400, 401, 403, 404, 409)
   @ApiOkResponse({ type: ScheduleResponse })
   @Roles('student', 'ops', 'admin')
   @ApiOperation({

@@ -2,13 +2,13 @@ import { Inject } from '@nestjs/common';
 import { type IQueryHandler, Query, QueryHandler } from '@nestjs/cqrs';
 
 import { type Principal } from '@shared/application';
-import { EntityNotFoundError } from '@shared/domain';
 
 import {
   CONTRACT_REPOSITORY,
   type ContractRepository,
   FINANCING_PLAN_REPOSITORY,
   type FinancingPlanRepository,
+  PlanNotOpenError,
 } from '../../domain';
 import { canSeeRepayment, findVisibleContract } from '../contract-access';
 import { toScheduleDto } from '../contract.mapping';
@@ -41,7 +41,7 @@ export class GetContractScheduleHandler implements IQueryHandler<GetContractSche
     );
     const plan = await this.plans.findByContractId(contract.id);
     if (!plan) {
-      throw new EntityNotFoundError('FinancingPlan', contract.id);
+      throw new PlanNotOpenError(contract.id);
     }
     return toScheduleDto(plan);
   }
