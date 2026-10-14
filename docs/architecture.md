@@ -475,7 +475,9 @@ the repayment plan.
   carried one), not the day the consumer gets to it, so a backlog does not move the schedule;
   `ContractActivated` opens its plan (ADR 016): the instalment table, stored with the plan, or
   the ISA terms with their running totals, assessed month by month without gaps. `PlanCompleted`
-  completes the contract.
+  completes the contract. An ISA whose cap, last payment or window is reached assesses no more
+  months and completes once billing has collected every month charged (`ChargePaid` and
+  `ChargeReturned` carry the month).
 - **Payoff.** For instalments, `POST /contracts/:id/payoff-quote` gives what repaying everything
   costs today or on a day in the coming month; `POST /contracts/:id/payoff` takes today's quote
   (the plan refuses another amount with `payoff_quote_changed`) and records it
@@ -536,7 +538,7 @@ through a payment provider, dunning, ISA income declarations and the account sta
   being collected), a charge for each instalment falling due by the end of the month, and for an
   ISA each month of income whose declarations have closed (on the 5th of the next month),
   assessed by the rules of lending on the income declared (ADR 017) and due that day, until the
-  month that ends the plan. A charge
+  month after which none is assessed. A charge
   billed late is due on the day of the run, so dunning counts from when the student could pay.
   Charges are unique per contract and reference (`installment:3`, `isa:2026-07`,
   `payoff:<request>`): a second run creates nothing. One plan per transaction; the run goes on

@@ -262,7 +262,12 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
     a row without a declaration publish `IsaDeclarationOverdue`, once until a declaration clears
     it: the student is emailed (`isa_declaration_overdue`) and staff see `declarationOverdue` on
     the contract's schedule (`GET /contracts/:id/schedule`); the ops overview does not count it.
-    The plan ends at the cap, at `maxPayments` or once a month starts after the window.
+    No month is assessed after the cap, `maxPayments` or once a month starts after the window
+    (`assessmentsEnded` on the schedule); the plan then ends with that reason when every month
+    charged has been collected (`uncollectedPeriods` lists those still owed), as a loan ends with
+    its last instalment. Until then the contract is being repaid: a mandate can be signed,
+    arrears and default apply, and a declaration is refused (`income_share_assessed`). A payment
+    returned marks its month uncollected again.
 - **Payoff / payoff quote** (`PayoffQuote`): instalments only. What repaying everything costs on
   a day: instalments due and unpaid, the outstanding principal and the interest accrued since the
   last due date, no fee. `POST /contracts/:id/payoff` takes today's quote and records a

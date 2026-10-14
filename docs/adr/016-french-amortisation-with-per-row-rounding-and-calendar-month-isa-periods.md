@@ -52,8 +52,9 @@ the 5th the month is assessed and its charge falls due. Each month is assessed o
 without gaps: at or above the threshold the student pays the share of the income declared, never
 past the cap; below it, or without a declaration, the month is paused and owes nothing; two months
 in a row without a declaration mark the plan overdue: the student is told, and staff see it on the
-schedule. The plan ends at the cap, at the last payment, or when a month starts after the window.
-Amounts count towards the cap when they are charged.
+schedule. No month is assessed after the cap, the last payment, or once a month starts after the
+window; the plan ends when every month charged has been collected, so arrears and default still
+apply to what the student owes until then. Amounts count towards the cap when they are charged.
 
 Option 1 is fairer to the day but gives a different instalment each month, which the offer cannot
 state as one figure. Option 3 produces rows whose interest and principal do not add up to the
