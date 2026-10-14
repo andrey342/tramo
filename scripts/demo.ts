@@ -36,6 +36,13 @@ const local = (port: string | undefined, fallback: string): string =>
 const apiUrl = process.env['API_URL'] ?? local(process.env['API_PORT'], '3000');
 const mailpitUrl = process.env['MAILPIT_URL'] ?? local(process.env['MAILPIT_UI_PORT'], '8025');
 const sinkUrl = process.env['WEBHOOK_SINK_URL'] ?? local(process.env['WEBHOOK_SINK_PORT'], '9099');
+// Inside the api container the services are reached by their compose names; the reader opens
+// them on the ports compose publishes on the host.
+const PUBLISHED: Readonly<Record<string, string>> = {
+  mailpit: 'http://localhost:8025',
+  'webhook-sink': 'http://localhost:9099',
+};
+const shown = (url: string): string => PUBLISHED[new URL(url).hostname] ?? url;
 const base = `${apiUrl}/api/v1`;
 
 let step = 0;
@@ -297,20 +304,24 @@ async function main(): Promise<void> {
       );
       return received ? found : null;
     });
-    detail(`${String(mail.messages_count ?? 0)} emails to ${email} in Mailpit (${mailpitUrl}):`);
+    detail(
+      `${String(mail.messages_count ?? 0)} emails to ${email} in Mailpit (${shown(mailpitUrl)}):`,
+    );
     for (const message of mail.messages ?? []) detail(`  ${String(message['Subject'])}`);
   } catch {
-    detail(`emails: see Mailpit at ${mailpitUrl}`);
+    detail(`emails: see Mailpit at ${shown(mailpitUrl)}`);
   }
   try {
     const sink = (await fetch(`${sinkUrl}/deliveries`).then((response) => response.json())) as {
       data: Json[];
     };
     const ours = sink.data.filter((delivery) => JSON.stringify(delivery).includes(contractId));
-    detail(`${String(ours.length)} signed webhooks about this contract at the sink (${sinkUrl}):`);
+    detail(
+      `${String(ours.length)} signed webhooks about this contract at the sink (${shown(sinkUrl)}/deliveries):`,
+    );
     for (const delivery of ours) detail(`  ${String(delivery['event'])}`);
   } catch {
-    detail(`webhooks: see the sink at ${sinkUrl}/deliveries`);
+    detail(`webhooks: see the sink at ${shown(sinkUrl)}/deliveries`);
   }
   process.stdout.write('\nDone.\n');
 }
