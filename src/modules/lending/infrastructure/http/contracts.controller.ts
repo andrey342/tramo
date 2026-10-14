@@ -1,20 +1,15 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Header,
-  HttpCode,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import {
+  ApiCursorPaginated,
+  ApiProblems,
+  Idempotent,
+  ParseIdPipe,
+} from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -79,7 +74,7 @@ export class ContractsController {
   @ApiOperation({ summary: 'A contract; what the center is paid is not shown to the student' })
   get(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
   ): Promise<ContractDto> {
     return this.queries.execute(new GetContractQuery(actor, contractId));
   }
@@ -93,7 +88,7 @@ export class ContractsController {
   @ApiOperation({ summary: 'The contract text the student signs' })
   document(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
   ): Promise<string> {
     return this.queries.execute(new GetContractDocumentQuery(actor, contractId));
   }
@@ -107,7 +102,7 @@ export class ContractsController {
   })
   schedule(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
   ): Promise<ScheduleDto> {
     return this.queries.execute(new GetContractScheduleQuery(actor, contractId));
   }
@@ -122,7 +117,7 @@ export class ContractsController {
   })
   payoffQuote(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
     @Body() body: PayoffQuoteRequest,
   ): Promise<PayoffQuoteDto> {
     return this.queries.execute(new GetPayoffQuoteQuery(actor, contractId, body.asOf));
@@ -140,7 +135,7 @@ export class ContractsController {
   })
   payoff(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
     @Body() body: PayoffRequest,
   ): Promise<PayoffQuoteDto> {
     return this.commands.execute(new RequestPayoffCommand(actor, contractId, body.amountCents));

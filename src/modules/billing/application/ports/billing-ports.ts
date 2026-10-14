@@ -62,6 +62,11 @@ export interface RepaymentPlans {
     limit: number,
     contractId?: string | null,
   ): Promise<readonly BillablePlan[]>;
+  // The principal of each instalment of a loan not paid yet, whatever the plan's state; null for
+  // an ISA.
+  unpaidPrincipal(
+    contractId: string,
+  ): Promise<readonly { readonly number: number; readonly principalCents: number }[] | null>;
   // Lending's ISA rules applied to the income declared for a month (null if none was).
   assessIsaPeriod(
     contractId: string,

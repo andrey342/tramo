@@ -30,9 +30,12 @@ type Json = Record<string, unknown>;
 if (existsSync('.env')) {
   process.loadEnvFile('.env');
 }
-const apiUrl = process.env['API_URL'] ?? 'http://localhost:3000';
-const mailpitUrl = process.env['MAILPIT_URL'] ?? 'http://localhost:8025';
-const sinkUrl = process.env['WEBHOOK_SINK_URL'] ?? 'http://localhost:9099';
+// The host ports compose publishes (API_PORT and the others in .env), unless a URL is given.
+const local = (port: string | undefined, fallback: string): string =>
+  `http://localhost:${port || fallback}`;
+const apiUrl = process.env['API_URL'] ?? local(process.env['API_PORT'], '3000');
+const mailpitUrl = process.env['MAILPIT_URL'] ?? local(process.env['MAILPIT_UI_PORT'], '8025');
+const sinkUrl = process.env['WEBHOOK_SINK_URL'] ?? local(process.env['WEBHOOK_SINK_PORT'], '9099');
 const base = `${apiUrl}/api/v1`;
 
 let step = 0;
@@ -284,9 +287,16 @@ async function main(): Promise<void> {
 
   say('What left the system');
   try {
-    const mail = (await fetch(
-      `${mailpitUrl}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`,
-    ).then((response) => response.json())) as { messages_count?: number; messages?: Json[] };
+    // The receipt is sent from the payment's event, a moment after the charge is paid.
+    const mail = await until('the receipt in Mailpit', async () => {
+      const found = (await fetch(
+        `${mailpitUrl}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`,
+      ).then((response) => response.json())) as { messages_count?: number; messages?: Json[] };
+      const received = (found.messages ?? []).some((message) =>
+        String(message['Subject']).startsWith('We have collected'),
+      );
+      return received ? found : null;
+    });
     detail(`${String(mail.messages_count ?? 0)} emails to ${email} in Mailpit (${mailpitUrl}):`);
     for (const message of mail.messages ?? []) detail(`  ${String(message['Subject'])}`);
   } catch {

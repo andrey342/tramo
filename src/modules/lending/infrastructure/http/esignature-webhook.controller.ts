@@ -19,7 +19,12 @@ import { type Request } from 'express';
 import { CLOCK, type Clock } from '@shared/domain';
 import { Audited } from '@shared/infrastructure/audit';
 import { APP_CONFIG, type AppConfig } from '@shared/infrastructure/config';
-import { ApiProblems, ProblemException, verifyWebhook } from '@shared/infrastructure/http';
+import {
+  ApiProblems,
+  ProblemException,
+  signatureFailure,
+  verifyWebhook,
+} from '@shared/infrastructure/http';
 import { Public } from '@shared/infrastructure/http/access.decorators';
 
 import {
@@ -61,7 +66,7 @@ export class ESignatureSignatureGuard implements CanActivate {
       throw new ProblemException(
         HttpStatus.UNAUTHORIZED,
         'invalid_webhook_signature',
-        `The webhook signature is ${verification.reason}.`,
+        signatureFailure(verification.reason),
       );
     }
     return true;

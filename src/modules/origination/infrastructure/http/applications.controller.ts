@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -19,6 +9,7 @@ import {
   ApiProblems,
   AuthRateLimited,
   Idempotent,
+  ParseIdPipe,
 } from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
@@ -88,7 +79,7 @@ export class ApplicationsController {
   @ApiOperation({ summary: 'Complete or change a draft' })
   update(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
     @Body() body: UpdateApplicationRequest,
   ): Promise<ApplicationDto> {
     return this.commands.execute(
@@ -116,7 +107,7 @@ export class ApplicationsController {
   })
   submit(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
   ): Promise<ApplicationDto> {
     return this.commands.execute(new SubmitApplicationCommand(actor, applicationId));
   }
@@ -135,7 +126,7 @@ export class ApplicationsController {
   @ApiOperation({ summary: 'Accept an approved offer; lending then draws up the contract' })
   acceptOffer(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
   ): Promise<ApplicationDto> {
     return this.commands.execute(new AcceptOfferCommand(actor, applicationId));
   }
@@ -153,7 +144,7 @@ export class ApplicationsController {
   @ApiOperation({ summary: 'Withdraw an application that is not final yet' })
   cancel(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
   ): Promise<ApplicationDto> {
     return this.commands.execute(new CancelApplicationCommand(actor, applicationId));
   }
@@ -184,7 +175,7 @@ export class ApplicationsController {
   @ApiOperation({ summary: 'An application; its center does not see the personal data' })
   get(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
   ): Promise<ApplicationDto> {
     return this.queries.execute(new GetApplicationQuery(actor, applicationId));
   }
@@ -198,7 +189,7 @@ export class ApplicationsController {
   })
   decision(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
   ): Promise<DecisionDto> {
     return this.queries.execute(new GetApplicationDecisionQuery(actor, applicationId));
   }

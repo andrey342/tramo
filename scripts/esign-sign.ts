@@ -1,8 +1,8 @@
 // Plays the e-signature provider for the demo: the student signs (or declines) a contract and the
 // provider posts its signed callback to the api.
 //   pnpm esign:sign <contractId> [--decline]
-// Reads API_URL (default http://localhost:3000) and ESIGN_WEBHOOK_SECRET from .env, and looks the
-// envelope up as the demo ops user. Local and demo use only.
+// Reads API_URL (default http://localhost on API_PORT, 3000) and ESIGN_WEBHOOK_SECRET from .env,
+// and looks the envelope up as the demo ops user. Local and demo use only.
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
       'usage: pnpm esign:sign <contractId> [--decline], with ESIGN_WEBHOOK_SECRET set',
     );
   }
-  const apiUrl = process.env.API_URL ?? 'http://localhost:3000';
+  const apiUrl = process.env.API_URL ?? `http://localhost:${process.env.API_PORT || '3000'}`;
   // It signs with the webhook secret: pointed at a real deployment it would sign contracts and
   // release payments. Local stacks only.
   if (process.env.NODE_ENV === 'production' || !LOCAL_HOSTS.has(new URL(apiUrl).hostname)) {

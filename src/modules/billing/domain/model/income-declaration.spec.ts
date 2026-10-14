@@ -85,6 +85,26 @@ describe('IncomeDeclaration', () => {
     );
   });
 
+  // The demo walks an ISA through months still to come: the windows follow the day given.
+  it('should judge the windows on a day to come when given, never on a past one', () => {
+    const asOf = (day: string, period: string) =>
+      IncomeDeclaration.declare({
+        id: uuidv7(),
+        contractId: uuidv7(),
+        studentId: uuidv7(),
+        period,
+        grossMonthlyIncome: Money.fromCents(2_000_00),
+        source: 'self',
+        asOf: CalendarDate.parse(day),
+        now: NOW,
+      });
+
+    expect(asOf('2027-03-02', '2027-02').period).toBe('2027-02');
+    expect(() => asOf('2027-03-05', '2027-02')).toThrow(PeriodNotOpenError);
+    expect(() => asOf('2027-03-02', '2027-04')).toThrow(InvalidPeriodError);
+    expect(() => asOf('2020-01-02', '2019-12')).toThrow(InvalidValueError);
+  });
+
   it('should refuse a month lending has assessed even while its window is open', () => {
     const third = new Date('2026-12-03T10:00:00Z');
 

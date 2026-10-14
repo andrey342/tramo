@@ -487,6 +487,7 @@ export class FinancingApplication extends AggregateRoot {
         applicationId: this.id,
         applicantId: this.props.applicantId,
         centerId: this.centerId,
+        programId: this.props.program.programId,
         reasonCodes,
         decidedBy,
       },

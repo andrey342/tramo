@@ -41,7 +41,7 @@ describe('Billing (e2e)', () => {
 
   // A registered student with an active contract activated today (24 instalments, or an ISA),
   // as lending leaves it once the center is paid.
-  async function studentWithContract(isa = false) {
+  async function studentWithContract(isa = false, isaActivatedToday = false) {
     const email = `payer-${uuidv7().slice(-12)}@example.com`;
     await api().post('/api/v1/auth/register').send({ email, password: TEST_PASSWORD });
     const token = await accessTokenFor(app, { email, password: TEST_PASSWORD });
@@ -61,7 +61,7 @@ describe('Billing (e2e)', () => {
         // An ISA activated a year ago is in its months of repayment.
         aPlan({
           contractId: contract.id,
-          activatedOn: (isa ? today.addMonths(-12) : today).toString(),
+          activatedOn: (isa && !isaActivatedToday ? today.addMonths(-12) : today).toString(),
           ...(isa ? { product: anIsa() } : {}),
         }),
       );
@@ -251,6 +251,41 @@ describe('Billing (e2e)', () => {
     expect(future.body.code).toBe('invalid_period');
     expect(beforeStart.status).toBe(422);
     expect(beforeStart.body.code).toBe('period_not_open');
+  });
+
+  // Where future runs are enabled, an ISA signed today is walked through its first month: the
+  // student declares as of a day to come and the billing run of the 5th charges the share.
+  it('should let a new ISA declare as of a day to come and be charged by the run', async () => {
+    const isa = await studentWithContract(true, true);
+    const plan = await app
+      .get<FinancingPlanRepository>(FINANCING_PLAN_REPOSITORY)
+      .findByContractId(isa.contractId);
+    const first = plan?.terms.kind === 'isa' ? plan.terms.firstPeriod : null;
+    const month = first?.period ?? '';
+    const nextMonth = first?.addMonths(1);
+    const declare = (query: string) =>
+      api()
+        .post(`/api/v1/contracts/${isa.contractId}/income-declarations${query}`)
+        .set(...bearer(isa.token))
+        .set('Idempotency-Key', uuidv7())
+        .send({ period: month, grossMonthlyIncomeCents: 2_150_00 });
+
+    const today = await declare('');
+    const past = await declare('?asOf=2020-01-02');
+    const declared = await declare(`?asOf=${nextMonth?.withDay(2).toString() ?? ''}`);
+    const run = await api()
+      .post(
+        `/api/v1/ops/billing/run?asOf=${nextMonth?.withDay(5).toString() ?? ''}&contractId=${isa.contractId}`,
+      )
+      .set(...bearer(opsToken))
+      .set('Idempotency-Key', uuidv7());
+
+    expect(today.body.code).toBe('invalid_period');
+    expect(past.body.code).toBe('invalid_value');
+    expect(declared.status).toBe(201);
+    expect(declared.body).toMatchObject({ period: month, grossMonthlyIncomeCents: 2_150_00 });
+    expect(run.body).toMatchObject({ chargesCreated: 1, failedContractIds: [] });
+    expect((await chargeOf(isa.contractId, `isa:${month}`))?.amount.cents).toBeGreaterThan(0);
   });
 
   it('should keep billing to the student and staff', async () => {

@@ -427,6 +427,7 @@ export class WebhookOnApplicationRejected
       event: 'application.decided',
       data: {
         applicationId: payload.applicationId,
+        programId: payload.programId,
         decision: 'rejected',
         decidedBy: payload.decidedBy,
       },

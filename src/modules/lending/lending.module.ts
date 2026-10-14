@@ -27,6 +27,7 @@ import {
   E_SIGNATURE_PROVIDER,
 } from './application/ports/lending-ports';
 import { FindContractHandler } from './application/queries/find-contract.query';
+import { FindUnpaidPrincipalHandler } from './application/queries/find-unpaid-principal.query';
 import { GetContractDocumentHandler } from './application/queries/get-contract-document.query';
 import { GetContractScheduleHandler } from './application/queries/get-contract-schedule.query';
 import { GetContractHandler } from './application/queries/get-contract.query';
@@ -132,6 +133,7 @@ function simulated<T>(config: AppConfig, provider: T): T {
     GetContractDocumentHandler,
     ListDisbursementsHandler,
     FindContractHandler,
+    FindUnpaidPrincipalHandler,
     ListBillablePlansHandler,
     AssessIsaPeriodHandler,
     RecordRepaymentHandler,

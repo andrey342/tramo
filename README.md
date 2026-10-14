@@ -21,7 +21,8 @@ collects monthly instalments or income-share payments afterwards.
   of payments. A payoff settles a contract early.
 - **Collection.** A monthly billing run turns what is due into charges collected by SEPA direct
   debit through a payment provider; dunning retries failed charges, puts contracts in arrears and
-  writes off what is not recovered. The student sees a statement.
+  writes off what is not recovered. A defaulted loan's principal left to bill is written off with
+  the default. The student sees a statement.
 - **Notifications and reporting.** Emails to students and centers, signed webhooks to centers
   with retries, and dashboards built from the events for centers and operations.
 
@@ -79,6 +80,11 @@ from the network. If a port is already taken on your machine, override it in `.e
 `REDIS_PORT`, `MAILPIT_UI_PORT`, `MAILPIT_SMTP_PORT`, `WEBHOOK_SINK_PORT`).
 
 Stop with `docker compose down`; add `-v` to also drop the database and Redis volumes.
+
+The compose project is named `tramo` whatever the folder, so every clone on a machine shares its
+containers and volumes: a database left by an earlier run is reused as it is. To run another copy
+next to it, give it a name and other ports in its `.env`, e.g.
+`docker compose -p tramo-2 up -d --build --wait`, and pass the same `-p` to every later command.
 
 ## Try it in 2 minutes
 
@@ -336,7 +342,10 @@ ending in 14 cents is collected and then returned by the student's bank: owed ag
 the plan, and dunned from the day of the return. In
 production the cycle runs on the 1st and the 5th, collection and dunning every morning. ISA
 students declare a month's income with `POST /contracts/:id/income-declarations` until the 4th of
-the next month; on the 5th the month is charged.
+the next month; on the 5th the month is charged. An ISA signed today starts paying months later
+(`firstPeriod` on its schedule): to see one charged, declare that month with `?asOf=` set to the
+2nd of the next month, then run billing as of the 5th (both need `BILLING_FUTURE_RUNS_ENABLED`, on
+outside production).
 
 Every step above writes to someone: the student receives emails (welcome, application received,
 decision, contract ready to sign, payment reminders and receipts, overdue notices, ISA declaration
@@ -375,9 +384,9 @@ progressively after five failed attempts. An admin disables an account with
 
 ## Developer tooling
 
-The repo carries its Claude Code configuration, so routine work follows the repo's conventions
-whether it is done by hand or with the agent (ADR 011). [`CLAUDE.md`](CLAUDE.md) is the short map:
-commands, architecture principles and workflow. Under `.claude/`:
+The repo versions its developer tooling, so routine work follows the same conventions however it
+is done (ADR 011). [`CLAUDE.md`](CLAUDE.md) is the short map: commands, architecture principles and
+workflow. Under `.claude/`:
 
 - `rules/`: conventions loaded only for the paths they cover (domain, migrations, HTTP, tests).
 - `skills/`: procedures backed by scripts that also run on their own, e.g. `/new-module payouts`

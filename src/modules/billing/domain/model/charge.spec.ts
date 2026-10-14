@@ -53,6 +53,35 @@ describe('Charge', () => {
     expect(loaded.hasPendingEvents).toBe(false);
   });
 
+  it('should raise the principal a defaulted loan had left to bill, written off', () => {
+    const charge = Charge.accelerate({
+      id: '0199a000-0000-7000-8000-00000000000a',
+      contractId: '0199a000-0000-7000-8000-00000000000c',
+      studentId: '0199a000-0000-7000-8000-00000000000s',
+      centerId: '0199a000-0000-7000-8000-0000000000ce',
+      amount: aCharge({ amountCents: 1_250_65 }).amount,
+      today: day('2027-02-11'),
+      now: LATER,
+    });
+
+    expect(charge).toMatchObject({
+      kind: 'accelerated',
+      reference: 'accelerated',
+      installmentNumber: null,
+      period: '2027-02',
+      status: 'written_off',
+      collectible: false,
+    });
+    expect(charge.pullEvents()).toEqual([
+      expect.objectContaining({ eventType: BillingEvents.ChargeCreated }),
+      expect.objectContaining({
+        eventType: BillingEvents.ChargeWrittenOff,
+        payload: expect.objectContaining({ amountCents: 1_250_65, reason: 'contract_defaulted' }),
+      }),
+    ]);
+    expect(charge.applyDunning(day('2027-06-01'), LATER)).toEqual({ retry: false });
+  });
+
   describe('collection', () => {
     it('should ask the provider again for the attempt in collection, with the same key', () => {
       const charge = fresh();

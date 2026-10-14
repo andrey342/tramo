@@ -6,7 +6,11 @@ import {
 } from '@shared/domain';
 
 import { PaymentMismatchError, UnknownCollectionAttemptError } from '../errors/billing-errors';
-import { BillingEvents, type ChargeKind } from '../events/billing-events';
+import {
+  BillingEvents,
+  type ChargeKind,
+  type ChargeWrittenOffPayload,
+} from '../events/billing-events';
 import { ARREARS_STEP, dunningStepsDue, STEPS_BEFORE_DUE } from '../services/dunning';
 
 export const CHARGE_STATUSES = [
@@ -71,6 +75,7 @@ export interface ChargeProps {
 //   failed | overdue → pending                    (dunning's retries, or ops)
 //   scheduled | failed | overdue → written_off    (dunning, 90 days after the due date)
 //   scheduled → cancelled                         (the plan ended before it fell due)
+//   (new) → written_off                           (accelerated: raised and written off at once)
 //   failed | overdue → cancelled                  (the plan was paid off)
 //
 // A payoff is not dunned: refused, it is cancelled (pending → cancelled) and lending withdraws
@@ -128,6 +133,31 @@ export class Charge extends AggregateRoot {
         dueDate: input.dueDate.toString(),
       },
     });
+    return charge;
+  }
+
+  // A loan defaulted: the principal of the instalments it had not billed is owed at once. Ops and
+  // collections pursue it outside billing, so it is written off as it is raised; the statement and
+  // the portfolio figures show the loss. Unique per contract (`accelerated`).
+  static accelerate(input: {
+    id: string;
+    contractId: string;
+    studentId: string;
+    centerId: string;
+    amount: Money;
+    today: CalendarDate;
+    now: Date;
+  }): Charge {
+    const { today, ...owed } = input;
+    const charge = Charge.create({
+      ...owed,
+      kind: 'accelerated',
+      reference: 'accelerated',
+      installmentNumber: null,
+      period: today.period,
+      dueDate: today,
+    });
+    charge.writeOff('contract_defaulted', input.now);
     return charge;
   }
 
@@ -470,7 +500,7 @@ export class Charge extends AggregateRoot {
           });
           break;
         case 'write_off':
-          this.writeOff(now);
+          this.writeOff('dunning_exhausted', now);
           retry = false;
           break;
       }
@@ -511,7 +541,7 @@ export class Charge extends AggregateRoot {
     return ['paid', 'written_off', 'cancelled'].includes(this.props.status);
   }
 
-  private writeOff(now: Date): void {
+  private writeOff(reason: ChargeWrittenOffPayload['reason'], now: Date): void {
     this.moveTo('written_off', now);
     this.record({
       eventType: BillingEvents.ChargeWrittenOff,
@@ -524,7 +554,7 @@ export class Charge extends AggregateRoot {
         studentId: this.props.studentId,
         centerId: this.props.centerId,
         amountCents: this.props.amount.cents,
-        reason: 'dunning_exhausted',
+        reason,
       },
     });
   }

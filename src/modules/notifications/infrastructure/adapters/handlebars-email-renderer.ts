@@ -65,14 +65,14 @@ const SOURCES: Readonly<Record<EmailTemplate, TemplateSource>> = {
   payment_overdue: {
     subject: 'Your payment of {{money amountCents}} is overdue',
     body: [
-      'We could not collect {{money amountCents}}, now {{daysOverdue}} days overdue.',
-      '{{#if secondNotice}}This is our second notice. {{/if}}We will try the direct debit again; please make sure your account has funds, or contact us.',
+      'We could not collect {{money amountCents}}, now {{days daysOverdue}} overdue.',
+      '{{#if secondNotice}}This is our second notice: please contact us to settle it, as the direct debit will not be retried on its own.{{else}}We will try the direct debit again; please make sure your account has funds, or contact us.{{/if}}',
     ],
   },
   contract_in_arrears: {
     subject: 'Your contract is in arrears',
     body: [
-      'A payment of your contract is {{daysOverdue}} days overdue, so the contract is now in arrears.',
+      'A payment of your contract is {{days daysOverdue}} overdue, so the contract is now in arrears.',
       'Paying what is overdue brings it back to normal. If you are in difficulty, contact us: we can look at your options.',
     ],
   },
@@ -130,6 +130,9 @@ function engine(): typeof Handlebars {
   const instance = Handlebars.create();
   instance.registerHelper('money', (cents: unknown) =>
     typeof cents === 'number' ? formatMoney(cents) : '',
+  );
+  instance.registerHelper('days', (count: unknown) =>
+    typeof count === 'number' ? `${String(count)} ${count === 1 ? 'day' : 'days'}` : '',
   );
   instance.registerHelper('product', (value: unknown) =>
     typeof value === 'string' ? (PRODUCT_NAMES[value] ?? value) : '',

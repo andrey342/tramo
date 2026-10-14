@@ -1,10 +1,15 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiAcceptedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent, ProblemException } from '@shared/infrastructure/http';
+import {
+  ApiProblems,
+  Idempotent,
+  ParseIdPipe,
+  ProblemException,
+} from '@shared/infrastructure/http';
 import { RequireScopes, Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 import { QueueUnreachableError } from '@shared/infrastructure/queues';
@@ -44,7 +49,7 @@ export class ReportingController {
   })
   dashboard(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
   ): Promise<CenterDashboardDto> {
     return this.queries.execute(new GetCenterDashboardQuery(actor, centerId));
   }
@@ -57,8 +62,8 @@ export class ReportingController {
   @ApiOperation({ summary: 'How a program converts: approval rate, mean ticket and score' })
   programPerformance(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
-    @Param('programId', ParseUUIDPipe) programId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
+    @Param('programId', ParseIdPipe) programId: string,
   ): Promise<ProgramPerformanceDto> {
     return this.queries.execute(new GetProgramPerformanceQuery(actor, centerId, programId));
   }

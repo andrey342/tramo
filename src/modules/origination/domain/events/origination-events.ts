@@ -54,6 +54,7 @@ export type ApplicationRejectedPayload = {
   readonly applicationId: string;
   readonly applicantId: string;
   readonly centerId: string;
+  readonly programId: string;
   // Hard rules broken, 'score_below_threshold' or 'analyst_decision'. The readable reasons and the
   // score are personal financial data: they stay in the decision record.
   readonly reasonCodes: readonly string[];

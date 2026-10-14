@@ -13,6 +13,7 @@ import { type EventHandler, EventSubscriber, type IntegrationEvent } from '@shar
 import { CalendarDate } from '@shared/domain';
 
 import { CancelOpenChargesCommand } from '../../application/commands/cancel-open-charges.command';
+import { CloseDefaultedChargesCommand } from '../../application/commands/close-defaulted-charges.command';
 import { CollectWaitingChargesCommand } from '../../application/commands/collect-waiting-charges.command';
 import { CreatePayoffChargeCommand } from '../../application/commands/create-payoff-charge.command';
 import { RevokeContractMandateCommand } from '../../application/commands/revoke-contract-mandate.command';
@@ -112,20 +113,18 @@ export class CancelChargesOnPlanCompleted implements EventHandler<PlanCompletedP
 
   async handle(event: IntegrationEvent<PlanCompletedPayload>): Promise<void> {
     if (event.payload.reason === 'paid_off') {
-      await this.commands.execute(new CancelOpenChargesCommand(event.payload.contractId, 'all'));
+      await this.commands.execute(new CancelOpenChargesCommand(event.payload.contractId));
     }
   }
 }
 
 @Injectable()
 @EventSubscriber({ event: LendingEvents.ContractDefaulted, consumer: 'billing.close-defaulted' })
-export class CancelChargesOnContractDefaulted implements EventHandler<ContractDefaultedPayload> {
+export class CloseChargesOnContractDefaulted implements EventHandler<ContractDefaultedPayload> {
   constructor(private readonly commands: CommandBus) {}
 
   async handle(event: IntegrationEvent<ContractDefaultedPayload>): Promise<void> {
-    await this.commands.execute(
-      new CancelOpenChargesCommand(event.payload.contractId, 'scheduled'),
-    );
+    await this.commands.execute(new CloseDefaultedChargesCommand(event.payload.contractId));
   }
 }
 
@@ -144,6 +143,7 @@ const LABELS: Readonly<Record<ChargeCreatedPayload['kind'], string>> = {
   installment: 'Instalment',
   isa: 'Income share',
   payoff: 'Payoff',
+  accelerated: 'Principal left to bill on default',
 };
 
 // The statement: a line per charge, payment, return, write-off and cancellation, from their
@@ -212,14 +212,17 @@ export class LedgerOnChargeWrittenOff implements EventHandler<ChargeWrittenOffPa
   constructor(private readonly ledger: LedgerWriter) {}
 
   async handle(event: IntegrationEvent<ChargeWrittenOffPayload>): Promise<void> {
-    const { chargeId, contractId, amountCents } = event.payload;
+    const { chargeId, contractId, amountCents, reason } = event.payload;
     await this.ledger.append({
       eventId: event.eventId,
       contractId,
       chargeId,
       type: 'write_off',
       amountCents: -amountCents,
-      description: 'Written off after dunning',
+      description:
+        reason === 'contract_defaulted'
+          ? 'Written off on default, passed to collections'
+          : 'Written off after dunning',
       occurredAt: new Date(event.occurredAt),
     });
   }

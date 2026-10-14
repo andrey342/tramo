@@ -61,6 +61,25 @@ describe('HandlebarsEmailRenderer', () => {
     expect(email.text).toContain('by the 4th of the next month');
   });
 
+  // Retries come at 3 and 7 days: the notice at 15 promises none.
+  it('should count days in the singular and promise a retry only in the first notice', () => {
+    const first = renderer.render(
+      'payment_overdue',
+      { amountCents: 100_00, daysOverdue: 1, secondNotice: false },
+      'c-1',
+    );
+    const second = renderer.render(
+      'payment_overdue',
+      { amountCents: 100_00, daysOverdue: 15, secondNotice: true },
+      'c-1',
+    );
+
+    expect(first.text).toContain('now 1 day overdue.');
+    expect(first.text).toContain('We will try the direct debit again');
+    expect(second.text).toContain('now 15 days overdue.');
+    expect(second.text).not.toContain('try the direct debit again');
+  });
+
   it('should escape values in the HTML version only', () => {
     const email = renderer.render('contract_ready_to_sign', { envelopeId: '<b>env</b>' }, 'c-1');
 

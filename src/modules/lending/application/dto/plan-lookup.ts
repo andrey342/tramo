@@ -53,3 +53,14 @@ export class AssessIsaPeriodCommand extends Command<IsaAssessmentDto> {
     super();
   }
 }
+
+// Part of the module's public surface: the principal of each instalment of a loan not paid yet,
+// whatever the plan's state; null for an ISA or a contract without a plan. Billing raises from
+// it what a defaulted loan had left to bill.
+export class FindUnpaidPrincipalQuery extends Query<
+  readonly { readonly number: number; readonly principalCents: number }[] | null
+> {
+  constructor(readonly contractId: string) {
+    super();
+  }
+}

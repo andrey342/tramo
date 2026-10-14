@@ -161,6 +161,7 @@ validation, idempotency, the handler, auditing, and Problem Details rendering of
 - **Pagination.** Lists use keyset pagination on `(created_at, id)` with an opaque cursor
   (ADR 010; the review queue pages on `(status_changed_at, id)`, oldest first); later pages do
   not shift when new rows arrive. A cursor that does not decode is a 422 (`cursor` in `errors`).
+  A center's API keys are the one list returned whole: a few per center, issued by hand.
 - **OpenAPI.** Statuses the pipeline answers are documented by the decorators that cause them:
   `@Idempotent()` adds 400, 409, 422 and 503, `@ApiCursorPaginated()` (on every list) 400 and 422. `src/openapi.spec.ts` builds the document from every controller and fails when an
   idempotent or cursor-paginated route lacks them.
@@ -461,7 +462,8 @@ the repayment plan.
   `ChargeReturned` marks it unpaid again (a return before its payment is retried until the
   payment is in); `ContractInArrears` and `ArrearsCleared` move the contract into and out of
   `in_arrears`; `ChargeWrittenOff` defaults it (`ContractDefaulted`), which closes its plan
-  (`defaulted`): the schedule shows it ended and billing no longer bills it. A defaulted plan
+  (`defaulted`): the schedule shows it ended and billing no longer bills it; billing raises the
+  principal a defaulted loan had left to bill as one charge written off at once. A defaulted plan
   still records what billing collects or sees returned, since its debt is being recovered, and
   stays `defaulted`; a plan that ended otherwise is not reopened by a return (ADR 020). The first
   ending recorded is final: a `PlanCompleted` delivered after the default leaves the contract
@@ -580,7 +582,9 @@ through a payment provider, dunning, ISA income declarations and the account sta
   time) and while lending has not assessed it (`period_not_open` otherwise: on the 5th the cycle
   assesses the month, paused when undeclared); audited, the amount stays in billing (events say
   only that a month was declared). On the 25th students who have not declared the month are
-  reminded once (`IncomeDeclarationDue`).
+  reminded once (`IncomeDeclarationDue`). Where future billing runs are enabled, `?asOf=` judges
+  the windows on a day still to come (never a past one), so a demo walks a new ISA through its
+  months together with the ops runs.
 - **Payoff.** `PayoffRequested` from lending becomes a charge due that day, collected at once
   and never dunned; meanwhile nothing else of the contract is collected or dunned, since it
   covers what is left. Paid, the plan ends (`paid_off`) and every charge not collected is

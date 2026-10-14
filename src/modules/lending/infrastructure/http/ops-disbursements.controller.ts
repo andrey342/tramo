@@ -1,10 +1,15 @@
-import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import {
+  ApiCursorPaginated,
+  ApiProblems,
+  Idempotent,
+  ParseIdPipe,
+} from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -57,7 +62,7 @@ export class OpsDisbursementsController {
   @ApiOperation({ summary: 'Send a failed disbursement again, as a new transfer' })
   retry(
     @CurrentPrincipal() actor: Principal,
-    @Param('disbursementId', ParseUUIDPipe) disbursementId: string,
+    @Param('disbursementId', ParseIdPipe) disbursementId: string,
   ): Promise<DisbursementDto> {
     return this.commands.execute(new RetryDisbursementCommand(actor, disbursementId));
   }
@@ -78,7 +83,7 @@ export class OpsDisbursementsController {
   })
   reconcile(
     @CurrentPrincipal() actor: Principal,
-    @Param('disbursementId', ParseUUIDPipe) disbursementId: string,
+    @Param('disbursementId', ParseIdPipe) disbursementId: string,
   ): Promise<DisbursementDto> {
     return this.commands.execute(new ReconcileDisbursementCommand(actor, disbursementId));
   }

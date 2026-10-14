@@ -59,7 +59,7 @@ describe('CancelChargesOnPlanCompleted', () => {
       await consumer.handle(completed(capped, reason));
     }
 
-    expect(executed).toEqual([new CancelOpenChargesCommand(paidOff, 'all')]);
+    expect(executed).toEqual([new CancelOpenChargesCommand(paidOff)]);
   });
 });
 

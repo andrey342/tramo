@@ -282,7 +282,7 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
   a new mandate revokes the one in force, and a contract cancelled before it took effect revokes
   its mandate.
 - **`Charge`**: an amount a student owes on a due date, and its collection. `ChargeKind`:
-  `installment`, `isa`, `payoff`. Unique per contract and `reference` (`installment:3`,
+  `installment`, `isa`, `payoff`, `accelerated`. Unique per contract and `reference` (`installment:3`,
   `isa:2026-07`, `payoff:<request>`), so a repeated run creates nothing.
 
   ```text
@@ -328,6 +328,11 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 - **Arrears**: a contract with a charge past the arrears step and unpaid. A payment that leaves no
   other charge of the contract in arrears publishes `ArrearsCleared`.
 - **Write-off**: the end of dunning; the charge is `written_off` with reason `dunning_exhausted`.
+- **Accelerated charge** (`kind: accelerated`, reference `accelerated`): when a loan defaults
+  (`ContractDefaulted`), billing cancels the charges not yet due and raises the principal of every
+  instalment left unbilled as one charge, written off at once with reason `contract_defaulted`
+  (ops and collections pursue it). The statement and the portfolio figures then show the whole
+  loss; future interest is not claimed. An ISA owes nothing beyond the months already assessed.
 - **`IncomeDeclaration`**: what an ISA student earned in one month (`period` as `YYYY-MM`), one
   per contract and month. The declaration window of a month runs from its first day to the end
   of the 4th of the next (`ISA_DUE_DAY`, the 5th, closes it), so a salary paid on the 1st or 2nd

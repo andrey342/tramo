@@ -7,14 +7,9 @@ import { CLOCK, type Clock } from '@shared/domain';
 import { CHARGE_REPOSITORY, type ChargeRepository } from '../../domain';
 
 // A plan was paid off: what the payoff covered is no longer owed, whether scheduled or failed
-// and in dunning (`all`). A contract defaulted: the charges not yet due are cancelled
-// (`scheduled`), those overdue stay as the debt. Those being collected are left to the
-// provider's answer.
+// and in dunning. Those being collected are left to the provider's answer.
 export class CancelOpenChargesCommand extends Command<number> {
-  constructor(
-    readonly contractId: string,
-    readonly scope: 'all' | 'scheduled',
-  ) {
+  constructor(readonly contractId: string) {
     super();
   }
 }
@@ -32,9 +27,6 @@ export class CancelOpenChargesHandler implements ICommandHandler<CancelOpenCharg
       await this.charges.lockContract(command.contractId);
       let cancelled = 0;
       for (const charge of await this.charges.findOpen(command.contractId)) {
-        if (command.scope === 'scheduled' && charge.status !== 'scheduled') {
-          continue;
-        }
         charge.cancel(this.clock.now());
         await this.charges.save(charge);
         cancelled += 1;
