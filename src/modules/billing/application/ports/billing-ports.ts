@@ -31,6 +31,8 @@ export interface RepaidContract {
   readonly status: string;
   // ISA only: the first month of income not assessed yet (YYYY-MM).
   readonly nextIsaPeriod: string | null;
+  // Whether lending has opened its repayment plan (a moment after activation).
+  readonly planOpen: boolean;
 }
 
 export interface BillablePlan {

@@ -11,6 +11,8 @@ export interface ContractLookupDto {
   // ISA only: the first month of income not assessed yet, as YYYY-MM; a declaration for an
   // earlier month comes too late.
   readonly nextIsaPeriod: string | null;
+  // Whether its repayment plan is open: it opens a moment after the contract is activated.
+  readonly planOpen: boolean;
 }
 
 // Part of the module's public surface: billing checks whose contract a mandate or an income

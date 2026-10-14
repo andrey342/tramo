@@ -282,6 +282,7 @@ describe('lending queries', () => {
         product: 'installments',
         status: 'active',
         nextIsaPeriod: null,
+        planOpen: false,
       });
       expect(await handler.execute(new FindContractQuery(uuidv7()))).toBeNull();
     });

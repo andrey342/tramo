@@ -38,6 +38,16 @@ export class IncomeShareAssessedError extends DomainError {
   }
 }
 
+// The contract was just activated and lending has not opened its plan yet: retry shortly.
+export class IncomeSharePlanNotOpenError extends DomainError {
+  readonly code = 'plan_not_open';
+  readonly category = 'conflict';
+
+  constructor() {
+    super('The agreement has no repayment plan yet: it opens shortly after activation.');
+  }
+}
+
 export class IncomeAlreadyDeclaredError extends DomainError {
   readonly code = 'income_already_declared';
   readonly category = 'conflict';

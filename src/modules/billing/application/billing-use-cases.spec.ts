@@ -26,6 +26,7 @@ import {
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
   IncomeShareAssessedError,
+  IncomeSharePlanNotOpenError,
   MandateMissingError,
   PayoffInProgressError,
   NotAnIncomeShareError,
@@ -253,6 +254,16 @@ describe('billing use cases', () => {
       await expect(
         t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00)),
       ).rejects.toThrow(IncomeShareAssessedError);
+    });
+
+    // Just activated: lending opens the plan a moment later, so the student retries shortly.
+    it('should refuse a declaration, to retry, until the plan is open', async () => {
+      const t = setup();
+      const contractId = t.contract('isa');
+
+      await expect(
+        t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00)),
+      ).rejects.toThrow(IncomeSharePlanNotOpenError);
     });
 
     it('should not lock the contract when someone other than its student declares', async () => {

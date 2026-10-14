@@ -251,7 +251,7 @@ export class FakePaymentGateway implements PaymentGateway {
 // Lending's ISA rules, simplified: 10 % of an income from 1,500, one month after the other; a
 // plan can be set to end with a given month (its cap or last payment).
 export class FakeRepaymentPlans implements RepaymentPlans {
-  readonly contracts = new Map<string, Omit<RepaidContract, 'nextIsaPeriod'>>();
+  readonly contracts = new Map<string, Omit<RepaidContract, 'nextIsaPeriod' | 'planOpen'>>();
   readonly plans: BillablePlan[] = [];
   readonly assessed: { contractId: string; period: string; incomeCents: number | null }[] = [];
   // Loans: the principal of each instalment not paid yet.
@@ -259,7 +259,7 @@ export class FakeRepaymentPlans implements RepaymentPlans {
   private readonly lastPeriods = new Map<string, string>();
 
   addContract(
-    contract: Omit<RepaidContract, 'nextIsaPeriod'>,
+    contract: Omit<RepaidContract, 'nextIsaPeriod' | 'planOpen'>,
     plan?: Omit<BillablePlan, 'contractId' | 'studentId' | 'centerId'>,
   ): this {
     this.contracts.set(contract.id, contract);
@@ -283,7 +283,9 @@ export class FakeRepaymentPlans implements RepaymentPlans {
     const contract = this.contracts.get(contractId);
     const plan = this.plans.find((candidate) => candidate.contractId === contractId);
     return Promise.resolve(
-      contract ? { ...contract, nextIsaPeriod: plan?.nextIsaPeriod ?? null } : null,
+      contract
+        ? { ...contract, nextIsaPeriod: plan?.nextIsaPeriod ?? null, planOpen: plan !== undefined }
+        : null,
     );
   }
 
