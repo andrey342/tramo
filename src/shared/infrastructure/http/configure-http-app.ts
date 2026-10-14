@@ -8,6 +8,7 @@ import { resolveRequestId } from '../context/request-id';
 import {
   PROBLEM_CONTENT_TYPE,
   type ProblemDetails,
+  problemType,
   statusCode,
   statusTitle,
 } from './problem-details';
@@ -92,7 +93,7 @@ function sendProblem(
 ): void {
   const path = request.originalUrl.split('?', 1)[0] ?? '/';
   const problem: ProblemDetails = {
-    type: 'about:blank',
+    type: problemType(code.replace(/_/g, '-')),
     title: statusTitle(status),
     status,
     detail,

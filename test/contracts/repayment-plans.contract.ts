@@ -28,6 +28,7 @@ export function repaymentPlansContract(
         product: 'installments',
         status: 'active',
         nextIsaPeriod: null,
+        planOpen: true,
       });
       expect(await plans.findContract(UNKNOWN)).toBeNull();
     });

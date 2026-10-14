@@ -220,7 +220,12 @@ export function originationRepositoriesContract(
       const addNext = async () => {
         const current = await t.policies.findCurrent();
         if (!current) throw new Error('No policy seeded.');
-        const next = current.revise({}, 'admin-1', NOW);
+        // A revision must change a rule: flip the minimum age between 18 and 19.
+        const next = current.revise(
+          { minAgeYears: current.minAgeYears === 18 ? 19 : 18 },
+          'admin-1',
+          NOW,
+        );
         await t.run(() => t.policies.add(next));
         return { current, next };
       };

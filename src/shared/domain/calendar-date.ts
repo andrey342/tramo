@@ -24,7 +24,10 @@ export class CalendarDate extends ValueObject<{ year: number; month: number; day
       day >= 1 &&
       day <= daysInMonth(year, month);
     if (!valid) {
-      throw new InvalidValueError(field, `${year}-${month}-${day} is not a calendar date.`);
+      const shown = [year, month, day].map((part, index) =>
+        String(part).padStart(index === 0 ? 4 : 2, '0'),
+      );
+      throw new InvalidValueError(field, `${shown.join('-')} is not a calendar date.`);
     }
     return new CalendarDate(year, month, day);
   }

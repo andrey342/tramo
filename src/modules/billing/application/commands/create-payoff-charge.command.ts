@@ -72,8 +72,17 @@ export class CreatePayoffChargeHandler implements ICommandHandler<CreatePayoffCh
         dueDate: payoff.asOf,
         now,
       });
+      // A payoff covers what is not overdue; charges past due are collected first. Lending checks
+      // it against today's schedule, billing against the charges dunning has made overdue (as of
+      // a run on a day to come, where future runs are enabled). One that failed before its due
+      // date is still covered.
+      const owed = (await this.charges.findOpen(contract.id)).some(
+        (open) => open.status === 'overdue',
+      );
       const mandate = await this.mandates.findActiveByContract(contract.id);
-      if (mandate) {
+      if (owed) {
+        charge.refusePayoff('charges_overdue', now);
+      } else if (mandate) {
         charge.submitCollection(mandate.id, now);
       } else {
         charge.refusePayoff('no_mandate', now);

@@ -18,9 +18,10 @@ can parse without special cases per endpoint, and field-level detail for validat
 
 Option 3, implemented as a global exception filter.
 
-- `type`: `about:blank` for plain HTTP errors, where the status code says everything; otherwise a
-  URN `urn:tramo:problem:<slug>`. URNs identify the problem without implying a documentation page
-  that clients would try to fetch; the catalogue of types is documented in OpenAPI.
+- `type`: a URN `urn:tramo:problem:<slug>` named after the `code`, plain HTTP errors included
+  (`urn:tramo:problem:not-found`), so every problem has the same shape. URNs identify the problem
+  without implying a documentation page that clients would try to fetch; the catalogue of types is
+  documented in OpenAPI.
 - `title`, `status`, `detail`, `instance` (request path) as defined by the RFC.
 - Extensions: `code` (stable, snake_case, for programmatic handling), `requestId` (correlates
   with logs) and `errors[]` (`{ field, message }`, nested fields as dotted paths) for validation.

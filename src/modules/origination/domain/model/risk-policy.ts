@@ -125,17 +125,35 @@ export class RiskPolicy {
     return this.props.createdBy;
   }
 
-  // The next version, with these changes on top of this one.
+  // The next version, with these changes on top of this one. A revision that changes no rule
+  // would publish a version identical to this one: it is refused.
   revise(
     changes: Partial<Omit<RiskPolicyProps, 'createdAt' | 'createdBy'>>,
     by: string,
     now: Date,
   ): RiskPolicy {
-    return RiskPolicy.define(this.version + 1, {
+    const next = RiskPolicy.define(this.version + 1, {
       ...this.props,
       ...changes,
       createdAt: now,
       createdBy: by,
     });
+    if (next.rules() === this.rules()) {
+      throw new InvalidRiskPolicyError('the revision changes none of the rules');
+    }
+    return next;
+  }
+
+  // What the policy decides with, as one comparable value.
+  private rules(): string {
+    const { maxFinanceable, minAgeYears, allowedResidenceCountries, weights } = this.props;
+    return JSON.stringify([
+      maxFinanceable.cents,
+      minAgeYears,
+      allowedResidenceCountries,
+      SCORE_FACTORS.map((factor) => weights[factor].basisPoints),
+      this.props.approveThreshold,
+      this.props.reviewThreshold,
+    ]);
   }
 }

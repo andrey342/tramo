@@ -18,6 +18,7 @@ import {
   IncomeAlreadyDeclaredError,
   IncomeDeclaration,
   IncomeShareAssessedError,
+  IncomeSharePlanNotOpenError,
   INCOME_DECLARATION_REPOSITORY,
   type IncomeDeclarationRepository,
   NotAnIncomeShareError,
@@ -67,6 +68,9 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
       }
       if (contract.status !== 'active' && contract.status !== 'in_arrears') {
         throw new ContractNotRepayingError(contract.status);
+      }
+      if (!contract.planOpen) {
+        throw new IncomeSharePlanNotOpenError();
       }
       if (contract.nextIsaPeriod === null) {
         throw new IncomeShareAssessedError();

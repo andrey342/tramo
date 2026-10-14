@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Header, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
@@ -109,6 +109,8 @@ export class ContractsController {
 
   @Post(':contractId/payoff-quote')
   @HttpCode(200)
+  // Every field is optional: no body quotes today.
+  @ApiBody({ type: PayoffQuoteRequest, required: false })
   @ApiProblems(400, 401, 403, 404, 409, 422)
   @ApiOkResponse({ type: PayoffQuoteResponse })
   @Roles('student', 'ops', 'admin')

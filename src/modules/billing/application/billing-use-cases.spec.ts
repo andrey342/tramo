@@ -26,6 +26,7 @@ import {
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
   IncomeShareAssessedError,
+  IncomeSharePlanNotOpenError,
   MandateMissingError,
   PayoffInProgressError,
   NotAnIncomeShareError,
@@ -253,6 +254,16 @@ describe('billing use cases', () => {
       await expect(
         t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00)),
       ).rejects.toThrow(IncomeShareAssessedError);
+    });
+
+    // Just activated: lending opens the plan a moment later, so the student retries shortly.
+    it('should refuse a declaration, to retry, until the plan is open', async () => {
+      const t = setup();
+      const contractId = t.contract('isa');
+
+      await expect(
+        t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00)),
+      ).rejects.toThrow(IncomeSharePlanNotOpenError);
     });
 
     it('should not lock the contract when someone other than its student declares', async () => {
@@ -785,7 +796,7 @@ describe('billing use cases', () => {
 
     // The student and the center hear of the arrears once: not again when the next instalment
     // reaches 30 days, nor once the contract has defaulted.
-    it('should announce a contract in arrears once, and never after its default', async () => {
+    it('should announce a contract in arrears once, and never once it has ended', async () => {
       const t = setup();
       const inArrears = t.contract();
       await t.charge({ contractId: inArrears });
@@ -797,6 +808,9 @@ describe('billing use cases', () => {
       });
       const defaulted = t.contract('installments', 'defaulted');
       await t.charge({ contractId: defaulted });
+      // Repaid, then its last payment returned (ADR 020): dunned, but no longer in arrears.
+      const completed = t.contract('installments', 'completed');
+      await t.charge({ contractId: completed });
 
       await t.dunning.execute(new RunDunningCommand(day('2026-12-12')));
       await t.dunning.execute(new RunDunningCommand(day('2027-01-11')));
@@ -890,6 +904,36 @@ describe('billing use cases', () => {
     });
 
     // The payoff covers the overdue instalment: retrying it on its own would debit it twice.
+    // Billing ran as of a day to come and dunning made an instalment overdue, while lending's
+    // quote, as of today, saw none due: the payoff would cancel it unpaid, so it is refused.
+    it('should refuse a payoff while a charge is overdue', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.mandate(contractId);
+      const overdue = aCharge({ contractId, reference: 'installment:2', dueDate: '2026-10-20' });
+      overdue.applyDunning(day('2026-10-21'), NOW);
+      await t.charges.save(overdue);
+      const requestId = uuidv7();
+
+      await t.payoff.execute(
+        new CreatePayoffChargeCommand({
+          requestId,
+          planId: uuidv7(),
+          contractId,
+          amountCents: 6_000_00,
+          asOf: day('2026-11-18'),
+        }),
+      );
+
+      expect(await t.charges.findByReference(contractId, `payoff:${requestId}`)).toMatchObject({
+        status: 'cancelled',
+      });
+      expect(t.events.ofType(BillingEvents.ChargeFailed).at(-1)?.payload).toMatchObject({
+        reason: 'charges_overdue',
+      });
+      expect((await t.charges.findById(overdue.id))?.status).toBe('overdue');
+    });
+
     it('should not retry a charge that a payoff being collected covers', async () => {
       const t = setup();
       const contractId = t.contract();
@@ -1093,14 +1137,19 @@ describe('billing use cases', () => {
       expect(await t.charges.findByReference(contractId, 'accelerated')).toBeNull();
     });
 
-    // Instalment 3 falls due while the payoff is collected: it is not dunned meanwhile, and the
-    // payoff, once paid, cancels it even though it is overdue; a defaulted contract keeps it.
+    // Instalment 2's debit failed before its due date, and instalment 3 falls due while the payoff
+    // is collected: neither is dunned meanwhile, and the payoff, once paid, cancels both.
     it('should not dun what a payoff covers, and cancel it once the payoff is paid', async () => {
       const t = setup();
       const contractId = t.contract();
       await t.mandate(contractId);
-      const overdue = aCharge({ contractId, reference: 'installment:2', dueDate: '2026-10-20' });
-      overdue.applyDunning(day('2026-10-21'), NOW);
+      const overdue = aCharge({ contractId, reference: 'installment:2', dueDate: '2026-11-25' });
+      overdue.recordFailed(
+        overdue.submitCollection('mandate-1', NOW),
+        'insufficient_funds',
+        day('2026-11-15'),
+        NOW,
+      );
       await t.charges.save(overdue);
       const held = await t.charge({
         contractId,

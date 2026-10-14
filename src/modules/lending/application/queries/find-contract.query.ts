@@ -22,8 +22,7 @@ export class FindContractHandler implements IQueryHandler<FindContractQuery> {
     if (!contract) {
       return null;
     }
-    const plan =
-      contract.terms.product.kind === 'isa' ? await this.plans.findByContractId(contract.id) : null;
+    const plan = await this.plans.findByContractId(contract.id);
     return {
       id: contract.id,
       studentId: contract.studentId,
@@ -31,6 +30,7 @@ export class FindContractHandler implements IQueryHandler<FindContractQuery> {
       product: contract.terms.product.kind,
       status: contract.status,
       nextIsaPeriod: plan ? toBillablePlanDto(plan, 'active').nextIsaPeriod : null,
+      planOpen: plan !== null,
     };
   }
 }

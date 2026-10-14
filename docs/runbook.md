@@ -263,7 +263,7 @@ curl -s -H 'Authorization: Bearer tramo-local-metrics-token-change-me' localhost
     was collected and then returned by the student's bank: owed again from the day of the
     return (a `return` line on the statement), dunned from that day, its instalment unpaid on
     the plan. If that payment had ended the plan (its last instalment, or a payoff), the plan and
-    the contract stay as they ended and the api logs `Payment returned on a plan that has ended`:
+    the contract stay as they ended and the worker logs `Payment returned on a plan that has ended`:
     the instalment is dunned as usual; a payoff is not dunned, so retry it or settle it with the
     student (ADR 020).
   - Provider callbacks (`POST /webhooks/psp`) carry no amount: a real provider's adapter must
@@ -515,6 +515,14 @@ future billing runs and private webhook targets by default. The compose stack ru
 - **Bull Board**: ten failed sign-ins from one client within 15 minutes refuse every attempt from
   it (429 with `Retry-After`) until the window ends. Requests with the right credentials are not
   counted, however many the dashboard sends at once, and clear the failures below the limit.
+
+## Database unreachable
+
+- **Symptom**: requests answer 503 `database_unavailable` with `Retry-After: 5`; the api logs
+  `Database unreachable; request refused` and `GET /health/ready` reports `database` down.
+- **Action**: bring Postgres back (`docker compose ps postgres`, `docker compose logs postgres`).
+  The api reconnects by itself; nothing is lost, since a request either committed or did not run.
+  Retries with the same `Idempotency-Key` are safe.
 
 ## Idempotent requests refused
 

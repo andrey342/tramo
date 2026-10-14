@@ -1,5 +1,9 @@
+import { STATUS_CODES } from 'node:http';
+
 import { type INestApplication } from '@nestjs/common';
 import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
+
+import { PROBLEM_CONTENT_TYPE } from './problem-details';
 
 export const API_KEY_HEADER = 'X-Api-Key';
 
@@ -47,7 +51,36 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
       }
     }
   }
+  addPipelineStatuses(document);
   return document;
+}
+
+interface Operation {
+  requestBody?: unknown;
+  responses: Record<string, unknown>;
+}
+
+// Statuses the HTTP pipeline answers on any route, whatever its handler: 503 while the database
+// cannot be reached, 429 past the rate limit (not on the signed provider callbacks, which are
+// exempt), and 413 or 415 for a body too large or not JSON.
+function addPipelineStatuses(document: OpenAPIObject): void {
+  const problem = (status: number): unknown => ({
+    description: STATUS_CODES[status],
+    content: {
+      [PROBLEM_CONTENT_TYPE]: { schema: { $ref: '#/components/schemas/ProblemDetailsSchema' } },
+    },
+  });
+  for (const [path, item] of Object.entries(document.paths)) {
+    for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+      const operation = (item as Record<string, Operation | undefined>)[method];
+      if (!operation) continue;
+      const statuses = [503, ...(path.includes('/webhooks/') ? [] : [429])];
+      if (operation.requestBody) statuses.push(413, 415);
+      for (const status of statuses) {
+        operation.responses[String(status)] ??= problem(status);
+      }
+    }
+  }
 }
 
 export function setupSwagger(app: INestApplication): void {

@@ -85,12 +85,13 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
       }
       const now = this.clock.now();
       const step = charge.dunningStep;
-      // The contract is announced in arrears once: not again by its next charge, nor after it
-      // defaulted.
+      // The contract is announced in arrears once: not again by its next charge, nor once it has
+      // ended (defaulted, or completed with a payment returned since, ADR 020).
       const contractInArrears =
         charge.reachesArrears(asOf) &&
         ((await this.charges.hasOtherChargesInArrears(charge.contractId, charge.id)) ||
-          (await this.defaulted(charge.contractId, asOf)));
+          (await this.defaulted(charge.contractId, asOf)) ||
+          (await this.plans.findContract(charge.contractId))?.status === 'completed');
       const { retry } = charge.applyDunning(asOf, now, contractInArrears);
       const mandate =
         retry && !(await this.defaulted(charge.contractId, asOf))
