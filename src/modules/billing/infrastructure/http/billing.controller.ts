@@ -5,7 +5,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
   Post,
   Query,
   Inject,
@@ -22,6 +21,7 @@ import {
   ApiProblems,
   CursorPageQueryDto,
   Idempotent,
+  ParseIdPipe,
   ProblemException,
 } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
@@ -78,7 +78,7 @@ export class BillingController {
   @ApiOperation({ summary: 'Authorise the direct debit of the contract from an account' })
   signMandate(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
     @Body() body: SignMandateRequest,
   ): Promise<MandateDto> {
     return this.commands.execute(new SignMandateCommand(actor, contractId, body.iban));
@@ -102,7 +102,7 @@ export class BillingController {
   })
   declareIncome(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
     @Body() body: DeclareIncomeRequest,
     @Query() query: DeclarationAsOfQueryDto,
   ): Promise<IncomeDeclarationDto> {
@@ -125,7 +125,7 @@ export class BillingController {
   @ApiOperation({ summary: 'The charges of a contract, newest first' })
   charges(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
     @Query() query: CursorPageQueryDto,
   ): Promise<CursorPage<ChargeDto>> {
     return this.queries.execute(new ListChargesQuery(actor, contractId, query.toPageRequest()));
@@ -138,7 +138,7 @@ export class BillingController {
   @ApiOperation({ summary: 'Charges, payments and write-offs in order, with the balance owed' })
   statement(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
   ): Promise<StatementDto> {
     return this.queries.execute(new GetStatementQuery(actor, contractId));
   }
@@ -153,7 +153,7 @@ export class BillingController {
   @ApiOperation({ summary: 'Collect a failed or overdue charge again' })
   retry(
     @CurrentPrincipal() actor: Principal,
-    @Param('chargeId', ParseUUIDPipe) chargeId: string,
+    @Param('chargeId', ParseIdPipe) chargeId: string,
   ): Promise<ChargeDto> {
     return this.commands.execute(new RetryChargeCommand(actor, chargeId));
   }

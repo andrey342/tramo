@@ -1,8 +1,16 @@
-import { type INestApplication, RequestMethod, VersioningType } from '@nestjs/common';
+import { HttpStatus, type INestApplication, RequestMethod, VersioningType } from '@nestjs/common';
+import { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
 
 import { type AppConfig } from '../config';
+import { resolveRequestId } from '../context/request-id';
 
+import {
+  PROBLEM_CONTENT_TYPE,
+  type ProblemDetails,
+  statusCode,
+  statusTitle,
+} from './problem-details';
 import { setupSwagger } from './swagger';
 
 export const API_PREFIX = 'api';
@@ -33,4 +41,23 @@ export function configureHttpApp(app: INestApplication, config: AppConfig): void
   if (config.docs.enabled) {
     setupSwagger(app);
   }
+}
+
+// Nest answers unknown paths only below the global prefix; any other path would get Express's
+// HTML page. Call it once the app is initialised, so it runs after every route.
+export function answerUnknownPaths(app: INestApplication): void {
+  (app.getHttpAdapter().getInstance() as Express).use((request: Request, response: Response) => {
+    const path = request.originalUrl.split('?', 1)[0] ?? '/';
+    const status = HttpStatus.NOT_FOUND;
+    const problem: ProblemDetails = {
+      type: 'about:blank',
+      title: statusTitle(status),
+      status,
+      detail: `No route matches ${request.method} ${path}.`,
+      code: statusCode(status),
+      instance: path,
+      requestId: resolveRequestId(request, response),
+    };
+    response.status(status).type(PROBLEM_CONTENT_TYPE).json(problem);
+  });
 }

@@ -1,10 +1,10 @@
-import { Controller, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Controller, HttpCode, Param, Post } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems } from '@shared/infrastructure/http';
+import { ApiProblems, ParseIdPipe } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -32,7 +32,7 @@ export class OpsContractsController {
   })
   cancel(
     @CurrentPrincipal() actor: Principal,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('contractId', ParseIdPipe) contractId: string,
   ): Promise<ContractDto> {
     return this.commands.execute(new CancelUndisbursedContractCommand(actor, contractId));
   }

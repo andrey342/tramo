@@ -1,20 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import { ApiProblems, Idempotent, ParseIdPipe } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -73,7 +63,7 @@ export class CentersController {
   @ApiOperation({ summary: 'A training center: staff see any, a center admin its own' })
   get(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
   ): Promise<TrainingCenterResponse> {
     return this.queries.execute(new GetTrainingCenterQuery(actor, centerId));
   }
@@ -91,7 +81,7 @@ export class CentersController {
   })
   async verifyVat(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
   ): Promise<TrainingCenterResponse> {
     return (await this.commands.execute(new VerifyCenterVatCommand(actor, centerId))).center;
   }
@@ -107,7 +97,7 @@ export class CentersController {
   })
   update(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
     @Body() body: UpdateTrainingCenterRequest,
   ): Promise<TrainingCenterResponse> {
     return this.commands.execute(new UpdateTrainingCenterCommand(actor, centerId, body));

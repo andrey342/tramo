@@ -1,10 +1,15 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import {
+  ApiCursorPaginated,
+  ApiProblems,
+  Idempotent,
+  ParseIdPipe,
+} from '@shared/infrastructure/http';
 import {
   OptionalAuthentication,
   Public,
@@ -48,7 +53,7 @@ export class ProgramsController {
   })
   create(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
     @Body() body: CreateProgramRequest,
   ): Promise<ProgramResponse> {
     const { financing, ...details } = body;
@@ -68,7 +73,7 @@ export class ProgramsController {
   })
   update(
     @CurrentPrincipal() actor: Principal,
-    @Param('programId', ParseUUIDPipe) programId: string,
+    @Param('programId', ParseIdPipe) programId: string,
     @Body() body: UpdateProgramRequest,
   ): Promise<ProgramResponse> {
     const { financing, status, ...details } = body;
@@ -108,7 +113,7 @@ export class ProgramsController {
   })
   get(
     @CurrentPrincipal() actor: Principal,
-    @Param('programId', ParseUUIDPipe) programId: string,
+    @Param('programId', ParseIdPipe) programId: string,
   ): Promise<CatalogProgramResponse> {
     return this.queries.execute(new GetProgramQuery(actor, programId));
   }

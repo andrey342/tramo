@@ -1,4 +1,4 @@
-export { API_PREFIX, configureHttpApp } from './configure-http-app';
+export { answerUnknownPaths, API_PREFIX, configureHttpApp } from './configure-http-app';
 export { HttpPlatformModule } from './http-platform.module';
 export {
   IDEMPOTENCY_KEY_HEADER,
@@ -12,7 +12,7 @@ export { AuthRateLimited } from './throttling/throttling.module';
 export { CurrentPrincipal, principalOf, type RequestWithPrincipal } from './principal';
 export * from './problem-details';
 export { API_KEY_HEADER, setupSwagger } from './swagger';
-export { createValidationPipe } from './validation';
+export { createValidationPipe, ParseIdPipe } from './validation';
 export {
   signWebhook,
   verifyWebhook,

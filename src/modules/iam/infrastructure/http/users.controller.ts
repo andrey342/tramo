@@ -1,10 +1,10 @@
-import { Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems } from '@shared/infrastructure/http';
+import { ApiProblems, ParseIdPipe } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -31,7 +31,7 @@ export class UsersController {
   })
   async disable(
     @CurrentPrincipal() actor: Principal,
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('userId', ParseIdPipe) userId: string,
   ): Promise<void> {
     await this.commands.execute(new DisableUserCommand(actor, userId));
   }

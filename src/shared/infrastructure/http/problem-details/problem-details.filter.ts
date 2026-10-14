@@ -10,6 +10,8 @@ import { type Request, type Response } from 'express';
 
 import { DomainError } from '@shared/domain';
 
+import { resolveRequestId } from '../../context/request-id';
+
 import { domainErrorToProblem } from './domain-error.mapper';
 import {
   PROBLEM_CONTENT_TYPE,
@@ -21,22 +23,22 @@ import {
 import { ProblemException } from './problem.exception';
 import { ValidationProblemException } from './validation-problem.exception';
 
-type RequestWithId = Request & { id?: unknown };
-
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
   private readonly logger = new Logger(ProblemDetailsFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
-    const request = http.getRequest<RequestWithId>();
+    const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
     const problem: ProblemDetails = {
       ...this.toProblem(exception),
       // Path only: the query string may carry identifiers that should not be echoed back.
       instance: request.originalUrl.split('?', 1)[0],
-      requestId: typeof request.id === 'string' ? request.id : undefined,
+      // Set by the request context; a body the parser refused fails before it, so it is resolved
+      // here too.
+      requestId: resolveRequestId(request, response),
     };
 
     if (!(exception instanceof HttpException || exception instanceof DomainError)) {

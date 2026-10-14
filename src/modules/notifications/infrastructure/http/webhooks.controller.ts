@@ -7,7 +7,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -17,7 +16,12 @@ import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nes
 
 import { type CursorPage, type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiCursorPaginated, ApiProblems, Idempotent } from '@shared/infrastructure/http';
+import {
+  ApiCursorPaginated,
+  ApiProblems,
+  Idempotent,
+  ParseIdPipe,
+} from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -61,7 +65,7 @@ export class WebhooksController {
   })
   configure(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
     @Body() body: ConfigureWebhookRequest,
   ): Promise<ConfiguredWebhookDto> {
     return this.commands.execute(new ConfigureWebhookCommand(actor, centerId, body.url));
@@ -74,7 +78,7 @@ export class WebhooksController {
   @ApiOperation({ summary: "The center's webhook, without its secret" })
   get(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
   ): Promise<WebhookSubscriptionDto> {
     return this.queries.execute(new GetWebhookQuery(actor, centerId));
   }
@@ -88,7 +92,7 @@ export class WebhooksController {
   @ApiOperation({ summary: 'Stop posting events to the center' })
   async remove(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
   ): Promise<void> {
     await this.commands.execute(new RemoveWebhookCommand(actor, centerId));
   }
@@ -101,7 +105,7 @@ export class WebhooksController {
   @ApiOperation({ summary: 'What was posted to the center, newest first' })
   deliveries(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
     @Query() query: DeliveryQueryDto,
   ): Promise<CursorPage<WebhookDeliveryDto>> {
     return this.queries.execute(
@@ -128,8 +132,8 @@ export class WebhooksController {
   @ApiOperation({ summary: 'Post a delivery again, as a new round of attempts' })
   redeliver(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
-    @Param('deliveryId', ParseUUIDPipe) deliveryId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
+    @Param('deliveryId', ParseIdPipe) deliveryId: string,
   ): Promise<WebhookDeliveryDto> {
     return this.commands.execute(new RedeliverWebhookCommand(actor, centerId, deliveryId));
   }

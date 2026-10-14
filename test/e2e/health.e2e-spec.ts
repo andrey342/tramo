@@ -40,6 +40,31 @@ describe('Health (e2e)', () => {
     expect(response.headers['x-request-id']).toBeDefined();
   });
 
+  // Outside the prefix, a body the parser refuses and a malformed id in the path: still problem
+  // details, with the request id.
+  it('should answer every error with problem details and a request id', async () => {
+    const server = app.getHttpServer();
+    const outside = await request(server).get('/nope');
+    const malformed = await request(server)
+      .post('/api/v1/auth/register')
+      .set('Content-Type', 'application/json')
+      .send('{"email":');
+    const badId = await request(server).get('/api/v1/programs/not-a-uuid');
+
+    expect(outside.status).toBe(404);
+    expect(outside.body).toMatchObject({ code: 'not_found', instance: '/nope' });
+    expect(malformed.status).toBe(400);
+    expect(badId.status).toBe(400);
+    expect(badId.body).toMatchObject({
+      code: 'validation_error',
+      errors: [{ field: 'programId', message: 'programId must be a UUID' }],
+    });
+    for (const response of [outside, malformed, badId]) {
+      expect(response.headers['content-type']).toContain('application/problem+json');
+      expect(response.body.requestId).toEqual(response.headers['x-request-id']);
+    }
+  });
+
   it('should publish the openapi document', async () => {
     const response = await request(app.getHttpServer()).get('/docs/openapi.json');
 

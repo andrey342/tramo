@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -9,6 +9,7 @@ import {
   ApiProblems,
   CursorPageQueryDto,
   Idempotent,
+  ParseIdPipe,
 } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
@@ -65,7 +66,7 @@ export class OpsApplicationsController {
   @ApiOperation({ summary: 'Approve or reject an application in review, with a reason' })
   decide(
     @CurrentPrincipal() actor: Principal,
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('applicationId', ParseIdPipe) applicationId: string,
     @Body() body: DecideApplicationRequest,
   ): Promise<ApplicationDto> {
     return this.commands.execute(

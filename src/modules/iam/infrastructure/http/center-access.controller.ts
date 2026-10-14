@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import {
   ApiCreatedResponse,
@@ -20,7 +10,7 @@ import {
 
 import { type Principal } from '@shared/application';
 import { Audited } from '@shared/infrastructure/audit';
-import { ApiProblems } from '@shared/infrastructure/http';
+import { ApiProblems, ParseIdPipe } from '@shared/infrastructure/http';
 import { Roles } from '@shared/infrastructure/http/access.decorators';
 import { CurrentPrincipal } from '@shared/infrastructure/http/principal';
 
@@ -54,7 +44,7 @@ export class CenterAccessController {
   @ApiOperation({ summary: 'Create an administrator account for a training center (admin)' })
   createUser(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
     @Body() body: CreateCenterUserRequest,
   ): Promise<CenterUserCreatedResponse> {
     return this.commands.execute(
@@ -70,7 +60,7 @@ export class CenterAccessController {
   @ApiOperation({ summary: 'Issue an API key for the center; the key is shown once' })
   issueApiKey(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
     @Body() body: IssueApiKeyRequest,
   ): Promise<IssuedApiKeyResponse> {
     return this.commands.execute(
@@ -91,7 +81,7 @@ export class CenterAccessController {
   @ApiOperation({ summary: "List the center's API keys (without secrets)" })
   listApiKeys(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
   ): Promise<ApiKeyResponse[]> {
     return this.queries.execute(new ListApiKeysQuery(actor, centerId));
   }
@@ -105,8 +95,8 @@ export class CenterAccessController {
   @ApiOperation({ summary: 'Revoke an API key; requests with it fail from now on' })
   async revokeApiKey(
     @CurrentPrincipal() actor: Principal,
-    @Param('centerId', ParseUUIDPipe) centerId: string,
-    @Param('keyId', ParseUUIDPipe) keyId: string,
+    @Param('centerId', ParseIdPipe) centerId: string,
+    @Param('keyId', ParseIdPipe) keyId: string,
   ): Promise<void> {
     await this.commands.execute(new RevokeApiKeyCommand(actor, centerId, keyId));
   }

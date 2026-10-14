@@ -117,7 +117,10 @@ describe('ProblemDetailsFilter', () => {
       detail: 'Program 42 does not exist.',
       instance: '/probe/missing',
       code: 'not_found',
+      // No request context in this probe: the filter gives the request its id itself.
+      requestId: response.headers['x-request-id'],
     });
+    expect(response.body.requestId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('should tell when to retry when an infrastructure problem carries a delay', async () => {
