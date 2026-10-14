@@ -345,7 +345,9 @@ students declare a month's income with `POST /contracts/:id/income-declarations`
 the next month; on the 5th the month is charged. An ISA signed today starts paying months later
 (`firstPeriod` on its schedule): to see one charged, declare that month with `?asOf=` set to the
 2nd of the next month, then run billing as of the 5th (both need `BILLING_FUTURE_RUNS_ENABLED`, on
-outside production).
+outside production). Only billing, dunning and declarations walk the months: payoff quotes, the
+schedule's due instalments and the catch-up a new mandate triggers follow today's date, and a
+payoff is refused while a charge is overdue.
 
 Every step above writes to someone: the student receives emails (welcome, application received,
 decision, contract ready to sign, payment reminders and receipts, overdue notices, returned
