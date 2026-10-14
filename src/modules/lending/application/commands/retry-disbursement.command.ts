@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -29,6 +35,7 @@ export class RetryDisbursementHandler implements ICommandHandler<RetryDisburseme
   constructor(
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(DISBURSEMENT_REPOSITORY) private readonly disbursements: DisbursementRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -41,8 +48,13 @@ export class RetryDisbursementHandler implements ICommandHandler<RetryDisburseme
       if (!disbursement) {
         throw new EntityNotFoundError('Disbursement', command.disbursementId);
       }
+      const before = { status: disbursement.status, attempt: disbursement.attempt };
       disbursement.retry(this.clock.now());
       await this.disbursements.save(disbursement);
+      this.audit.describeChanges({
+        status: { before: before.status, after: disbursement.status },
+        attempt: { before: before.attempt, after: disbursement.attempt },
+      });
       return toDisbursementDto(disbursement);
     });
   }

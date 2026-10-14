@@ -60,7 +60,7 @@ function setup() {
       }
     },
     rebuild: new RebuildProjectionsHandler(uow, store, history, projector),
-    request: new RequestRebuildHandler(jobs),
+    request: new RequestRebuildHandler(jobs, { describeChanges: () => undefined }),
     dashboard: new GetCenterDashboardHandler(store, clock),
     performance: new GetProgramPerformanceHandler(store, programs, scores, clock),
     overview: new GetOpsOverviewHandler(store, queues, clock),

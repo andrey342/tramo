@@ -59,7 +59,13 @@ function setup() {
     centers,
     changes,
     register: new RegisterTrainingCenterHandler(uow, centers, vat, clock),
-    verify: new VerifyCenterVatHandler(uow, centers, vat, clock),
+    verify: new VerifyCenterVatHandler(
+      uow,
+      centers,
+      vat,
+      { describeChanges: (change) => changes.push(change) },
+      clock,
+    ),
     update: new UpdateTrainingCenterHandler(
       uow,
       centers,
@@ -171,6 +177,7 @@ describe('training center use cases', () => {
           check: () =>
             Promise.resolve({ outcome: 'unavailable', provider: 'fake', reason: 'TIMEOUT' }),
         },
+        { describeChanges: () => undefined },
         t.clock,
       );
 

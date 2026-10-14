@@ -113,9 +113,9 @@ function setup() {
     audited,
     start: new StartApplicationHandler(uow, applications, programs, students, clock),
     update: new UpdateApplicationDraftHandler(uow, applications, programs, clock),
-    submit: new SubmitApplicationHandler(uow, applications, programs, clock),
-    cancel: new CancelApplicationHandler(uow, applications, clock),
-    accept: new AcceptOfferHandler(uow, applications, programs, clock),
+    submit: new SubmitApplicationHandler(uow, applications, programs, audit, clock),
+    cancel: new CancelApplicationHandler(uow, applications, audit, clock),
+    accept: new AcceptOfferHandler(uow, applications, programs, audit, clock),
     decide: new DecideApplicationHandler(uow, applications, audit, clock),
     get: new GetApplicationHandler(applications),
     decision: new GetApplicationDecisionHandler(applications),
@@ -457,7 +457,10 @@ describe('application use cases', () => {
 
       expect(queue.data.map((row) => row.id)).toEqual([first, second]);
       expect(decided.status).toBe('approved');
+      // The two submissions first, then the decision.
       expect(t.audited).toEqual([
+        { status: { before: 'draft', after: 'submitted' } },
+        { status: { before: 'draft', after: 'submitted' } },
         {
           status: { before: 'needs_review', after: 'approved' },
           reason: { before: null, after: 'Stable job, low risk' },

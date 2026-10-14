@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CalendarDate, CLOCK, type Clock, EntityNotFoundError, Money } from '@shared/domain';
 
 import {
@@ -34,6 +40,7 @@ export class RequestPayoffHandler implements ICommandHandler<RequestPayoffComman
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(CONTRACT_REPOSITORY) private readonly contracts: ContractRepository,
     @Inject(FINANCING_PLAN_REPOSITORY) private readonly plans: FinancingPlanRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -51,6 +58,7 @@ export class RequestPayoffHandler implements ICommandHandler<RequestPayoffComman
       const today = CalendarDate.fromInstant(now);
       const quote = plan.requestPayoff(today, Money.fromCents(command.expectedAmountCents), now);
       await this.plans.save(plan);
+      this.audit.describeChanges({ payoffCents: { before: null, after: quote.total.cents } });
       return toPayoffQuoteDto(contract.id, quote);
     });
   }

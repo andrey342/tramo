@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import { AUDIT_TRAIL, type AuditTrail, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
 import { CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -29,6 +29,7 @@ export class VerifyCenterVatHandler implements ICommandHandler<VerifyCenterVatCo
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(TRAINING_CENTER_REPOSITORY) private readonly centers: TrainingCenterRepository,
     @Inject(VAT_VALIDATOR) private readonly vat: VatValidator,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -40,8 +41,13 @@ export class VerifyCenterVatHandler implements ICommandHandler<VerifyCenterVatCo
     const result = await this.vat.check(before.vatNumber);
     return this.uow.run(async () => {
       const center = await this.load(command.centerId);
+      const was = { status: center.status, vat: center.vatValidation?.status ?? null };
       center.recordVatCheck(result, this.clock.now(), before.vatNumber);
       await this.centers.save(center);
+      this.audit.describeChanges({
+        status: { before: was.status, after: center.status },
+        vatStatus: { before: was.vat, after: center.vatValidation?.status ?? null },
+      });
       return { center: toTrainingCenterDto(center), outcome: result.outcome };
     });
   }

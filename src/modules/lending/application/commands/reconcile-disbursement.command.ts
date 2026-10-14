@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal } from '@shared/application';
+import { AUDIT_TRAIL, type AuditTrail, type Principal } from '@shared/application';
 import { EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -41,6 +41,7 @@ export class ReconcileDisbursementHandler implements ICommandHandler<ReconcileDi
     @Inject(DISBURSEMENT_REPOSITORY) private readonly disbursements: DisbursementRepository,
     private readonly transfer: ExecuteDisbursementHandler,
     private readonly settlement: CheckDisbursementSettlementHandler,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
   ) {}
 
   async execute(command: ReconcileDisbursementCommand): Promise<DisbursementDto> {
@@ -56,7 +57,8 @@ export class ReconcileDisbursementHandler implements ICommandHandler<ReconcileDi
     } else if (disbursement.status === 'sent') {
       await this.settlement.execute(new CheckDisbursementSettlementCommand(disbursement.id));
     }
-    const current = await this.disbursements.findById(disbursement.id);
-    return toDisbursementDto(current ?? disbursement);
+    const current = (await this.disbursements.findById(disbursement.id)) ?? disbursement;
+    this.audit.describeChanges({ status: { before: disbursement.status, after: current.status } });
+    return toDisbursementDto(current);
   }
 }

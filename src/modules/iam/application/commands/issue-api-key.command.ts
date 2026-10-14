@@ -2,7 +2,13 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { type ApiKeyScope, CLOCK, type Clock, EntityNotFoundError } from '@shared/domain';
 
 import {
@@ -43,6 +49,7 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
     @Inject(API_KEY_REPOSITORY) private readonly apiKeys: ApiKeyRepository,
     @Inject(CREDENTIAL_GENERATOR) private readonly credentials: CredentialGenerator,
     @Inject(CENTER_DIRECTORY) private readonly centers: CenterDirectory,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -70,6 +77,11 @@ export class IssueApiKeyHandler implements ICommandHandler<IssueApiKeyCommand> {
       expiresAt: command.expiresAt,
     });
     await this.uow.run(() => this.apiKeys.save(apiKey));
+    // Never the secret: the key by its name, prefix and what it may do.
+    this.audit.describeChanges({
+      apiKey: { before: null, after: { id: apiKey.id, name: apiKey.name, prefix: secret.prefix } },
+      scopes: { before: null, after: [...apiKey.scopes] },
+    });
     return { ...toApiKeySummary(apiKey), key: secret.value };
   }
 

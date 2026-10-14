@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
 import {
@@ -32,6 +38,7 @@ export class AcceptOfferHandler implements ICommandHandler<AcceptOfferCommand> {
     @Inject(FINANCING_APPLICATION_REPOSITORY)
     private readonly applications: FinancingApplicationRepository,
     @Inject(PROGRAM_DIRECTORY) private readonly programs: ProgramDirectory,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -49,8 +56,10 @@ export class AcceptOfferHandler implements ICommandHandler<AcceptOfferCommand> {
       if (!(await this.programs.findOpenProgram(application.program.programId))) {
         throw new ProgramNotAvailableError(application.program.programId);
       }
+      const before = application.status;
       application.acceptOffer(this.clock.now());
       await this.applications.save(application);
+      this.audit.describeChanges({ status: { before, after: application.status } });
       return toApplicationDto(application, { withProfile: true });
     });
   }

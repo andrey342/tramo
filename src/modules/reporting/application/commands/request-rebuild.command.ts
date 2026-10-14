@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, principalId } from '@shared/application';
+import { AUDIT_TRAIL, type AuditTrail, type Principal, principalId } from '@shared/application';
 
 import { REBUILD_JOBS, type RebuildJobs } from '../ports/reporting-ports';
 import { assertStaff } from '../reporting-access';
@@ -16,10 +16,16 @@ export class RequestRebuildCommand extends Command<{ readonly queued: boolean }>
 
 @CommandHandler(RequestRebuildCommand)
 export class RequestRebuildHandler implements ICommandHandler<RequestRebuildCommand> {
-  constructor(@Inject(REBUILD_JOBS) private readonly jobs: RebuildJobs) {}
+  constructor(
+    @Inject(REBUILD_JOBS) private readonly jobs: RebuildJobs,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
+  ) {}
 
   async execute(command: RequestRebuildCommand): Promise<{ readonly queued: boolean }> {
     assertStaff(command.actor);
-    return { queued: await this.jobs.request(principalId(command.actor)) };
+    const queued = await this.jobs.request(principalId(command.actor));
+    // A request while a rebuild is queued joins it.
+    this.audit.describeChanges({ rebuild: { before: null, after: queued ? 'queued' : 'joined' } });
+    return { queued };
   }
 }

@@ -1,4 +1,4 @@
-import { type Principal } from '@shared/application';
+import { type AuditChanges, type Principal } from '@shared/application';
 import { EntityNotFoundError, FixedClock, InvalidValueError } from '@shared/domain';
 
 import { aCenterAdmin, aStaffUser, DEFAULT_CENTER_ID } from '../../../../test/factories/iam';
@@ -50,6 +50,7 @@ function setup(knownCenters?: ReadonlySet<string>, suspendedCenters = new Set<st
   const credentials = new SequentialCredentialGenerator();
   const changes: unknown[] = [];
   const centers = new FakeCenterDirectory(knownCenters, suspendedCenters);
+  const audit = { describeChanges: (change: AuditChanges) => changes.push(change) };
   return {
     clock,
     events,
@@ -64,8 +65,8 @@ function setup(knownCenters?: ReadonlySet<string>, suspendedCenters = new Set<st
       centers,
       clock,
     ),
-    issue: new IssueApiKeyHandler(uow, apiKeys, credentials, centers, clock),
-    revoke: new RevokeApiKeyHandler(uow, apiKeys, clock),
+    issue: new IssueApiKeyHandler(uow, apiKeys, credentials, centers, audit, clock),
+    revoke: new RevokeApiKeyHandler(uow, apiKeys, audit, clock),
     revokeCenterKeys: new RevokeCenterApiKeysHandler(uow, apiKeys, clock),
     list: new ListApiKeysHandler(apiKeys),
     authenticate: new AuthenticateApiKeyHandler(apiKeys, credentials, centers, clock),

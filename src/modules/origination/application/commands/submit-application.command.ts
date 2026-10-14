@@ -1,7 +1,13 @@
 import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { CLOCK, type Clock } from '@shared/domain';
 
 import {
@@ -33,6 +39,7 @@ export class SubmitApplicationHandler implements ICommandHandler<SubmitApplicati
     @Inject(FINANCING_APPLICATION_REPOSITORY)
     private readonly applications: FinancingApplicationRepository,
     @Inject(PROGRAM_DIRECTORY) private readonly programs: ProgramDirectory,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -50,8 +57,10 @@ export class SubmitApplicationHandler implements ICommandHandler<SubmitApplicati
       if (!program) {
         throw new ProgramNotAvailableError(application.program.programId);
       }
+      const before = application.status;
       application.submit(program, this.clock.now());
       await this.applications.save(application);
+      this.audit.describeChanges({ status: { before, after: application.status } });
       return toApplicationDto(application, { withProfile: true });
     });
   }
