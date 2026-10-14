@@ -35,24 +35,24 @@ without pasting anything.
 
 Mirrors `scripts/demo.ts` (`pnpm demo` runs the same walk from a terminal):
 
-| Step | Request                                          | Notes                                                  |
-| ---- | ------------------------------------------------ | ------------------------------------------------------ |
-| 1    | Catalog / List programs                          | stores the Full Stack bootcamp in `programId`          |
-| 2    | Applications / Start application                 | 24 instalments, a profile that is approved             |
-| 3    | Applications / Submit application                | the worker verifies and scores it                      |
-| 4    | Applications / Get application                   | repeat until `status` is `approved`                    |
-| 5    | Applications / Get decision                      | score, factors and reasons                             |
-| 6    | Applications / Accept offer                      | lending draws up the contract                          |
-| 7    | Contracts / List contracts                       | repeat until the contract appears; stores `contractId` |
-| 8    | Contracts / Get contract                         | repeat until `sent_for_signature`; stores the envelope |
-| 9    | Contracts / Sign contract (e-signature callback) | see below                                              |
-| 10   | Contracts / Sign mandate                         | direct debit authorisation                             |
-| 11   | Contracts / Get contract                         | repeat until `active` (the center has been paid)       |
-| 12   | Contracts / Get schedule                         | repeat while 404; stores `firstDueDate`                |
-| 13   | Billing / Run billing (ops)                      | bills the first instalment as of its due date          |
-| 14   | Billing / List charges                           | repeat until instalment 1 is `paid`                    |
-| 15   | Billing / Get statement                          | charge, payment and balance                            |
-| 16   | Reporting / Center dashboard                     | the center's view of the same money                    |
+| Step | Request                                          | Notes                                                   |
+| ---- | ------------------------------------------------ | ------------------------------------------------------- |
+| 1    | Catalog / List programs                          | stores the Full Stack bootcamp in `programId`           |
+| 2    | Applications / Start application                 | 24 instalments, a profile that is approved              |
+| 3    | Applications / Submit application                | the worker verifies and scores it                       |
+| 4    | Applications / Get application                   | repeat until `status` is `approved`                     |
+| 5    | Applications / Get decision                      | score, factors and reasons                              |
+| 6    | Applications / Accept offer                      | lending draws up the contract                           |
+| 7    | Contracts / List contracts                       | repeat until the contract appears; stores `contractId`  |
+| 8    | Contracts / Get contract                         | repeat until `sent_for_signature`; stores the envelope  |
+| 9    | Contracts / Sign contract (e-signature callback) | see below                                               |
+| 10   | Contracts / Sign mandate                         | direct debit authorisation                              |
+| 11   | Contracts / Get contract                         | repeat until `active` (the center has been paid)        |
+| 12   | Contracts / Get schedule                         | repeat while 409 `plan_not_open`; stores `firstDueDate` |
+| 13   | Billing / Run billing (ops)                      | bills the first instalment as of its due date           |
+| 14   | Billing / List charges                           | repeat until instalment 1 is `paid`                     |
+| 15   | Billing / Get statement                          | charge, payment and balance                             |
+| 16   | Reporting / Center dashboard                     | the center's view of the same money                     |
 
 The worker does the asynchronous steps (scoring, contract, payout, collection) within seconds;
 the "repeat until" steps just mean sending the request again.

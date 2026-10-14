@@ -40,7 +40,7 @@ export class ReportingController {
   ) {}
 
   @Get('centers/:centerId/dashboard')
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 404)
   @ApiOkResponse({ type: CenterDashboardResponse })
   @Roles('center_admin', 'ops', 'admin')
   @RequireScopes('portfolio:read')

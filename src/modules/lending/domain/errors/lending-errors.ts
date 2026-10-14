@@ -130,13 +130,16 @@ export class InstallmentNotPaidError extends DomainError {
   }
 }
 
-// The repayment plan opens when the contract is activated (the center has been paid): before
-// that there is no schedule and nothing to pay off.
+// The repayment plan opens just after the contract is activated (the center has been paid): until
+// then there is no schedule and nothing to pay off, and a contract cancelled never gets one.
 export class PlanNotOpenError extends DomainError {
   readonly code = 'plan_not_open';
   readonly category = 'conflict';
 
   constructor(contractId: string) {
-    super('The contract has no repayment plan until it is activated.', { contractId });
+    super(
+      'The contract has no repayment plan: one opens shortly after it is activated, never once it is cancelled.',
+      { contractId },
+    );
   }
 }

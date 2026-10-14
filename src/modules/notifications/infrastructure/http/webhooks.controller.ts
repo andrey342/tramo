@@ -98,7 +98,7 @@ export class WebhooksController {
   }
 
   @Get('webhook-deliveries')
-  @ApiProblems(400, 401, 403)
+  @ApiProblems(400, 401, 403, 404)
   @ApiCursorPaginated()
   @ApiOkResponse({ type: WebhookDeliveryPageResponse })
   @Roles('center_admin', 'ops', 'admin')
