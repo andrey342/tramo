@@ -218,6 +218,29 @@ describe('Applications (e2e)', () => {
     expect(decided.body.status).toBe('rejected');
   });
 
+  // A field the api would drop is refused, so the caller does not believe it was applied.
+  it('should refuse a student naming another student, and a term for an ISA', async () => {
+    const student = await newStudent();
+    const other = await newStudent();
+
+    const forOther = await start(bearer(student.token), {
+      programId,
+      product: { kind: 'installments', termMonths: 12 },
+      studentEmail: other.email,
+    });
+    const isaWithTerm = await start(bearer(student.token), {
+      programId,
+      product: { kind: 'isa', termMonths: 12 },
+    });
+
+    expect(forOther.status).toBe(422);
+    expect(forOther.body.errors).toEqual([expect.objectContaining({ field: 'studentEmail' })]);
+    expect(isaWithTerm.status).toBe(400);
+    expect(isaWithTerm.body.errors).toEqual([
+      expect.objectContaining({ field: 'product.termMonths' }),
+    ]);
+  });
+
   it('should list by caller and refuse what each may not do', async () => {
     const ana = await newStudent();
     const luis = await newStudent();
