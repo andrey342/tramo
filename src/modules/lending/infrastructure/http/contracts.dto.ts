@@ -92,7 +92,7 @@ export class ESignatureCallbackRequest {
   occurredAt!: string;
 }
 
-class ProgramResponse {
+class ContractProgramResponse {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
@@ -179,8 +179,8 @@ export class ContractResponse {
   @ApiProperty({ format: 'uuid' })
   centerId!: string;
 
-  @ApiProperty({ type: ProgramResponse })
-  program!: ProgramResponse;
+  @ApiProperty({ type: ContractProgramResponse })
+  program!: ContractProgramResponse;
 
   @ApiProperty({ example: 750_000 })
   principalCents!: number;

@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+
 import { type DynamicModule, type INestApplication, type Type } from '@nestjs/common';
 import { DECORATORS, DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
@@ -149,5 +151,19 @@ describe('OpenAPI document', () => {
       (schemas['CreateProgramRequest'] as { properties?: Record<string, { type?: string }> })
         .properties?.['priceCents'],
     ).toMatchObject({ type: 'integer' });
+  });
+
+  // The document keys schemas by class name: a second DTO of the same name replaces the first, and
+  // a route would be documented with another route's shape.
+  it('should give every DTO class a name of its own', () => {
+    const names = readdirSync('src/modules', { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.dto.ts'))
+      .flatMap((file) =>
+        [...readFileSync(`src/modules/${file}`, 'utf8').matchAll(/^(?:export )?class (\w+)/gm)].map(
+          (match) => match[1],
+        ),
+      );
+
+    expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
   });
 });
