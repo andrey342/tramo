@@ -8,7 +8,8 @@ x-app: &app
     dockerfile: docker/Dockerfile
     # The application plus the seed and demo scripts; the default target leaves them out.
     target: demo
-  image: tramo:local
+  # Named after the project, so copies run with `-p` do not overwrite each other's image.
+  image: ${COMPOSE_PROJECT_NAME}:local
   profiles: [demo]
   restart: unless-stopped
   depends_on:
@@ -53,7 +54,7 @@ services:
   postgres:
     build:
       context: docker/postgres
-    image: tramo-postgres:local
+    image: ${COMPOSE_PROJECT_NAME}-postgres:local
     profiles: [dev, demo]
     restart: unless-stopped
     # pg_stat_statements must be preloaded; it feeds the query diagnostics (see .mcp.json).

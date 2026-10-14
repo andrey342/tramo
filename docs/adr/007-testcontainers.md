@@ -13,7 +13,7 @@ BullMQ semantics. In-memory fakes and SQLite pass where production fails.
 
 - Integration (`pnpm test:int`, files `*.int-spec.ts`) and e2e (`pnpm test:e2e`) suites start
   Postgres 16 and Redis 7 with Testcontainers (`postgres:16.15-alpine`, `redis:7.4.11-alpine`).
-  Compose runs the same Redis tag and builds `tramo-postgres:local` on the same Postgres base,
+  Compose runs the same Redis tag and builds `<project>-postgres:local` (`tramo-postgres:local` by default) on the same Postgres base,
   adding only the diagnostics extensions (`pg_stat_statements`, `hypopg`).
 - Containers start once per run in Jest's global setup; the database is built by running the real
   migrations, so a migration that does not match the entities fails the suite.
