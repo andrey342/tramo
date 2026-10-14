@@ -2,7 +2,13 @@ import { Inject } from '@nestjs/common';
 import { Command, CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { uuidv7 } from 'uuidv7';
 
-import { type Principal, UNIT_OF_WORK, type UnitOfWork } from '@shared/application';
+import {
+  AUDIT_TRAIL,
+  type AuditTrail,
+  type Principal,
+  UNIT_OF_WORK,
+  type UnitOfWork,
+} from '@shared/application';
 import { type CalendarDate, CLOCK, type Clock, Money } from '@shared/domain';
 
 import {
@@ -45,6 +51,7 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
     private readonly declarations: IncomeDeclarationRepository,
     @Inject(REPAYMENT_PLANS) private readonly plans: RepaymentPlans,
     @Inject(CHARGE_REPOSITORY) private readonly charges: ChargeRepository,
+    @Inject(AUDIT_TRAIL) private readonly audit: AuditTrail,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -79,6 +86,8 @@ export class DeclareIncomeHandler implements ICommandHandler<DeclareIncomeComman
         now: this.clock.now(),
       });
       await this.declarations.save(declaration);
+      // The month only: the income stays in billing.
+      this.audit.describeChanges({ declaredPeriod: { before: null, after: declaration.period } });
       return toDeclarationDto(declaration);
     });
   }

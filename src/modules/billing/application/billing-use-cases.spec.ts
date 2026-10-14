@@ -149,7 +149,7 @@ function setup() {
     charge,
     mandate,
     sign: new SignMandateHandler(uow, mandates, charges, plans, audit, clock),
-    declare: new DeclareIncomeHandler(uow, declarations, plans, charges, clock),
+    declare: new DeclareIncomeHandler(uow, declarations, plans, charges, audit, clock),
     cycle: new RunBillingCycleHandler(uow, plans, charges, declarations, clock),
     collect: new CollectDueChargesHandler(uow, charges, mandates, clock),
     waiting: new CollectWaitingChargesHandler(uow, charges, mandates, clock),

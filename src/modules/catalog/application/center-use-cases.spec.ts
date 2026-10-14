@@ -58,7 +58,13 @@ function setup() {
     events,
     centers,
     changes,
-    register: new RegisterTrainingCenterHandler(uow, centers, vat, clock),
+    register: new RegisterTrainingCenterHandler(
+      uow,
+      centers,
+      vat,
+      { describeChanges: (change) => changes.push(change) },
+      clock,
+    ),
     verify: new VerifyCenterVatHandler(
       uow,
       centers,
@@ -124,6 +130,7 @@ describe('training center use cases', () => {
         new InlineUnitOfWork(),
         t.centers,
         { acceptsTestNumbers: false, check: () => Promise.reject(new Error('not asked')) },
+        { describeChanges: () => undefined },
         t.clock,
       );
       const command = new RegisterTrainingCenterCommand(ADMIN, 'X', 'DE', '100', VALID_IBAN, 500);

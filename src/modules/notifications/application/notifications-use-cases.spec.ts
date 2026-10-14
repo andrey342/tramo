@@ -110,7 +110,7 @@ function setup() {
     remove: new RemoveWebhookHandler(uow, subscriptions, audit, clock),
     get: new GetWebhookHandler(subscriptions),
     deliver: new DeliverWebhookHandler(uow, deliveries, subscriptions, webhookSender, clock),
-    redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, clock),
+    redeliver: new RedeliverWebhookHandler(uow, deliveries, subscriptions, audit, clock),
     list: new ListWebhookDeliveriesHandler(new InMemoryNotificationsQueries(deliveries), centers),
     request: new RequestEmailHandler(uow, emails, recipients, clock),
     send: new SendEmailHandler(uow, emails, new FakeEmailRenderer(), emailSender, clock),
