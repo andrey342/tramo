@@ -8,7 +8,7 @@ import {
   UNIT_OF_WORK,
   type UnitOfWork,
 } from '@shared/application';
-import { CalendarDate, CLOCK, type Clock, EntityNotFoundError, Money } from '@shared/domain';
+import { CalendarDate, CLOCK, type Clock, Money } from '@shared/domain';
 
 import {
   ContractAccessDeniedError,
@@ -16,6 +16,7 @@ import {
   type ContractRepository,
   FINANCING_PLAN_REPOSITORY,
   type FinancingPlanRepository,
+  PlanNotOpenError,
 } from '../../domain';
 import { findVisibleContract, isStudentOf } from '../contract-access';
 import { toPayoffQuoteDto } from '../contract.mapping';
@@ -52,7 +53,7 @@ export class RequestPayoffHandler implements ICommandHandler<RequestPayoffComman
       }
       const plan = await this.plans.findByContractId(contract.id);
       if (!plan) {
-        throw new EntityNotFoundError('FinancingPlan', contract.id);
+        throw new PlanNotOpenError(contract.id);
       }
       const now = this.clock.now();
       const today = CalendarDate.fromInstant(now);
