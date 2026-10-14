@@ -25,6 +25,7 @@ import {
   type Charge,
   ContractNotRepayingError,
   IncomeAlreadyDeclaredError,
+  IncomeShareAssessedError,
   MandateMissingError,
   PayoffInProgressError,
   NotAnIncomeShareError,
@@ -108,6 +109,15 @@ function setup() {
     plans.addContract({ id, studentId, centerId, product, status });
     return id;
   };
+  // An ISA whose next month to assess is `next` (null once no more are assessed).
+  const isaAssessing = (next: string | null = '2026-11') => {
+    const id = uuidv7();
+    plans.addContract(
+      { id, studentId, centerId, product: 'isa', status: 'active' },
+      { kind: 'isa', unpaidInstallments: [], nextIsaPeriod: next },
+    );
+    return id;
+  };
   const charge = async (overrides: Parameters<typeof aCharge>[0] = {}): Promise<Charge> => {
     const created = aCharge({ studentId, centerId, ...overrides });
     await charges.save(created);
@@ -135,6 +145,7 @@ function setup() {
     studentId,
     centerId,
     contract,
+    isaAssessing,
     charge,
     mandate,
     sign: new SignMandateHandler(uow, mandates, charges, plans, audit, clock),
@@ -217,7 +228,7 @@ describe('billing use cases', () => {
   describe('income declarations', () => {
     it('should take one declaration per month of an ISA', async () => {
       const t = setup();
-      const contractId = t.contract('isa');
+      const contractId = t.isaAssessing();
 
       const declared = await t.declare.execute(
         new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00),
@@ -233,9 +244,20 @@ describe('billing use cases', () => {
     });
 
     // Only the student holds up the cycle of their contract.
+    // The cap, the last payment or the window was reached: its last months are being collected,
+    // and no month is charged any more.
+    it('should refuse a declaration once the agreement assesses no more months', async () => {
+      const t = setup();
+      const contractId = t.isaAssessing(null);
+
+      await expect(
+        t.declare.execute(new DeclareIncomeCommand(t.student, contractId, '2026-11', 2_000_00)),
+      ).rejects.toThrow(IncomeShareAssessedError);
+    });
+
     it('should not lock the contract when someone other than its student declares', async () => {
       const t = setup();
-      const contractId = t.contract('isa');
+      const contractId = t.isaAssessing();
 
       await expect(
         t.declare.execute(new DeclareIncomeCommand(OPS, contractId, '2026-11', 2_000_00)),
