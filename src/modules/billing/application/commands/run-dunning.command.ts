@@ -90,10 +90,10 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
       const contractInArrears =
         charge.reachesArrears(asOf) &&
         ((await this.charges.hasOtherChargesInArrears(charge.contractId, charge.id)) ||
-          (await this.defaulted(charge.contractId)));
+          (await this.defaulted(charge.contractId, asOf)));
       const { retry } = charge.applyDunning(asOf, now, contractInArrears);
       const mandate =
-        retry && !(await this.defaulted(charge.contractId))
+        retry && !(await this.defaulted(charge.contractId, asOf))
           ? await this.mandates.findActiveByContract(charge.contractId)
           : null;
       if (mandate) {
@@ -107,7 +107,12 @@ export class RunDunningHandler implements ICommandHandler<RunDunningCommand> {
   }
 
   // Asked only when a retry or the arrears step is due, which is a few times in a charge's life.
-  private async defaulted(contractId: string): Promise<boolean> {
-    return (await this.plans.findContract(contractId))?.status === 'defaulted';
+  // Billing knows of a default first (a charge written off, or reaching it in this very run);
+  // lending's status covers the rest.
+  private async defaulted(contractId: string, asOf: CalendarDate): Promise<boolean> {
+    return (
+      (await this.charges.defaultsBy(contractId, asOf)) ||
+      (await this.plans.findContract(contractId))?.status === 'defaulted'
+    );
   }
 }

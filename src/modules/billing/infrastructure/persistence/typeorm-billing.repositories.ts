@@ -20,6 +20,7 @@ import {
   OPEN_CHARGE_STATUSES,
   type PaymentMandate,
   type PaymentMandateRepository,
+  WRITE_OFF_DAYS,
 } from '../../domain';
 
 import { ChargeMapper, IncomeDeclarationMapper, PaymentMandateMapper } from './billing.mappers';
@@ -94,6 +95,21 @@ export class TypeOrmChargeRepository implements ChargeRepository {
       order: { id: 'ASC' },
     });
     return rows.map((row) => ChargeMapper.toDomain(row));
+  }
+
+  async defaultsBy(contractId: string, asOf: CalendarDate): Promise<boolean> {
+    const lastDueDate = asOf.addDays(-WRITE_OFF_DAYS).toString();
+    return this.txHost.tx.exists(ChargeOrmEntity, {
+      where: [
+        { contractId, status: 'written_off' },
+        {
+          contractId,
+          kind: Not('payoff'),
+          status: In(['scheduled', 'failed', 'overdue']),
+          dueDate: LessThanOrEqual(lastDueDate),
+        },
+      ],
+    });
   }
 
   async hasOtherChargesInArrears(contractId: string, exceptChargeId: string): Promise<boolean> {

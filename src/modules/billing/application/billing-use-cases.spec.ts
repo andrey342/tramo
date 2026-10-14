@@ -759,6 +759,30 @@ describe('billing use cases', () => {
       expect(after.chargesReviewed).toBe(0);
     });
 
+    // Instalment 1 reaches its write-off on the day instalment 3's retry falls due: the contract
+    // defaults in this very run, before lending hears of it, so nothing is debited again.
+    it('should not retry a charge in the run that defaults its contract', async () => {
+      const t = setup();
+      const contractId = t.contract();
+      await t.charge({ contractId });
+      const later = await t.charge({
+        contractId,
+        reference: 'installment:3',
+        installmentNumber: 3,
+        dueDate: '2027-02-07',
+      });
+      await t.dunning.execute(new RunDunningCommand(day('2027-02-08'), contractId));
+      await t.mandate(contractId);
+      t.events.published.length = 0;
+
+      const run = await t.dunning.execute(new RunDunningCommand(day('2027-02-10'), contractId));
+
+      expect(run.retries).toBe(0);
+      expect(t.events.ofType(BillingEvents.ChargeSubmitted)).toHaveLength(0);
+      expect(t.events.ofType(BillingEvents.ChargeWrittenOff)).toHaveLength(1);
+      expect((await t.charges.findById(later.id))?.status).toBe('overdue');
+    });
+
     // The student and the center hear of the arrears once: not again when the next instalment
     // reaches 30 days, nor once the contract has defaulted.
     it('should announce a contract in arrears once, and never after its default', async () => {

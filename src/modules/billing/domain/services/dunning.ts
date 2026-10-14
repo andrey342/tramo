@@ -24,6 +24,10 @@ export const DUNNING_STEPS: readonly DunningStep[] = [
 
 export const ARREARS_STEP = DUNNING_STEPS.findIndex((step) => step.action === 'arrears');
 
+// Days from the due date to the write-off, when the contract defaults.
+export const WRITE_OFF_DAYS =
+  DUNNING_STEPS.find((step) => step.action === 'write_off')?.offset ?? Number.POSITIVE_INFINITY;
+
 // The steps that come before the due date (the reminder): a charge due again at once, after its
 // payment was returned, starts past them.
 export const STEPS_BEFORE_DUE = DUNNING_STEPS.filter((step) => step.offset <= 0).length;

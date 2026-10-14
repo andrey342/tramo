@@ -29,6 +29,9 @@ export interface ChargeRepository {
   // Charges of a contract not collected and not being collected (scheduled, failed, overdue):
   // what a payoff makes unowed. Oldest first, loaded together.
   findOpen(contractId: string): Promise<Charge[]>;
+  // Whether the contract defaults by `asOf` as far as billing knows: a charge written off, or one
+  // still owed that reaches its write-off by then (in the same run, before lending hears of it).
+  defaultsBy(contractId: string, asOf: CalendarDate): Promise<boolean>;
   // Whether a contract has charges in arrears other than `exceptChargeId`.
   hasOtherChargesInArrears(contractId: string, exceptChargeId: string): Promise<boolean>;
   // Whether a payoff of the contract is scheduled, being collected or paid: it covers what is

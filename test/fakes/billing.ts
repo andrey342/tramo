@@ -23,6 +23,7 @@ import {
   OPEN_CHARGE_STATUSES,
   type PaymentMandate,
   type PaymentMandateRepository,
+  WRITE_OFF_DAYS,
 } from '../../src/modules/billing/domain';
 import { PeriodAlreadyAssessedError } from '../../src/modules/lending/domain';
 import { type CursorPage, type PageRequest } from '../../src/shared/application';
@@ -103,6 +104,20 @@ export class InMemoryChargeRepository
             charge.contractId === contractId && OPEN_CHARGE_STATUSES.includes(charge.status),
         )
         .sort((a, b) => (a.id < b.id ? -1 : 1)),
+    );
+  }
+
+  defaultsBy(contractId: string, asOf: CalendarDate): Promise<boolean> {
+    const lastDueDate = asOf.addDays(-WRITE_OFF_DAYS);
+    return Promise.resolve(
+      this.all().some(
+        (charge) =>
+          charge.contractId === contractId &&
+          (charge.status === 'written_off' ||
+            (charge.kind !== 'payoff' &&
+              ['scheduled', 'failed', 'overdue'].includes(charge.status) &&
+              !charge.dueDate.isAfter(lastDueDate))),
+      ),
     );
   }
 
