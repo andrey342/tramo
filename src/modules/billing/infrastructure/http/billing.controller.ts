@@ -195,7 +195,7 @@ export class BillingController {
   // A day still to come only where future runs are enabled (not in production by default).
   private asOf(query: { readonly asOf?: string }): CalendarDate {
     const today = CalendarDate.fromInstant(this.clock.now());
-    const asOf = query.asOf ? CalendarDate.parse(query.asOf) : today;
+    const asOf = query.asOf ? CalendarDate.parse(query.asOf, 'asOf') : today;
     if (asOf.isAfter(today) && !this.config.billing.futureRunsEnabled) {
       throw new ProblemException(
         HttpStatus.UNPROCESSABLE_ENTITY,

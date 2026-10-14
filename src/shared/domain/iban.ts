@@ -14,23 +14,24 @@ export class Iban extends ValueObject<{ value: string }> {
     super({ value });
   }
 
-  static create(raw: string): Result<Iban, InvalidValueError> {
+  // `field`: the input it came from, named in the error (`payoutIban`).
+  static create(raw: string, field = 'iban'): Result<Iban, InvalidValueError> {
     const value = raw.replace(/[\s-]/g, '').toUpperCase();
     const match = IBAN_PATTERN.exec(value);
     if (!match?.[1]) {
-      return err(new InvalidValueError('iban', 'IBAN format is not valid.'));
+      return err(new InvalidValueError(field, 'IBAN format is not valid.'));
     }
     const expectedLength = LENGTH_BY_COUNTRY[match[1]];
     if (expectedLength !== undefined && value.length !== expectedLength) {
       return err(
         new InvalidValueError(
-          'iban',
+          field,
           `A ${match[1]} IBAN has ${String(expectedLength)} characters.`,
         ),
       );
     }
     if (mod97(`${value.slice(4)}${value.slice(0, 4)}`) !== 1) {
-      return err(new InvalidValueError('iban', 'IBAN check digits do not match.'));
+      return err(new InvalidValueError(field, 'IBAN check digits do not match.'));
     }
     return ok(new Iban(value));
   }

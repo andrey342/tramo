@@ -46,7 +46,7 @@ export class RegisterTrainingCenterHandler implements ICommandHandler<RegisterTr
         registryTestNumbers: this.vat.acceptsTestNumbers,
       }),
     );
-    const payoutIban = unwrap(Iban.create(command.payoutIban));
+    const payoutIban = unwrap(Iban.create(command.payoutIban, 'payoutIban'));
     const platformFee = Percentage.fromBasisPoints(command.platformFeeBasisPoints);
 
     return this.uow.run(async () => {

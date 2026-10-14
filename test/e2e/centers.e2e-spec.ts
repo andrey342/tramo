@@ -123,7 +123,7 @@ describe('Training centers (e2e)', () => {
     expect(duplicate.body.code).toBe('center_already_registered');
     expect(badIban.status).toBe(422);
     expect(badIban.body.errors).toEqual([
-      { field: 'iban', message: 'IBAN check digits do not match.' },
+      { field: 'payoutIban', message: 'IBAN check digits do not match.' },
     ]);
     expect(unknownField.status).toBe(400);
     expect(byOps.status).toBe(403);

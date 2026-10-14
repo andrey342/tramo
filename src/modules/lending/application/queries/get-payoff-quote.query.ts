@@ -49,7 +49,7 @@ export class GetPayoffQuoteHandler implements IQueryHandler<GetPayoffQuoteQuery>
       canSeeRepayment,
     );
     const today = CalendarDate.fromInstant(this.clock.now());
-    const asOf = query.asOf ? CalendarDate.parse(query.asOf) : today;
+    const asOf = query.asOf ? CalendarDate.parse(query.asOf, 'asOf') : today;
     const ahead = today.daysUntil(asOf);
     if (ahead < 0 || ahead > MAX_DAYS_AHEAD) {
       throw new InvalidValueError(

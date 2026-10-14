@@ -11,8 +11,8 @@ export class CalendarDate extends ValueObject<{ year: number; month: number; day
     super({ year, month, day });
   }
 
-  // month 1-12
-  static of(year: number, month: number, day: number): CalendarDate {
+  // month 1-12; `field`: the input it came from, named in the error (`asOf`).
+  static of(year: number, month: number, day: number, field = 'date'): CalendarDate {
     const valid =
       Number.isInteger(year) &&
       year >= 1900 &&
@@ -24,17 +24,17 @@ export class CalendarDate extends ValueObject<{ year: number; month: number; day
       day >= 1 &&
       day <= daysInMonth(year, month);
     if (!valid) {
-      throw new InvalidValueError('date', `${year}-${month}-${day} is not a calendar date.`);
+      throw new InvalidValueError(field, `${year}-${month}-${day} is not a calendar date.`);
     }
     return new CalendarDate(year, month, day);
   }
 
-  static parse(iso: string): CalendarDate {
+  static parse(iso: string, field = 'date'): CalendarDate {
     const match = ISO_DATE.exec(iso);
     if (!match) {
-      throw new InvalidValueError('date', `Expected a date as YYYY-MM-DD, got "${iso}".`);
+      throw new InvalidValueError(field, `Expected a date as YYYY-MM-DD, got "${iso}".`);
     }
-    return CalendarDate.of(Number(match[1]), Number(match[2]), Number(match[3]));
+    return CalendarDate.of(Number(match[1]), Number(match[2]), Number(match[3]), field);
   }
 
   static fromInstant(instant: Date): CalendarDate {
