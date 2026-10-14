@@ -40,7 +40,7 @@ export class MeController {
   @ApiProblems(401, 403)
   @ApiNoContentResponse()
   @Roles(...ROLES)
-  @Audited({ action: 'session.revoke_all', resource: 'user' })
+  @Audited({ action: 'session.revoke_all', resource: 'user', resourceIsCaller: true })
   @ApiOperation({
     summary: 'Sign out everywhere: end every session of the caller',
     description:

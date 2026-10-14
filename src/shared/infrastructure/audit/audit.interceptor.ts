@@ -103,6 +103,9 @@ function resourceId(
   request: RequestWithPrincipal,
   result: Outcome,
 ): string | null {
+  if (options.resourceIsCaller) {
+    return principalId(principalOf(request));
+  }
   const fromParam = request.params[options.resourceIdParam ?? 'id'];
   if (typeof fromParam === 'string') {
     return fromParam;

@@ -8,6 +8,8 @@ export interface AuditedOptions {
   readonly resource: string;
   // Route parameter holding the resource id; when absent, `id` of the response body is used.
   readonly resourceIdParam?: string;
+  // The resource is the caller itself (signing out everywhere): its id is the caller's.
+  readonly resourceIsCaller?: boolean;
 }
 
 // For commands run by operations and admins: every call is recorded in shared.audit_log with the
