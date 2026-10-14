@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 
 import { RebuildProjectionsCommand } from '@modules/reporting/application/commands/rebuild-projections.command';
+import { PROGRAMS, type Programs } from '@modules/reporting/application/ports/reporting-ports';
 import { GetCenterDashboardQuery } from '@modules/reporting/application/queries/get-center-dashboard.query';
 import { ReportingModule } from '@modules/reporting/reporting.module';
 import {
@@ -37,7 +38,14 @@ describe('reporting flow (integration)', () => {
         MessagingWorkerModule,
         ReportingModule,
       ],
-    }).compile();
+    })
+      // The portfolio's center is made up; catalog is not part of this module.
+      .overrideProvider(PROGRAMS)
+      .useValue({
+        centerOf: () => Promise.resolve(null),
+        centerExists: () => Promise.resolve(true),
+      } satisfies Programs)
+      .compile();
     moduleRef.useLogger(false);
     app = await moduleRef.init();
     publisher = app.get(OutboxPublisher);
