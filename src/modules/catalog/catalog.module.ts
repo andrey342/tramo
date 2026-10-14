@@ -10,6 +10,7 @@ import { UpdateTrainingCenterHandler } from './application/commands/update-train
 import { VerifyCenterVatHandler } from './application/commands/verify-center-vat.command';
 import {
   PROGRAM_CATALOG,
+  TRAINING_CENTER_QUERIES,
   VAT_VALIDATOR,
   type VatValidator,
 } from './application/ports/catalog-ports';
@@ -22,6 +23,7 @@ import { FindPublishedProgramHandler } from './application/queries/find-publishe
 import { GetProgramHandler } from './application/queries/get-program.query';
 import { GetTrainingCenterHandler } from './application/queries/get-training-center.query';
 import { ListProgramsHandler } from './application/queries/list-programs.query';
+import { ListTrainingCentersHandler } from './application/queries/list-training-centers.query';
 import { PROGRAM_REPOSITORY, TRAINING_CENTER_REPOSITORY } from './domain';
 import { FakeVatValidator } from './infrastructure/adapters/fake-vat-validator';
 import { ViesVatValidator } from './infrastructure/adapters/vies-vat-validator';
@@ -36,6 +38,7 @@ import { ProgramOrmEntity } from './infrastructure/persistence/program.orm-entit
 import { TrainingCenterOrmEntity } from './infrastructure/persistence/training-center.orm-entity';
 import { TypeOrmProgramCatalog } from './infrastructure/persistence/typeorm-program.catalog';
 import { TypeOrmProgramRepository } from './infrastructure/persistence/typeorm-program.repository';
+import { TypeOrmTrainingCenterQueries } from './infrastructure/persistence/typeorm-training-center.queries';
 import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/typeorm-training-center.repository';
 
 // Use cases, persistence and adapters of the catalog context. Shared by both processes; the HTTP
@@ -47,6 +50,7 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
     { provide: TRAINING_CENTER_REPOSITORY, useClass: TypeOrmTrainingCenterRepository },
     { provide: PROGRAM_REPOSITORY, useClass: TypeOrmProgramRepository },
     { provide: PROGRAM_CATALOG, useClass: TypeOrmProgramCatalog },
+    { provide: TRAINING_CENTER_QUERIES, useClass: TypeOrmTrainingCenterQueries },
     ViesVatValidator,
     FakeVatValidator,
     {
@@ -70,6 +74,7 @@ import { TypeOrmTrainingCenterRepository } from './infrastructure/persistence/ty
     UpdateProgramHandler,
     GetProgramHandler,
     ListProgramsHandler,
+    ListTrainingCentersHandler,
     VerifyRegisteredCenterVatConsumer,
     VerifyChangedCenterVatConsumer,
     VerifyReinstatedCenterVatConsumer,

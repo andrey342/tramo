@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 
 import { VAT_COUNTRIES, type VatCountry } from '@shared/domain';
+import { CursorPageQueryDto } from '@shared/infrastructure/http';
 
 import { type CenterStatus, MAX_PLATFORM_FEE_BPS, type VatValidationStatus } from '../../domain';
 
@@ -157,4 +158,21 @@ export class TrainingCenterResponse {
 
   @ApiProperty()
   createdAt!: Date;
+}
+
+const CENTER_STATUSES: readonly CenterStatus[] = ['pending_verification', 'active', 'suspended'];
+
+export class ListTrainingCentersQueryDto extends CursorPageQueryDto {
+  @ApiPropertyOptional({ enum: CENTER_STATUSES })
+  @IsOptional()
+  @IsIn(CENTER_STATUSES)
+  status?: CenterStatus;
+}
+
+export class TrainingCenterPageResponse {
+  @ApiProperty({ type: [TrainingCenterResponse] })
+  data!: readonly TrainingCenterResponse[];
+
+  @ApiProperty({ nullable: true, type: String })
+  nextCursor!: string | null;
 }
