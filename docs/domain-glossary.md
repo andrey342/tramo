@@ -44,8 +44,9 @@ Architecture and decisions are in [`architecture.md`](architecture.md) and [`adr
 - **Idempotency-Key**: the header required by endpoints marked `@Idempotent()`. The completed
   response is kept 24 h and replayed (`Idempotent-Replayed: true`); a concurrent duplicate gets
   409; the same key with a different request gets 422.
-- **Audit log**: `shared.audit_log`, one row per call of an `@Audited` endpoint (actor, action,
-  resource, outcome, error code, request id, described changes), failures included.
+- **Audit log**: `shared.audit_log`, one row per call of an `@Audited` endpoint that reached its
+  handler (actor, action, resource, outcome, error code, request id, described changes), failures
+  included. Calls refused before it (authentication, role, signature) are in the request log only.
 - **Problem Details**: every error response (RFC 9457, ADR 006) with a stable `code`
   (`payoff_quote_changed`, `too_many_requests`...).
 - **`Role`**: `student`, `center_admin`, `ops`, `admin`. `ops` and `admin` are staff.
