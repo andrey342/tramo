@@ -99,6 +99,38 @@ describe('billing repositories (integration)', () => {
     ]);
   });
 
+  // A charge raised and written off at once: both events share their instant, and the write-off's
+  // consumer may run first. The statement follows the events, not the consumers.
+  it('should list lines of one instant in the order of their events', async () => {
+    const charge = aCharge();
+    await uow.run(() => app.get<ChargeRepository>(CHARGE_REPOSITORY).save(charge));
+    const ledger = app.get(LedgerWriter);
+    const line = { contractId: charge.contractId, chargeId: charge.id, occurredAt: NOW };
+    const [created, writtenOff] = [uuidv7(), uuidv7()];
+
+    await uow.run(async () => {
+      await ledger.append({
+        ...line,
+        eventId: writtenOff,
+        type: 'write_off',
+        amountCents: -337_50,
+        description: 'Written off on default, passed to collections',
+      });
+      await ledger.append({
+        ...line,
+        eventId: created,
+        type: 'charge',
+        amountCents: 337_50,
+        description: 'Principal left to bill on default',
+      });
+    });
+
+    const entries = await uow.run(() =>
+      app.get<BillingQueries>(BILLING_QUERIES).ledger(charge.contractId),
+    );
+    expect(entries.map((entry) => entry.type)).toEqual(['charge', 'write_off']);
+  });
+
   it('should send one declaration reminder per contract and month', async () => {
     const reminders = app.get<DeclarationReminders>(DECLARATION_REMINDERS);
     const contractId = uuidv7();

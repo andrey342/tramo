@@ -44,9 +44,12 @@ export class TypeOrmBillingQueries implements BillingQueries {
   }
 
   async ledger(contractId: string): Promise<readonly Omit<LedgerEntryDto, 'balanceCents'>[]> {
+    // Lines of one instant (a charge raised and written off together) in the order their events
+    // were recorded: event ids are UUIDv7 taken in that order, while a line's own id is taken
+    // when its consumer runs, in whatever order the queues deliver.
     const rows = await this.txHost.tx.find(LedgerEntryOrmEntity, {
       where: { contractId },
-      order: { occurredAt: 'ASC', id: 'ASC' },
+      order: { occurredAt: 'ASC', eventId: 'ASC' },
     });
     return rows.map((row) => ({
       occurredAt: row.occurredAt,
