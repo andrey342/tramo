@@ -205,6 +205,15 @@ describe('ProblemDetailsFilter', () => {
     );
   });
 
+  it('should say a missing field is required, not every rule its absence breaks', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/probe/sign-up')
+      .send({ address: { number: 3 } });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors).toEqual([{ field: 'email', message: 'email is required' }]);
+  });
+
   it('should reject properties that are not part of the contract', async () => {
     const response = await request(app.getHttpServer())
       .post('/probe/sign-up')
