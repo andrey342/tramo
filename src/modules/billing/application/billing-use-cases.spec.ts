@@ -785,7 +785,7 @@ describe('billing use cases', () => {
 
     // The student and the center hear of the arrears once: not again when the next instalment
     // reaches 30 days, nor once the contract has defaulted.
-    it('should announce a contract in arrears once, and never after its default', async () => {
+    it('should announce a contract in arrears once, and never once it has ended', async () => {
       const t = setup();
       const inArrears = t.contract();
       await t.charge({ contractId: inArrears });
@@ -797,6 +797,9 @@ describe('billing use cases', () => {
       });
       const defaulted = t.contract('installments', 'defaulted');
       await t.charge({ contractId: defaulted });
+      // Repaid, then its last payment returned (ADR 020): dunned, but no longer in arrears.
+      const completed = t.contract('installments', 'completed');
+      await t.charge({ contractId: completed });
 
       await t.dunning.execute(new RunDunningCommand(day('2026-12-12')));
       await t.dunning.execute(new RunDunningCommand(day('2027-01-11')));
