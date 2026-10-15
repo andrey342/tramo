@@ -49,8 +49,5 @@ export class AggregatePersister {
   }
 }
 
-export function isUniqueViolation(error: unknown, constraint: string): boolean {
-  const driverError = (error as { driverError?: { code?: unknown; constraint?: unknown } })
-    .driverError;
-  return driverError?.code === '23505' && driverError.constraint === constraint;
-}
+// Repositories import it from here, next to the persister whose inserts it interprets.
+export { isUniqueViolation } from './database-errors';

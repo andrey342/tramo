@@ -4,6 +4,8 @@ import { type DataSourceOptions } from 'typeorm';
 
 import { type DatabaseConfig } from '../config';
 
+import { ConsoleTypeOrmLogger } from './typeorm-logger';
+
 // Globs resolve against this file, so they work for compiled output (dist/src/**) and for sources
 // loaded through ts-jest (src/**). TypeORM's glob needs forward slashes, also on Windows.
 const SRC_ROOT = join(__dirname, '..', '..', '..');
@@ -38,7 +40,9 @@ export function typeOrmOptions(
     migrationsRun: database.runMigrations,
     migrationsTableName: 'migrations',
     migrationsTransactionMode: 'each',
-    logging: database.logQueries ? ['query', 'error'] : ['error'],
+    // Never TypeORM's own console logger, which prints the bound parameters. The api and the
+    // worker replace this one with TypeOrmLogger, which writes through pino (DatabaseModule).
+    logger: new ConsoleTypeOrmLogger(database.logQueries ? ['query', 'error'] : ['error']),
     // A transaction left open by a stuck caller would hold row locks indefinitely; Postgres ends
     // the session instead.
     extra: {
