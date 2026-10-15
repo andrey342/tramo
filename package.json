@@ -1,6 +1,6 @@
 {
   "name": "tramo",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "Education financing backend: applications, scoring, contracts, disbursements and collections.",
   "author": "Andrey Kuzmin <andreykuzmin342@gmail.com>",
   "private": true,
