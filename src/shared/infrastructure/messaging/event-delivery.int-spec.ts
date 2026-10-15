@@ -289,22 +289,30 @@ describe('Event delivery through the outbox (integration)', () => {
 
   // Last in the file: it drops every client of the shared Redis container. The suites run one at a
   // time (--runInBand) and each closes its application, so those are this file's connections.
-  it('should keep delivering once Redis has dropped every connection', async () => {
-    const admin = new Redis(process.env.REDIS_URL ?? '');
+  it('should keep delivering, and print nothing, once Redis has dropped every connection', async () => {
+    // Each worker's blocking connection rejects with "Connection is closed." and the worker emits
+    // it as an error, which BullMQ would print without a listener.
+    const printed = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      await admin.call('CLIENT', 'KILL', 'TYPE', 'normal', 'SKIPME', 'yes');
-    } finally {
-      admin.disconnect();
-    }
-    await publish('DeliveryProbed', 'probe-after-reset');
+      const admin = new Redis(process.env.REDIS_URL ?? '');
+      try {
+        await admin.call('CLIENT', 'KILL', 'TYPE', 'normal', 'SKIPME', 'yes');
+      } finally {
+        admin.disconnect();
+      }
+      await publish('DeliveryProbed', 'probe-after-reset');
 
-    // The producer and every worker reconnect by themselves (ioredis), then pick up as before.
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        expect(received.some((event) => event.aggregateId === 'probe-after-reset')).toBe(true);
-      },
-      { ...ACROSS_WORKERS, intervalMs: 200 },
-    );
+      // The producer and every worker reconnect by themselves (ioredis), then pick up as before.
+      await eventually(
+        async () => {
+          await publisher.publishBatch();
+          expect(received.some((event) => event.aggregateId === 'probe-after-reset')).toBe(true);
+        },
+        { ...ACROSS_WORKERS, intervalMs: 200 },
+      );
+      expect(printed).not.toHaveBeenCalled();
+    } finally {
+      printed.mockRestore();
+    }
   });
 });
