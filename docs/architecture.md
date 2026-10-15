@@ -391,7 +391,10 @@ Financing applications, from the student's draft to an accepted offer.
   log a failed statement through pino by its SQLSTATE, schema, table and constraint, never the
   statement or its values (at debug for a unique violation, which a repository turns into an
   answer such as a second open application's 409; at warn otherwise), and the migrations CLI
-  prints statements without their parameters.
+  prints statements without their parameters. An error that goes on to fail the request or the
+  job is logged there without its SQL, parameters or offending row (`scrubError`), but with its
+  message, and Postgres quotes the value in a few of those (an input of the wrong type): request
+  validation keeps such values from reaching a statement.
 
 Known gaps, accepted for now:
 
