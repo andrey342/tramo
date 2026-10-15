@@ -386,7 +386,12 @@ Financing applications, from the student's draft to an accepted offer.
   keeps every factor with its weight and value, readable reasons and the policy version.
 - **Personal data.** The national id is encrypted and bound to its row (ADR 014); responses show
   it masked, logs redact it and the rest of the profile, and events carry ids, outcomes and
-  reason codes, never the profile, the score or the readable reasons.
+  reason codes, never the profile, the score or the readable reasons. TypeORM's console logger,
+  which prints a failed statement with its bound parameters, is not used: the api and the worker
+  log a failed statement through pino by its SQLSTATE, schema, table and constraint, never the
+  statement or its values (at debug for a unique violation, which a repository turns into an
+  answer such as a second open application's 409; at warn otherwise), and the migrations CLI
+  prints statements without their parameters.
 
 Known gaps, accepted for now:
 

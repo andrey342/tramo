@@ -300,6 +300,40 @@ describe('Applications (e2e)', () => {
     expect(opsCannotApply.status).toBe(403);
   });
 
+  // Guards the path pino cannot redact: TypeORM's console logger, which printed the refused insert
+  // with its parameters whatever LOG_LEVEL said. What TypeOrmLogger hands pino is covered by its
+  // unit spec.
+  it('should keep the profile out of every log line when a second application is refused', async () => {
+    const student = await newStudent();
+    const body = { programId, product: { kind: 'installments', termMonths: 24 }, profile: PROFILE };
+    await start(bearer(student.token), body);
+    const printed: unknown[] = [];
+    const capture = (...args: unknown[]) => {
+      printed.push(args);
+      return true;
+    };
+    for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+      jest.spyOn(console, method).mockImplementation(capture);
+    }
+    jest.spyOn(process.stdout, 'write').mockImplementation(capture);
+    jest.spyOn(process.stderr, 'write').mockImplementation(capture);
+
+    let second: Awaited<ReturnType<typeof start>>;
+    try {
+      // The second insert breaks the one-open-application-per-program index inside Postgres.
+      second = await start(bearer(student.token), body);
+    } finally {
+      jest.restoreAllMocks();
+    }
+
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe('application_already_open');
+    const output = JSON.stringify(printed);
+    expect(output).not.toContain(PROFILE.dateOfBirth);
+    expect(output).not.toContain(String(PROFILE.declaredMonthlyIncomeCents));
+    expect(output).not.toContain('PARAMETERS');
+  });
+
   it('should show ops the risk policy and let only admins publish a new version', async () => {
     const current = await api()
       .get('/api/v1/risk-policies/current')
