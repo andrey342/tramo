@@ -1,10 +1,25 @@
-# Tramo
+<p align="center"><img src="docs/assets/tramo-banner.png" alt="Tramo" width="100%"></p>
 
 [![CI](https://github.com/andrey342/tramo/actions/workflows/ci.yml/badge.svg)](https://github.com/andrey342/tramo/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/andrey342/tramo)](https://github.com/andrey342/tramo/releases/latest)
+![Node.js 24](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-12-E0234E?logo=nestjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-FF4438?logo=redis&logoColor=white)
+![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
 Backend for an education financing platform: students apply for financing of a training program,
 the platform verifies and scores them, signs a contract, pays the training center up front and
 collects monthly instalments or income-share payments afterwards.
+
+**Highlights**
+
+- Modular monolith of seven hexagonal modules, a PostgreSQL schema each, boundaries checked in CI.
+- Domain events through a transactional outbox to idempotent BullMQ consumers.
+- Money in integer cents, idempotency keys on the endpoints that move money, RFC 9457 errors.
+- Tests on real PostgreSQL and Redis with coverage gates; twenty ADRs record the decisions.
+- The whole stack, demo data and a scripted happy path behind one `docker compose up`.
 
 ## What it does
 
