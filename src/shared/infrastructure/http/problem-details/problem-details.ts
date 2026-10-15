@@ -26,11 +26,14 @@ export function problemType(slug: string): string {
   return `urn:tramo:problem:${slug}`;
 }
 
+// The status phrase in sentence case ("Not found", "Too many requests"), like the titles of the
+// domain's problems, so a 404 reads the same whether a route or an entity is missing.
 export function statusTitle(status: number): string {
-  return STATUS_CODES[status] ?? 'Error';
+  const phrase = STATUS_CODES[status] ?? 'Error';
+  return phrase.charAt(0) + phrase.slice(1).toLowerCase();
 }
 
-// Errors without a domain code still get one, derived from the status ("Not Found" ->
+// Errors without a domain code still get one, derived from the status ("Not found" ->
 // "not_found"), so clients can always branch on `code`.
 export function statusCode(status: number): string {
   return statusTitle(status)

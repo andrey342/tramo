@@ -82,7 +82,7 @@ docker compose run --rm seed
 
 | What                                 | URL                                                                                         |
 | ------------------------------------ | ------------------------------------------------------------------------------------------- |
-| API (versioned)                      | http://localhost:3000/api/v1                                                                |
+| API (base path `/api/v1`)            | http://localhost:3000/api/v1/programs (the public catalog)                                  |
 | OpenAPI / Swagger UI                 | http://localhost:3000/docs (JSON: `/docs/openapi.json`)                                     |
 | Readiness (Postgres, Redis)          | http://localhost:3000/health/ready                                                          |
 | Bull Board (queues, dead letters)    | http://localhost:3000/admin/queues (user `ops`, password `tramo-queues`)                    |
@@ -164,7 +164,8 @@ compose sink, and five students whose applications have run through verification
 The centers are checked as they are created; a registry that does not answer is asked again three
 times over 14 seconds, after which the seed exits with 1 and can be run again.
 The simulated providers answer from the national id: a number ending in 7 is in the default
-registry and one ending in 9 fails the identity check. All accounts share the password
+registry and one ending in 9 fails the identity check (a Spanish DNI with its control letter, e.g.
+`12345677J` and `12345679S`). All accounts share the password
 `tramo demo password`; local use only.
 
 | Role                               | Email                      | Scenario                                                    |
@@ -294,8 +295,9 @@ route requires authentication unless documented otherwise. Two ways in:
 
 - **Users** (students, center staff, operations, admins): `POST /api/v1/auth/login` returns a
   15-minute bearer access token and a single-use refresh token. Send
-  `Authorization: Bearer <accessToken>`; renew with `POST /api/v1/auth/refresh`. Reusing an old
-  refresh token ends the session. Students self-register with `POST /api/v1/auth/register`;
+  `Authorization: Bearer <accessToken>`; renew with `POST /api/v1/auth/refresh`. A refresh token
+  presented again more than 2 seconds after it was rotated ends the session. Students
+  self-register with `POST /api/v1/auth/register`;
   center administrators are created by an admin (`POST /api/v1/centers/:id/users`).
 - **Training center integrations**: a center administrator issues an API key with explicit
   scopes (`POST /api/v1/centers/:id/api-keys`, the key is shown once). Send it as
@@ -320,7 +322,8 @@ pnpm api:call GET '/applications/{{last.id}}/decision' --as student
 Submitting starts the verification saga in the worker: identity (KYC), employment history and a
 credit bureau check run as three jobs, then the application is scored with the risk policy in
 force and approved, sent to the ops review queue (`GET /ops/applications/review-queue`) or
-rejected. The providers are simulated and answer deterministically from the national id: one
+rejected. Until then, a second or two with the simulated providers, the decision answers 409
+`decision_pending`: ask again. The providers answer deterministically from the national id: one
 ending in 9 fails identity verification, one ending in 7 is in a default registry. Applications
 nobody touches for 14 days expire, except those waiting for an analyst.
 
@@ -363,7 +366,10 @@ students declare a month's income with `POST /contracts/:id/income-declarations`
 the next month; on the 5th the month is charged. An ISA signed today starts paying months later
 (`firstPeriod` on its schedule): to see one charged, declare that month with `?asOf=` set to the
 2nd of the next month, then run billing as of the 5th (both need `BILLING_FUTURE_RUNS_ENABLED`, on
-outside production). Only billing, dunning and declarations walk the months: payoff quotes, the
+outside production). The charge is the declared income times the program's share, which shows
+both provider answers above: with the Full Stack bootcamp's 10 %, a `grossMonthlyIncomeCents` of
+220130 is charged 220.13 EUR and refused, 220140 is charged 220.14 EUR, collected and returned.
+Only billing, dunning and declarations walk the months: payoff quotes, the
 schedule's due instalments and the catch-up a new mandate triggers follow today's date. So a
 payoff asked while a charge is overdue only as of a later run is accepted by lending, then
 withdrawn by billing (`PayoffWithdrawn`, the student is emailed) without collecting anything.
