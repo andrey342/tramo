@@ -18,7 +18,7 @@ import { CoreModule } from '@shared/infrastructure/core.module';
 import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/messaging';
 
 import { aPortfolio } from '../factories/reporting';
-import { eventually } from '../helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../helpers/eventually';
 
 const OPS: Principal = { kind: 'user', userId: 'ops-1', roles: ['ops'], centerId: null };
 
@@ -75,25 +75,22 @@ describe('reporting flow (integration)', () => {
     const dashboard = () => queries.execute(new GetCenterDashboardQuery(OPS, portfolio.centerId));
 
     let live = await dashboard();
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        live = await dashboard();
-        expect(live).toMatchObject({
-          applications: { offerAccepted: 1, rejected: 1, needsReview: 1 },
-          contracts: { active: 1, inArrears: 1 },
-          disbursedCents: 7_125_00,
-          collectedCents: 337_50,
-          outstandingCents: 337_50,
-        });
-      },
-      { timeoutMs: 30_000 },
-    );
+    await eventually(async () => {
+      await publisher.publishBatch();
+      live = await dashboard();
+      expect(live).toMatchObject({
+        applications: { offerAccepted: 1, rejected: 1, needsReview: 1 },
+        contracts: { active: 1, inArrears: 1 },
+        disbursedCents: 7_125_00,
+        collectedCents: 337_50,
+        outstandingCents: 337_50,
+      });
+    }, ACROSS_WORKERS);
 
     const applied = await app.get(CommandBus).execute(new RebuildProjectionsCommand());
     const rebuilt = await dashboard();
 
     expect(applied).toBeGreaterThanOrEqual(portfolio.events.length);
     expect({ ...rebuilt, generatedAt: null }).toEqual({ ...live, generatedAt: null });
-  }, 60_000);
+  });
 });

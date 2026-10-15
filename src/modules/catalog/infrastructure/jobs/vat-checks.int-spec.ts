@@ -11,7 +11,7 @@ import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/m
 import { QueueNames } from '@shared/infrastructure/queues';
 
 import { aTaxId, VALID_IBAN } from '../../../../../test/factories/catalog';
-import { eventually } from '../../../../../test/helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../../../../../test/helpers/eventually';
 import { RegisterTrainingCenterCommand } from '../../application/commands/register-training-center.command';
 import { CatalogWorkerModule } from '../../catalog-worker.module';
 import { TRAINING_CENTER_REPOSITORY, type TrainingCenterRepository } from '../../domain';
@@ -63,7 +63,7 @@ describe('VAT check after registration (integration)', () => {
 
     await eventually(async () => {
       expect((await centers.findById(centerId))?.status).toBe('active');
-    });
+    }, ACROSS_WORKERS);
   });
 
   it('should mark the center unverified and retry later while the registry cannot answer', async () => {
@@ -83,7 +83,7 @@ describe('VAT check after registration (integration)', () => {
       expect(check?.attemptsMade).toBe(1);
       expect(check?.failedReason).toContain('VIES could not check');
       expect(await check?.isDelayed()).toBe(true);
-    });
+    }, ACROSS_WORKERS);
     const center = await centers.findById(centerId);
     expect(center?.status).toBe('pending_verification');
     expect(center?.vatValidation?.status).toBe('unverified');
@@ -97,7 +97,7 @@ describe('VAT check after registration (integration)', () => {
     const vatChecks = app.get<Queue>(getQueueToken(QueueNames.VAT_CHECKS));
     await eventually(async () => {
       expect(await (await vatChecks.getJob(centerId))?.isDelayed()).toBe(true);
-    });
+    }, ACROSS_WORKERS);
     await db.query(`UPDATE catalog.training_centers SET vat_status = 'invalid' WHERE id = $1`, [
       centerId,
     ]);
@@ -109,7 +109,7 @@ describe('VAT check after registration (integration)', () => {
       expect(check?.attemptsMade).toBe(2);
       expect(check?.failedReason).toContain('VIES could not check');
       expect(await check?.isDelayed()).toBe(true);
-    });
+    }, ACROSS_WORKERS);
     const center = await centers.findById(centerId);
     expect(center?.status).toBe('pending_verification');
     expect(center?.vatValidation?.status).toBe('invalid');

@@ -22,7 +22,7 @@ import {
   aProgramSnapshot,
   INSTALLMENTS_24,
 } from '../../../../../test/factories/origination';
-import { eventually } from '../../../../../test/helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../../../../../test/helpers/eventually';
 import {
   ApplicationAlreadyOpenError,
   FINANCING_APPLICATION_REPOSITORY,
@@ -81,13 +81,10 @@ describe('verification saga (integration)', () => {
 
   // The outbox is published by hand: each step of the saga writes the next events.
   const settle = async (id: string, status: string): Promise<void> => {
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        expect((await applications.findById(id))?.status).toBe(status);
-      },
-      { timeoutMs: 20_000 },
-    );
+    await eventually(async () => {
+      await publisher.publishBatch();
+      expect((await applications.findById(id))?.status).toBe(status);
+    }, ACROSS_WORKERS);
   };
 
   it('should verify, score and approve a good applicant, one job per provider', async () => {
