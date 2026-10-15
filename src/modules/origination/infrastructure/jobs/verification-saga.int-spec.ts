@@ -147,7 +147,7 @@ describe('verification saga (integration)', () => {
 
     await eventually(async () => {
       expect((await applications.findById(old.id))?.status).toBe('expired');
-    });
+    }, ACROSS_WORKERS);
   });
 
   it('should free the program for another application when the contract of an offer is cancelled', async () => {

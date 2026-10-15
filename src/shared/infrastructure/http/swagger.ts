@@ -1,9 +1,7 @@
-import { STATUS_CODES } from 'node:http';
-
 import { type INestApplication } from '@nestjs/common';
 import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 
-import { PROBLEM_CONTENT_TYPE } from './problem-details';
+import { PROBLEM_CONTENT_TYPE, statusTitle } from './problem-details';
 
 export const API_KEY_HEADER = 'X-Api-Key';
 
@@ -65,7 +63,7 @@ interface Operation {
 // exempt), and 413 or 415 for a body too large or not JSON.
 function addPipelineStatuses(document: OpenAPIObject): void {
   const problem = (status: number): unknown => ({
-    description: STATUS_CODES[status],
+    description: statusTitle(status),
     content: {
       [PROBLEM_CONTENT_TYPE]: { schema: { $ref: '#/components/schemas/ProblemDetailsSchema' } },
     },
