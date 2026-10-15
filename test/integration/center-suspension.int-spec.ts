@@ -19,7 +19,7 @@ import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/m
 
 import { anActiveTrainingCenter } from '../factories/catalog';
 import { aCenterAdmin } from '../factories/iam';
-import { eventually } from '../helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../helpers/eventually';
 
 // Catalog suspends a center; iam hears it through the outbox and revokes the center's API keys.
 // The outbox is published by hand; the events.iam consumer runs in this process.
@@ -76,12 +76,9 @@ describe('center suspension (integration)', () => {
     loaded?.suspend('Unpaid fees', new Date());
     await uow.run(() => centers.save(loaded!));
 
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        expect((await apiKeys.findById(key.id))?.isActive).toBe(false);
-      },
-      { timeoutMs: 30_000 },
-    );
-  }, 60_000);
+    await eventually(async () => {
+      await publisher.publishBatch();
+      expect((await apiKeys.findById(key.id))?.isActive).toBe(false);
+    }, ACROSS_WORKERS);
+  });
 });

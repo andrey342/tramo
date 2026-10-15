@@ -6,6 +6,7 @@ import { CLS_ID, ClsService } from 'nestjs-cls';
 import { CLOCK, type Clock } from '@shared/domain';
 
 import { DeadLetterQueue } from './dead-letter.queue';
+import { RedisErrorReporter } from './redis-errors';
 
 export interface CorrelatedJobData {
   readonly correlationId?: string | null;
@@ -14,7 +15,9 @@ export interface CorrelatedJobData {
 // Base for every processor in the worker:
 // - runs each job in its own CLS context whose id is the correlation id of the request that
 //   caused it, so logs and outbox rows written by the job trace back to that request;
-// - after the last attempt (or an UnrecoverableError) copies the job to the dead-letter queue.
+// - after the last attempt (or an UnrecoverableError) copies the job to the dead-letter queue;
+// - reports the worker's errors through the logger (RedisErrorReporter), as QueueErrorLogger does
+//   for the queues.
 export abstract class QueueProcessor<
   D extends CorrelatedJobData = CorrelatedJobData,
 > extends WorkerHost {
@@ -22,6 +25,7 @@ export abstract class QueueProcessor<
   @Inject(DeadLetterQueue) private readonly deadLetters!: DeadLetterQueue;
   @Inject(CLOCK) protected readonly clock!: Clock;
   protected readonly logger = new Logger(this.constructor.name);
+  private readonly redisErrors = new RedisErrorReporter(this.logger, 'Worker');
 
   protected abstract handle(job: Job<D>): Promise<unknown>;
 
@@ -30,6 +34,13 @@ export abstract class QueueProcessor<
       this.cls.set(CLS_ID, job.data.correlationId ?? `${job.queueName}.${job.id ?? job.name}`);
       return this.handle(job);
     });
+  }
+
+  // The worker's own errors: its connection reset (ECONNRESET) or Redis restarting, after which
+  // ioredis reconnects and the worker resumes, or a fault such as a lost job lock.
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.redisErrors.report(error);
   }
 
   @OnWorkerEvent('failed')

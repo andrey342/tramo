@@ -1,7 +1,9 @@
 import { getQueueToken } from '@nestjs/bullmq';
 import { type INestApplicationContext, Injectable } from '@nestjs/common';
+import { DiscoveryService } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { type Queue } from 'bullmq';
+import { Redis } from 'ioredis';
 import { CLS_ID, ClsService } from 'nestjs-cls';
 import { DataSource } from 'typeorm';
 
@@ -15,12 +17,12 @@ import {
   type UnitOfWork,
 } from '@shared/application';
 
-import { eventually } from '../../../../test/helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../../../../test/helpers/eventually';
 import { ClockModule } from '../clock/system-clock';
 import { ConfigModule } from '../config';
 import { RequestContextModule } from '../context';
 import { DatabaseModule } from '../database';
-import { EVENT_JOB_OPTIONS, QueueNames, QueuesModule } from '../queues';
+import { EVENT_JOB_OPTIONS, QueueNames, QueueProcessor, QueuesModule } from '../queues';
 
 import { MessagingWorkerModule } from './messaging-worker.module';
 import { MessagingModule } from './messaging.module';
@@ -117,7 +119,7 @@ describe('Event delivery through the outbox (integration)', () => {
         payload: { aggregateId: 'probe-1' },
         occurredAt: '2026-10-09T12:00:00.000Z',
       });
-    });
+    }, ACROSS_WORKERS);
     const [row] = await db.query<{ published_at: Date | null }[]>(
       "SELECT published_at FROM shared.outbox_messages WHERE aggregate_id = 'probe-1'",
     );
@@ -145,7 +147,7 @@ describe('Event delivery through the outbox (integration)', () => {
     await publisher.publishBatch();
     await eventually(() => {
       expect(received.filter((event) => event.aggregateId === 'probe-2')).toHaveLength(1);
-    });
+    }, ACROSS_WORKERS);
     const event = received.find((item) => item.aggregateId === 'probe-2');
 
     const queue = app.get<Queue>(getQueueToken('events.reporting'));
@@ -154,7 +156,7 @@ describe('Event delivery through the outbox (integration)', () => {
     });
     await eventually(async () => {
       expect(await redelivery.isCompleted()).toBe(true);
-    });
+    }, ACROSS_WORKERS);
 
     expect(received.filter((item) => item.aggregateId === 'probe-2')).toHaveLength(1);
   });
@@ -206,7 +208,7 @@ describe('Event delivery through the outbox (integration)', () => {
     expect(published?.published_at).toBeInstanceOf(Date);
     await eventually(() => {
       expect(received.some((event) => event.aggregateId === 'probe-refused')).toBe(true);
-    });
+    }, ACROSS_WORKERS);
   });
 
   it('should mark events without subscribers as published', async () => {
@@ -256,7 +258,53 @@ describe('Event delivery through the outbox (integration)', () => {
         failedReason: 'smtp is down',
         attemptsMade: 2,
       });
-    });
+    }, ACROSS_WORKERS);
     expect(failuresSeen).toBe(2);
+  });
+
+  it("should log a worker's connection errors instead of printing them", () => {
+    const processors = app
+      .get(DiscoveryService)
+      .getProviders()
+      .map((wrapper) => wrapper.instance as unknown)
+      .filter((instance): instance is QueueProcessor => instance instanceof QueueProcessor);
+    const printed = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      // What a worker's connection emits when Docker's port forwarding or Redis resets it. Without
+      // a listener BullMQ falls back to console.error.
+      for (const processor of processors) {
+        processor.worker.emit(
+          'error',
+          Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+        );
+      }
+
+      expect(processors).toHaveLength(QueueNames.EVENTS.length);
+      expect(printed).not.toHaveBeenCalled();
+    } finally {
+      printed.mockRestore();
+    }
+  });
+
+  // Last in the file: it drops every client of the shared Redis container. The suites run one at a
+  // time (--runInBand) and each closes its application, so those are this file's connections.
+  it('should keep delivering once Redis has dropped every connection', async () => {
+    const admin = new Redis(process.env.REDIS_URL ?? '');
+    try {
+      await admin.call('CLIENT', 'KILL', 'TYPE', 'normal', 'SKIPME', 'yes');
+    } finally {
+      admin.disconnect();
+    }
+    await publish('DeliveryProbed', 'probe-after-reset');
+
+    // The producer and every worker reconnect by themselves (ioredis), then pick up as before.
+    await eventually(
+      async () => {
+        await publisher.publishBatch();
+        expect(received.some((event) => event.aggregateId === 'probe-after-reset')).toBe(true);
+      },
+      { ...ACROSS_WORKERS, intervalMs: 200 },
+    );
   });
 });

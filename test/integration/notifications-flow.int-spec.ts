@@ -31,7 +31,7 @@ import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/m
 import { anActiveTrainingCenter } from '../factories/catalog';
 import { aCenterAdmin } from '../factories/iam';
 import { FakeEmailSender } from '../fakes/notifications';
-import { eventually } from '../helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../helpers/eventually';
 
 interface Received {
   readonly headers: IncomingHttpHeaders;
@@ -92,14 +92,11 @@ describe('notifications flow (integration)', () => {
 
   async function until<T>(read: () => Promise<T | undefined>): Promise<T> {
     let found: T | undefined;
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        found = await read();
-        expect(found).toBeDefined();
-      },
-      { timeoutMs: 30_000 },
-    );
+    await eventually(async () => {
+      await publisher.publishBatch();
+      found = await read();
+      expect(found).toBeDefined();
+    }, ACROSS_WORKERS);
     return found as T;
   }
 
@@ -175,5 +172,5 @@ describe('notifications flow (integration)', () => {
       [delivery.id],
     );
     expect(stored?.status).toBe('delivered');
-  }, 60_000);
+  });
 });

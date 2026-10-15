@@ -34,7 +34,7 @@ import { MessagingWorkerModule, OutboxPublisher } from '@shared/infrastructure/m
 
 import { aDeclaration, STUDENT_IBAN } from '../factories/billing';
 import { anActiveContract, anIsa, aPlan } from '../factories/lending';
-import { eventually } from '../helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../helpers/eventually';
 
 const OPS: Principal = { kind: 'user', userId: 'ops-1', roles: ['ops'], centerId: null };
 
@@ -97,14 +97,11 @@ describe('billing saga (integration)', () => {
 
   async function until<T>(read: () => Promise<T>, check: (value: T) => void): Promise<T> {
     let last: T | undefined;
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        last = await read();
-        check(last);
-      },
-      { timeoutMs: 30_000 },
-    );
+    await eventually(async () => {
+      await publisher.publishBatch();
+      last = await read();
+      check(last);
+    }, ACROSS_WORKERS);
     return last as T;
   }
 
@@ -145,7 +142,7 @@ describe('billing saga (integration)', () => {
       },
     );
     expect(statement.balanceCents).toBe(0);
-  }, 60_000);
+  });
 
   // ADR 020: the bank sends a collected debit back; a repeated notice of it writes nothing.
   it('should owe an instalment again, on the plan and the statement, when the bank returns it', async () => {
@@ -191,7 +188,7 @@ describe('billing saga (integration)', () => {
       status: 'failed',
       paidAt: null,
     });
-  }, 60_000);
+  });
 
   // The last payment the ISA allows is charged: no month is assessed any more, but the contract
   // is still being repaid (a mandate can be signed, arrears and default apply) until billing has
@@ -243,7 +240,7 @@ describe('billing saga (integration)', () => {
       status: 'completed',
       completionReason: 'max_payments',
     });
-  }, 60_000);
+  });
 
   // ADR 017: lending assesses the ISA month in billing's transaction. When the charge cannot be
   // written, the assessment is rolled back with it and the next run assesses the month again.
@@ -273,7 +270,7 @@ describe('billing saga (integration)', () => {
     expect((await charges.findByReference(contract.id, 'isa:2026-07'))?.amount.cents).toBe(200_00);
     const plan = await plans.findByContractId(contract.id);
     expect(plan?.terms.kind === 'isa' && plan.terms.paymentsMade).toBe(1);
-  }, 60_000);
+  });
 
   it('should put the contract in arrears at 30 days and default it at 90', async () => {
     const { contractId, firstDue } = await repaying(false);
@@ -320,7 +317,7 @@ describe('billing saga (integration)', () => {
     expect(accelerated?.amount.cents).toBe(leftToBill);
     // Dated by the dunning run that wrote instalment 1 off, not by the clock.
     expect(accelerated?.dueDate.toString()).toBe(firstDue.addDays(90).toString());
-  }, 60_000);
+  });
 
   // The payoff charge being collected for a contract (one per request).
   async function payoffOf(contractId: string): Promise<Charge | null> {
@@ -352,7 +349,7 @@ describe('billing saga (integration)', () => {
       },
     );
     expect((await plans.findByContractId(contractId))?.completionReason).toBe('paid_off');
-  }, 60_000);
+  });
 
   it('should withdraw a payoff the bank refused, so the student may ask again', async () => {
     const { contractId, student } = await repaying(true);
@@ -374,5 +371,5 @@ describe('billing saga (integration)', () => {
     );
     expect((await charges.findById(payoff?.id ?? ''))?.status).toBe('cancelled');
     expect((await contracts.findById(contractId))?.status).toBe('active');
-  }, 60_000);
+  });
 });

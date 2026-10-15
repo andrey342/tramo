@@ -38,7 +38,7 @@ import {
 import { LendingWorkerModule } from '../../src/modules/lending/lending-worker.module';
 import { anActiveTrainingCenter, aProgram, NOW } from '../factories/catalog';
 import { CLOSED_IBAN, OPEN_IBAN } from '../fakes/lending';
-import { eventually } from '../helpers/eventually';
+import { ACROSS_WORKERS, eventually } from '../helpers/eventually';
 
 // Crosses two modules (lending's saga, catalog's centers and programs), so it lives outside both.
 describe('contract saga (integration)', () => {
@@ -125,14 +125,11 @@ describe('contract saga (integration)', () => {
   // The outbox is published by hand: each step of the saga writes the next events.
   async function until<T>(read: () => Promise<T>, check: (value: T) => void): Promise<T> {
     let last: T | undefined;
-    await eventually(
-      async () => {
-        await publisher.publishBatch();
-        last = await read();
-        check(last);
-      },
-      { timeoutMs: 30_000 },
-    );
+    await eventually(async () => {
+      await publisher.publishBatch();
+      last = await read();
+      check(last);
+    }, ACROSS_WORKERS);
     return last as T;
   }
 
@@ -174,7 +171,7 @@ describe('contract saga (integration)', () => {
     expect(plan?.terms.kind).toBe('installments');
     const signatures = app.get<Queue>(getQueueToken(QueueNames.SIGNATURES));
     expect(await (await signatures.getJob(`${active!.id}.send`))?.isCompleted()).toBe(true);
-  }, 60_000);
+  });
 
   it('should open the plan of an income share agreement as offered', async () => {
     const { applicationId } = await acceptOffer(OPEN_IBAN, {
@@ -200,7 +197,7 @@ describe('contract saga (integration)', () => {
     expect(sent?.terms.product).toMatchObject({ kind: 'isa', capMultiplierHundredths: 150 });
     expect(plan?.terms).toMatchObject({ kind: 'isa', maxPayments: 36 });
     expect(plan?.terms.kind === 'isa' && plan.terms.cap.cents).toBe(9_000_00);
-  }, 60_000);
+  });
 
   it('should fail a transfer to a closed account and pay the corrected one on retry', async () => {
     const { applicationId, center } = await acceptOffer(CLOSED_IBAN);
@@ -233,5 +230,5 @@ describe('contract saga (integration)', () => {
       status: 'settled',
       attempt: 2,
     });
-  }, 60_000);
+  });
 });

@@ -4,13 +4,10 @@ import { ModuleRef } from '@nestjs/core';
 import { type Queue } from 'bullmq';
 
 import { ALL_QUEUES } from './queue-names';
+import { RedisErrorReporter } from './redis-errors';
 
-// How often a queue that keeps failing to reach Redis says so.
-const QUIET_MS = 60_000;
-
-// A queue's connection reports every failed reconnect while Redis is down; without a listener
-// BullMQ prints each one as a raw stack trace outside the logger. Each queue logs it at most once a
-// minute instead; readiness reports the outage.
+// The producer side of every queue reports its errors through the logger (RedisErrorReporter);
+// QueueProcessor does the same for the workers.
 @Injectable()
 export class QueueErrorLogger implements OnModuleInit {
   private readonly logger = new Logger('Queues');
@@ -20,13 +17,9 @@ export class QueueErrorLogger implements OnModuleInit {
   onModuleInit(): void {
     for (const name of ALL_QUEUES) {
       const queue = this.modules.get<Queue>(getQueueToken(name), { strict: false });
-      let loggedAt = Number.NEGATIVE_INFINITY;
+      const reporter = new RedisErrorReporter(this.logger, 'Queue', { queue: name });
       queue.on('error', (error: Error) => {
-        const now = Date.now();
-        if (now - loggedAt >= QUIET_MS) {
-          loggedAt = now;
-          this.logger.warn({ queue: name, err: error.message }, 'Queue cannot reach Redis');
-        }
+        reporter.report(error);
       });
     }
   }

@@ -236,7 +236,9 @@ pnpm coverage:check   # merges coverage/{unit,int,e2e}
 
 On Docker Desktop (Windows), run the suites with only the `dev` profile up, not the full stack:
 with the api and worker containers also running we have seen sporadic `ECONNRESET` on the test
-containers' published ports. `docker compose stop api worker` is enough.
+containers' published ports. `docker compose stop api worker` is enough. A reset can still happen
+now and then; the workers reconnect and the suites wait for a job to be taken up again, so it
+costs time, not a failure.
 
 ## Architecture
 
